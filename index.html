@@ -1369,7 +1369,7 @@ tbody tr.selected td{background:var(--blue-50)!important}
           <div style="font-size:13px;margin-top:6px;color:var(--gray-300)">+ 고객 등록 또는 📷 명함으로 추가하세요</div>
         </div>
       </div>
-    </div>
+    </div
 
 <!-- ── 고객(담당자) 등록/수정 모달 ── -->
 <div class="modal-overlay" id="modal-contact">
@@ -1582,6 +1582,15 @@ tbody tr.selected td{background:var(--blue-50)!important}
         <div class="fg" style="margin-bottom:10px"><label>고객 미팅희망일자 (선택)</label>
           <input type="date" id="tm-meeting-date"></div>
 
+        <!-- 탭 표시 설정 -->
+        <div class="card" style="grid-column:1/-1">
+          <div class="section-title">📋 탭 표시 설정 <span style="font-size:11px;font-weight:400;color:var(--gray-400)">— 역할별 활동 탭 On/Off</span></div>
+          <div id="tab-vis-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:12px"></div>
+          <div style="margin-top:14px">
+            <button class="btn btn-primary btn-sm" onclick="saveTabVisibility()">💾 저장</button>
+            <span id="tab-vis-status" style="font-size:12px;color:var(--gray-400);margin-left:10px"></span>
+          </div>
+        </div>
         <!-- 해피콜 예정일 재설정 (해피콜 DB만 표시) -->
         <div id="tm-hc-wrap" style="display:none;margin-bottom:14px;padding:14px;background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:var(--r-sm)">
           <div style="font-size:12px;font-weight:700;color:var(--ok);margin-bottom:10px">😊 해피콜 관리 <span style="font-size:11px;font-weight:400;color:var(--gray-400)">(대전TM 전용)</span></div>
@@ -3448,7 +3457,7 @@ function handleRealtimeChange(table, payload){
       (document.getElementById('leads-sub')||{}).textContent=allLeads.filter(l=>l.status!=='deleted').length+'건';
       if(typeof filterLeads==='function') filterLeads();
       if(typeof updateLeadsSubTabCounts==='function') updateLeadsSubTabCounts();
-      showToast('🔄 DB 데이터 업데이트됨', 'success');
+      // 조용히 갱신 — 토스트 제거 (방해됨)
     }, 400);
 
   } else if(table === 'activities'){
@@ -3508,12 +3517,15 @@ function sbH(){ return {'Content-Type':'application/json','apikey':SB_KEY,'Autho
 async function sbGet(path){
   if(testMode) return [];
   try{
-    const r=await fetch(SB_URL+'/rest/v1/'+path,{headers:sbH()});
+    const ctrl=new AbortController();
+    const timer=setTimeout(()=>ctrl.abort(),8000); // 8초 타임아웃
+    const r=await fetch(SB_URL+'/rest/v1/'+path,{headers:sbH(),signal:ctrl.signal});
+    clearTimeout(timer);
     if(!r.ok){ console.warn('sbGet err:',r.status); return null; }
     const t=await r.text(); return t?JSON.parse(t):[];
   }catch(e){
-    // sbGet fallback to local
-    console.warn('sbGet 연결 실패:', e);
+    if(e.name==='AbortError') console.warn('sbGet 타임아웃:', path);
+    else console.warn('sbGet 연결 실패:', e);
     return null;
   }
 }
@@ -3646,12 +3658,7 @@ async function logActivity(leadId, type, content, newStatus, stage, actDate){
   else await sbPost('activities',act);
   // 전역 캐시 갱신
   if(Array.isArray(allActivities)) allActivities.unshift(act);
-  if(newStatus||stage){
-    const upd={updated_at:new Date().toISOString()};
-    if(newStatus) upd.status=newStatus;
-    if(stage) upd.current_stage=stage;
-    await dbU('leads',leadId,upd);
-  }
+  // ※ leads 상태 업데이트는 호출자(changeLeadStatus)가 담당 — 여기서 중복 호출 제거
   return act;
 }
 
@@ -4368,7 +4375,7 @@ async function renderMonthlyChart(all){
 }
 
 // ── DB 관리 ───────────────────────────────────────────────
-let allLeads=[], filtered=[], selIds=new Set(), curPage=1, myPage=1, _lastSelId=null, _stageFilter='';
+let allLeads=[], filtered=[], selIds=new Set(), curPage=1, _lastSelId=null, _stageFilter='';
 let allActivities=[], allNextActions=[];  // Supabase 전역 캐시 (lg() 대체)
 // 지점 화면 전역 (openRemoveLeader 등이 화면 진입 전에도 호출될 수 있으므로 여기서 선언)
 let brAllLeads=[], brFiltered=[], brSelIds=new Set(), brPage=1;
@@ -4760,12 +4767,22 @@ async function confirmDropWithReason(ids){
   if(!reason){showToast('드랍 사유를 입력하세요.','error');return;}
   const stdReasons=['보험 기피','가격 불만족','서비스 내용 불만족','연락두절','팀장 판단'];
   const category=stdReasons.includes(reason)?reason:'기타';
-  for(const id of ids){
-    await dbU('leads',id,{drop_reason:reason, drop_category:category});
-    await changeStatus(id,'drop','',reason);
+  const now=new Date().toISOString();
+  const dropData={status:'drop',drop_reason:reason,drop_category:category,dropped_at:now,updated_at:now};
+  if(!testMode){
+    // 병렬 PATCH
+    await Promise.all(ids.map(id=>{ _trackLocalId(id); return sbPatch('leads',id,dropData); }));
+    await Promise.all(ids.map(id=>sbPost('activities',{
+      id:uuid(),lead_id:id,type:'status_change',content:`드랍: ${reason}`,
+      stage:'',author:curUser?.name||'',created_at:now,date:now.slice(0,10)
+    })));
+  } else {
+    const leads=lg('leads');
+    ids.forEach(id=>{ const l=leads.find(r=>r.id===id); if(l) Object.assign(l,dropData); });
+    ls('leads',leads);
   }
-  // allLeads 캐시 즉시 갱신 (status → drop)
-  if(allLeads) ids.forEach(id=>{ const l=allLeads.find(r=>r.id===id); if(l) l.status='drop'; });
+  // allLeads 캐시 즉시 갱신
+  if(allLeads) ids.forEach(id=>{ const l=allLeads.find(r=>r.id===id); if(l) Object.assign(l,dropData); });
   closeOv('ov-drop-reason'); clearSel();
   showToast(ids.length+'건 드랍 처리','success');
   filterLeads(); updateLeadsSubTabCounts();
@@ -5023,14 +5040,15 @@ function openActM(lid,cname){
 async function yjReassign(){
   const lid=document.getElementById('act-lead-id').value;
   if(!lid){showToast('오류: 리드 ID 없음','error');return;}
-  // 원래 배정 주체 확인
-  const lead=lg('leads').find(l=>l.id===lid)||allLeads.find(l=>l.id===lid)||myLeads?.find(l=>l.id===lid);
-  const fromRole=lead?.yj_from_role||'admin';
-  const fromBranch=lead?.yj_from_branch||'';
-  const returnTarget=fromBranch?fromBranch+'(지점장)':'관리자';
-  if(!confirm(`초도상담 완료 처리합니다.\n활동기록을 유지한 채 ${returnTarget}에게 자동 이관됩니다.`))return;
+  // allLeads 캐시 우선 사용
+  const lead=allLeads?.find(l=>l.id===lid)||myLeads?.find(l=>l.id===lid);
+  if(!lead){showToast('리드 정보를 불러올 수 없습니다.','error');return;}
+  const fromRole=lead.yj_from_role||'admin';
+  const fromBranch=lead.yj_from_branch||'';
+  const returnTarget=fromBranch?fromBranch+' 지점장':'관리자 신규배정 풀';
+  if(!confirm(`초도상담 완료 처리합니다.
+활동기록을 유지한 채 ${returnTarget}으로 자동 이관됩니다.`))return;
 
-  // 배정 주체에 따라 branch_name 복원
   const updateData={
     team_name:'',
     team_names:'',
@@ -5040,18 +5058,28 @@ async function yjReassign(){
     status:'assigned'
   };
   if(fromRole==='branch'&&fromBranch){
-    // 지점장에게 복귀 (팀장 미지정 상태)
     updateData.branch_name=fromBranch;
   } else {
-    // 관리자 신규배정 풀 (branch 초기화)
     updateData.branch_name='';
     updateData.assigned_at='';
   }
-  await dbU('leads',lid,updateData);
-  await logActivity(lid,'assign',`유영준 초도상담 완료 → ${returnTarget} 이관`,'assigned','초기접촉');
+
   closeM('modal-activity');
-  showToast(`초도상담 완료 — ${returnTarget}에게 이관됐어요`,'success');
-  loadLeads(); if(typeof loadMyLeads==='function') loadMyLeads();
+  showToast('처리 중...','success');
+
+  // 병렬 처리
+  await Promise.all([
+    dbU('leads',lid,updateData),
+    logActivity(lid,'assign',`유영준 초도상담 완료 → ${returnTarget} 이관`,'assigned','초기접촉')
+  ]);
+
+  // allLeads 캐시 즉시 갱신
+  if(allLeads){
+    const i=allLeads.findIndex(r=>r.id===lid);
+    if(i>=0) allLeads[i]={...allLeads[i],...updateData};
+  }
+  showToast(`초도상담 완료 — ${returnTarget}으로 이관됐어요`,'success');
+  filterLeads(); updateLeadsSubTabCounts();
 }
 // ══════════════════════════════════════════════════
 // 팀장: 오늘 할 일 위젯
@@ -8734,17 +8762,27 @@ function checkDelConfirm(){
 }
 async function doSoftDelete(){
   const ids=[...selIds];
-  const trash=getTrash();
-  const all=allLeads?.length?allLeads:await dbQ('leads');
-  for(const id of ids){
-    const lead=all.find(l=>l.id===id);
-    if(lead) trash.unshift({...lead,_deleted_at:new Date().toISOString(),_deleted_by:curUser.name});
-    await changeLeadStatus(id,{status:'deleted',note:'휴지통 이동',autoLog:true});
+  const now=new Date().toISOString();
+  // 배치 PATCH — 건별 루프 대신 병렬 처리
+  const updateData={status:'deleted',deleted_at:now,deleted_by:curUser?.name||'',updated_at:now};
+  if(!testMode){
+    // Supabase: 병렬 PATCH
+    await Promise.all(ids.map(id=>{ _trackLocalId(id); return sbPatch('leads',id,updateData); }));
+    // 활동 기록도 병렬
+    await Promise.all(ids.map(id=>sbPost('activities',{
+      id:uuid(),lead_id:id,type:'status_change',content:'휴지통 이동',
+      stage:'',author:curUser?.name||'',
+      created_at:now,date:now.slice(0,10)
+    })));
+  } else {
+    // 로컬 모드
+    const leads=lg('leads');
+    ids.forEach(id=>{ const l=leads.find(r=>r.id===id); if(l){l.status='deleted';l.deleted_at=now;l.deleted_by=curUser?.name||'';} });
+    ls('leads',leads);
   }
-  saveTrash(trash.slice(0,500));
-  // allLeads 캐시에서 즉시 제거 → 탭 카운트 즉시 반영
+  // allLeads 캐시에서 즉시 제거
   if(allLeads) allLeads=allLeads.filter(l=>!ids.includes(l.id));
-  _trashCount=(_trashCount||0)+ids.length; // 휴지통 카운트 즉시 증가
+  _trashCount=(_trashCount||0)+ids.length;
   closeOv('ov-delete-confirm'); clearSel();
   showToast(`${ids.length}건 휴지통으로 이동`,'success');
   filterLeads(); updateLeadsSubTabCounts();
@@ -9038,23 +9076,36 @@ async function distToYJ(){
   const ids=[...selIds];
   if(!ids.length){showToast('배정할 DB를 선택하세요.','error');return;}
   const note=document.getElementById('dist-note')?.value.trim()||'';
-  // 배정 주체 저장 (복귀용)
-  const fromRole=curUser.role;                          // 'admin' or 'branch'
-  const fromBranch=curUser.role==='branch'?curUser.name:''; // 지점장이면 본인명
-  for(const id of ids){
-    await dbU('leads',id,{
-      team_name:'유영준',
-      team_names:JSON.stringify(['유영준']),
-      yj_transferred:true,
-      yj_from_role:fromRole,      // 배정 주체 역할
-      yj_from_branch:fromBranch,  // 배정 주체 (지점장명 or '')
-      assigned_at:new Date().toISOString(),
-      status:'assigned'
-    });
-    await logActivity(id,'assign','유영준 초도상담 이관'+(note?' ('+note+')':''),'assigned','초기접촉');
-  }
+  const fromRole=curUser.role;
+  const fromBranch=curUser.role==='branch'?curUser.name:'';
+  const now=new Date().toISOString();
+  const updateData={
+    branch_name:'',        // 초도이관: 지점장 초기화 → 관리자 소속으로
+    team_name:'유영준',
+    team_names:JSON.stringify(['유영준']),
+    yj_transferred:true,
+    yj_from_role:fromRole,
+    yj_from_branch:fromBranch,
+    assigned_at:now,
+    status:'assigned'
+  };
   closeOv('ov-distribute'); clearSel();
-  showToast(`${ids.length}건 유영준 초도상담 이관 완료`,'success'); loadLeads();
+  showToast(`${ids.length}건 이관 처리 중...`,'success');
+
+  // 병렬 처리
+  await Promise.all(ids.flatMap(id=>[
+    dbU('leads',id,updateData),
+    logActivity(id,'assign','유영준 초도상담 이관'+(note?' ('+note+')':''),'assigned','초기접촉')
+  ]));
+
+  // allLeads 캐시 즉시 갱신
+  if(allLeads) ids.forEach(id=>{
+    const i=allLeads.findIndex(r=>r.id===id);
+    if(i>=0) allLeads[i]={...allLeads[i],...updateData};
+  });
+
+  showToast(`${ids.length}건 유영준 초도상담 이관 완료`,'success');
+  filterLeads(); updateLeadsSubTabCounts();
 }
 
 async function confirmDistribute(){
@@ -9064,30 +9115,39 @@ async function confirmDistribute(){
 
   // ── 회수 ──────────────────────────────────────────
   if(_distMode==='recall'){
-    for(const id of ids){
-      if(_recallType==='team_only'){
-        await dbU('leads',id,{team_name:'',team_names:'',status:'assigned'});
-        await logActivity(id,'assign','팀장 회수'+(note?' ('+note+')':''),'assigned','');
-      } else if(_recallType==='all'){
-        await changeLeadStatus(id,{status:'assigned',note:'지점장+팀장 전체 회수'+(note?' ('+note+')':''),autoLog:true});
-        await dbU('leads',id,{branch_name:'',team_name:'',team_names:'',assigned_at:''});
-      } else if(_recallType==='daejeon'){
-        await dbU('leads',id,{team_name:'',branch_name:'대전',tm_transferred:true,assigned_at:new Date().toISOString()});
-        await logActivity(id,'assign','팀장 회수 후 대전TM 이관'+(note?' ('+note+')':''),'','');
-      }
-    }
     closeOv('ov-distribute'); clearSel();
-    showToast(`${ids.length}건 회수 완료`,'success'); loadLeads(); return;
+    showToast(`${ids.length}건 회수 처리 중...`,'success');
+    await Promise.all(ids.flatMap(id=>{
+      if(_recallType==='team_only'){
+        const u={team_name:'',team_names:'',status:'assigned'};
+        if(allLeads){const i=allLeads.findIndex(r=>r.id===id);if(i>=0)allLeads[i]={...allLeads[i],...u};}
+        return [dbU('leads',id,u), logActivity(id,'assign','팀장 회수'+(note?' ('+note+')':''),'assigned','')];
+      } else if(_recallType==='all'){
+        const u={branch_name:'',team_name:'',team_names:'',assigned_at:'',status:'assigned'};
+        if(allLeads){const i=allLeads.findIndex(r=>r.id===id);if(i>=0)allLeads[i]={...allLeads[i],...u};}
+        return [dbU('leads',id,u), logActivity(id,'assign','지점장+팀장 전체 회수'+(note?' ('+note+')':''),'assigned','')];
+      } else if(_recallType==='daejeon'){
+        const u={team_name:'',branch_name:'대전',tm_transferred:true,assigned_at:new Date().toISOString()};
+        if(allLeads){const i=allLeads.findIndex(r=>r.id===id);if(i>=0)allLeads[i]={...allLeads[i],...u};}
+        return [dbU('leads',id,u), logActivity(id,'assign','팀장 회수 후 대전TM 이관'+(note?' ('+note+')':''),'','')];
+      }
+      return [];
+    }));
+    showToast(`${ids.length}건 회수 완료`,'success');
+    filterLeads(); updateLeadsSubTabCounts(); return;
   }
 
   // ── 대전TM 이관 ──────────────────────────────────
   if(_distMode==='daejeon'){
-    for(const id of ids){
-      await dbU('leads',id,{branch_name:'대전',team_name:'대전센터',tm_transferred:true,assigned_at:new Date().toISOString()});
-      await logActivity(id,'assign','대전TM센터 이관'+(note?' ('+note+')':''),'','');
-    }
+    const djData={branch_name:'대전',team_name:'대전센터',tm_transferred:true,assigned_at:new Date().toISOString()};
     closeOv('ov-distribute'); clearSel();
-    showToast(`${ids.length}건 대전TM 이관 완료`,'success'); loadLeads(); return;
+    await Promise.all(ids.flatMap(id=>[
+      dbU('leads',id,djData),
+      logActivity(id,'assign','대전TM센터 이관'+(note?' ('+note+')':''),'','')
+    ]));
+    if(allLeads) ids.forEach(id=>{const i=allLeads.findIndex(r=>r.id===id);if(i>=0)allLeads[i]={...allLeads[i],...djData};});
+    showToast(`${ids.length}건 대전TM 이관 완료`,'success');
+    filterLeads(); updateLeadsSubTabCounts(); return;
   }
 
   // ── 해피콜 이관 ──────────────────────────────────
@@ -9116,16 +9176,19 @@ async function confirmDistribute(){
   if(!_selBranch){showToast('지점장을 선택하세요.','error');return;}
   const teams=typeof _selTeams!=='undefined'?[..._selTeams]:[];
   const teamDisplay=teams.length===0?'':teams.length===1?teams[0]:teams[0]+' 외 '+(teams.length-1)+'명';
-  for(const id of ids){
-    const updateData={branch_name:_selBranch,assigned_at:new Date().toISOString(),status:'assigned'};
-    if(teams.length>0){updateData.team_name=teamDisplay;updateData.team_names=JSON.stringify(teams);}
-    else{updateData.team_name='';updateData.team_names=null;}
-    await dbU('leads',id,updateData);
-    const msg=`${_selBranch} 지점${teamDisplay?' → '+teamDisplay+' 배정':''}`+(note?' ('+note+')':'');
-    await logActivity(id,'assign',msg,'assigned','초기접촉');
-  }
+  const assignData={branch_name:_selBranch,assigned_at:new Date().toISOString(),status:'assigned'};
+  if(teams.length>0){assignData.team_name=teamDisplay;assignData.team_names=JSON.stringify(teams);}
+  else{assignData.team_name='';assignData.team_names=null;}
+  const msg=`${_selBranch} 지점${teamDisplay?' → '+teamDisplay+' 배정':''}`+(note?' ('+note+')':'');
   closeOv('ov-distribute'); clearSel();
-  showToast(`${ids.length}건 배정 완료`,'success'); loadLeads();
+  showToast(`${ids.length}건 배정 처리 중...`,'success');
+  await Promise.all(ids.flatMap(id=>[
+    dbU('leads',id,assignData),
+    logActivity(id,'assign',msg,'assigned','초기접촉')
+  ]));
+  if(allLeads) ids.forEach(id=>{const i=allLeads.findIndex(r=>r.id===id);if(i>=0)allLeads[i]={...allLeads[i],...assignData};});
+  showToast(`${ids.length}건 배정 완료`,'success');
+  filterLeads(); updateLeadsSubTabCounts();
 }
 
 // team_name 표시 — OOO 외 형식 그대로 렌더링 (이미 저장된 값 사용)
@@ -10389,11 +10452,10 @@ function renderMyLeadsTable(){
   }).join('');
 
   // 페이지네이션
-  const PG2_TOTAL=data.length;
   const pgEl=document.getElementById('my-leads-pagination');
   if(pgEl){
-    const pages2=Math.ceil(PG2_TOTAL/PG2);
-    pgEl.textContent=pages2<=1?`총 ${PG2_TOTAL}건`:`${myPage}/${pages2} (${PG2_TOTAL}건)`;
+    const pages=Math.ceil(data.length/PG2);
+    pgEl.textContent=pages<=1?`총 ${data.length}건`:`${myPage}/${pages} (${data.length}건)`;
   }
   renderMyColChips();
 }
@@ -10712,126 +10774,6 @@ function initDarkMode(){
 })();
 
 
-
-
-// ══════════════════════════════════════════════════════════
-// KBMC CRM PERF PATCH — 활동 데이터 맵 캐싱 + debounce + 병렬화
-// ══════════════════════════════════════════════════════════
-
-// [PERF-1] 활동 맵 캐시 (O(n²) → O(1))
-(function(){
-  let _cache=null, _stamp=0;
-  window.getActsMap=function(){
-    const src=(typeof allActivities!=='undefined'&&allActivities?.length)
-      ?allActivities:(typeof lg==='function'?lg('activities'):[]);
-    if(_cache&&src.length===_stamp)return _cache;
-    const m={};
-    src.forEach(a=>{
-      if(!a.lead_id||a.type==='assign')return;
-      if(!m[a.lead_id])m[a.lead_id]={latest:null,count:0};
-      m[a.lead_id].count++;
-      const c=m[a.lead_id].latest;
-      if(!c||new Date(a.created_at)>new Date(c.created_at))m[a.lead_id].latest=a;
-    });
-    _cache=m; _stamp=src.length; return m;
-  };
-  // dbI 후 캐시 무효화
-  const _origDbI=typeof dbI!=='undefined'?window.dbI:null;
-  if(_origDbI){
-    window.dbI=async function(table,data){
-      const r=await _origDbI(table,data);
-      if(table==='activities'){_cache=null;}
-      return r;
-    };
-  }
-})();
-
-// [PERF-2] debounce 유틸
-window._debounce=function(fn,ms){let t;return function(...a){clearTimeout(t);t=setTimeout(()=>fn.apply(this,a),ms);};};
-
-// [PERF-2] 검색 입력 debounce 적용
-document.addEventListener('DOMContentLoaded',function(){
-  const si=document.getElementById('leads-search');
-  if(si){
-    si.removeAttribute('oninput');
-    si.addEventListener('input',window._debounce(()=>{if(typeof filterLeads==='function')filterLeads();},250));
-  }
-  const ms=document.getElementById('my-search');
-  if(ms){
-    ms.removeAttribute('oninput');
-    ms.addEventListener('input',window._debounce(()=>{if(typeof filterMyLeads==='function')filterMyLeads();},250));
-  }
-},{once:true});
-
-// [PERF-3] loadLeads activities/next_actions 병렬 조회
-(function(){
-  const _orig=typeof loadLeads!=='undefined'?window.loadLeads:null;
-  if(!_orig)return;
-  window.loadLeads=async function(){
-    await _orig();
-    if(typeof testMode!=='undefined'&&!testMode&&typeof dbQ==='function'){
-      if(!(typeof allActivities!=='undefined'&&allActivities&&allActivities.length>0)){
-        const[acts,nas]=await Promise.all([dbQ('activities'),dbQ('next_actions')]);
-        window.allActivities=acts||[];
-        window.allNextActions=nas||[];
-        window._actsMapCache=null;
-      }
-    }
-  };
-})();
-
-// [PERF-4] renderLeadsTable — actsMap 캐시 활용 래퍼
-(function(){
-  const _orig=typeof renderLeadsTable!=='undefined'?window.renderLeadsTable:null;
-  if(!_orig)return;
-  window.renderLeadsTable=function(){
-    window._actsMapCache=null;
-    if(typeof getActsMap==='function')getActsMap();
-    _orig();
-  };
-})();
-
-// [PERF-5] loadMyLeads 병렬화
-(function(){
-  const _orig=typeof loadMyLeads!=='undefined'?window.loadMyLeads:null;
-  if(!_orig)return;
-  window.loadMyLeads=async function(){
-    if(typeof testMode!=='undefined'&&!testMode&&typeof dbQ==='function'){
-      const[all,nas]=await Promise.all([dbQ('leads'),dbQ('next_actions')]);
-      window.allNextActions=nas||[];
-      if(typeof ls==='function')ls('next_actions',nas);
-      window.myLeads=(all||[]).filter(l=>l.team_name===curUser.name&&l.status!=='deleted');
-      const sub=document.getElementById('my-leads-sub');
-      if(sub)sub.textContent=myLeads.length+'건';
-      if(typeof renderMyGoal==='function')renderMyGoal();
-      if(typeof renderNAWidget==='function')renderNAWidget();
-      if(typeof renderTodayTodo==='function')renderTodayTodo();
-      if(typeof filterMyLeads==='function')filterMyLeads();
-      if(typeof checkUnrecorded==='function')checkUnrecorded();
-    }else{await _orig();}
-  };
-})();
-
-// [PERF-6] colVal last_activity — getActsMap 캐시 활용
-(function(){
-  const _origColVal=typeof colVal!=='undefined'?window.colVal:null;
-  if(!_origColVal)return;
-  window.colVal=function(l,key,acts){
-    if(key==='last_activity'){
-      const m=typeof getActsMap==='function'?getActsMap():acts;
-      const la=m?.[l.id];
-      const latest=la?.latest;
-      const cnt=la?.count||0;
-      if(!latest)return'<td style="font-size:11px;color:var(--gray-300)">-</td>';
-      const preview=typeof esc==='function'?esc((latest.content||'').slice(0,40)):(latest.content||'').slice(0,40);
-      const extra=cnt>1?` <span style="font-size:10px;color:var(--gray-400);white-space:nowrap">외 ${cnt-1}건</span>`:'';
-      return`<td style="font-size:11px;max-width:220px;color:var(--gray-700);overflow:hidden;text-overflow:ellipsis">${preview}${extra}</td>`;
-    }
-    return _origColVal(l,key,acts);
-  };
-})();
-
-console.log('[KBMC CRM] 성능 패치 v2 적용 완료 (PERF 1~6)');
 
 </script>
 </body>
