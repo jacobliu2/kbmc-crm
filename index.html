@@ -3379,7 +3379,7 @@ async function sbGet(path){
     const t=await r.text(); return t?JSON.parse(t):[];
   }catch(e){
     // sbGet fallback to local
-    if(!testMode){ testMode=true; setTimeout(()=>showToast('Supabase 연결 불가 — 로컬 모드로 전환됩니다','error'),500); }
+    console.warn('sbGet 연결 실패:', e);
     return null;
   }
 }
@@ -3387,9 +3387,39 @@ async function sbPost(table,data){
   if(testMode) return null;
   try{
     const r=await fetch(SB_URL+'/rest/v1/'+table,{method:'POST',headers:sbH(),body:JSON.stringify(data)});
-    if(!r.ok){ console.error('sbPost err:',r.status); return null; }
+    if(!r.ok){
+      const errText=await r.text().catch(()=>'');
+      console.error('sbPost err:',r.status, errText);
+      return null;
+    }
     const t=await r.text(); const d=t?JSON.parse(t):null; return Array.isArray(d)?d[0]:d;
-  }catch(e){ if(!testMode) testMode=true; return null; }
+  }catch(e){
+    console.error('sbPost exception:',e);
+    return null; // testMode 전환 제거 — 네트워크 일시 오류로 전체 모드 바꾸지 않음
+  }
+}
+
+// 배치 INSERT (최대 BATCH_SIZE건씩 묶어서 한 번에 전송)
+async function sbPostBatch(table, rows, BATCH_SIZE=50){
+  if(testMode) return {ok:0, fail:rows.length};
+  let ok=0, fail=0;
+  for(let i=0;i<rows.length;i+=BATCH_SIZE){
+    const batch=rows.slice(i,i+BATCH_SIZE);
+    try{
+      const r=await fetch(SB_URL+'/rest/v1/'+table,{
+        method:'POST',
+        headers:{...sbH(),'Prefer':'return=minimal'},
+        body:JSON.stringify(batch)
+      });
+      if(r.ok){ ok+=batch.length; }
+      else {
+        const errText=await r.text().catch(()=>'');
+        console.error('sbPostBatch err:',r.status, errText);
+        fail+=batch.length;
+      }
+    }catch(e){ console.error('sbPostBatch exception:',e); fail+=batch.length; }
+  }
+  return {ok, fail};
 }
 async function sbPatch(table,id,data){ const r=await fetch(SB_URL+'/rest/v1/'+table+'?id=eq.'+id,{method:'PATCH',headers:sbH(),body:JSON.stringify(data)}); return r.ok; }
 async function sbDel(table,id){ return (await fetch(SB_URL+'/rest/v1/'+table+'?id=eq.'+id,{method:'DELETE',headers:sbH()})).ok; }
@@ -3414,10 +3444,9 @@ async function dbQ(table, filters={}){
   if(table==='leads') path+='&status=neq.deleted';
   const result=await sbGet(path);
   if(result===null){
-    testMode=true;
-    let d=lg(table);
-    Object.entries(filters).forEach(([k,v])=>{if(v!==undefined&&v!=='')d=d.filter(r=>r[k]===v);});
-    return d;
+    // testMode 자동전환 제거 — Supabase 실패를 명시적으로 알림
+    showToast('⚠️ Supabase 연결 실패 — 데이터를 불러오지 못했습니다. 새로고침 해주세요.','error');
+    return [];
   }
   return result;
 }
@@ -3425,7 +3454,7 @@ async function dbI(table,data){
   const row={id:uuid(),created_at:new Date().toISOString(),updated_at:new Date().toISOString(),...data};
   if(testMode){ const a=lg(table); a.unshift(row); ls(table,a); return row; }
   const result=await sbPost(table,row);
-  if(result===null&&testMode){ const a=lg(table); a.unshift(row); ls(table,a); return row; }
+  // testMode 자동전환 제거 — 실패는 null 반환으로만 처리
   return result;
 }
 async function dbU(table,id,data){
@@ -3465,7 +3494,8 @@ async function logActivity(leadId, type, content, newStatus, stage, actDate){
 // autoLog: false면 activity 생성 안 함 (배치용)
 // ══════════════════════════════════════════════════════════════
 async function changeLeadStatus(leadId, {status, stage, note='', autoLog=true, actDate=null, force=false}={}){
-  const cache = lg('leads');
+  // Supabase 모드: allLeads 인메모리 캐시 우선, fallback localStorage
+  const cache = (allLeads?.length ? allLeads : lg('leads'));
   const prev = cache.find(l=>l.id===leadId)||{};
   const prevStatus = prev.status||'';
   const prevStage  = prev.current_stage||'';
@@ -3474,7 +3504,8 @@ async function changeLeadStatus(leadId, {status, stage, note='', autoLog=true, a
   if(!force && stage && stage!==prevStage){
     const LOCKED_STAGES=['제안','협의','계약','관리고객'];
     if(LOCKED_STAGES.includes(stage)){
-      const acts=lg('activities').filter(a=>a.lead_id===leadId&&a.type!=='status_change'&&a.type!=='assign');
+      const _actCache = typeof allActivities!=='undefined'&&allActivities?.length ? allActivities : lg('activities');
+      const acts=_actCache.filter(a=>a.lead_id===leadId&&a.type!=='status_change'&&a.type!=='assign');
       if(!acts.length){
         showToast(`활동 기록 없이 "${stage}" 단계로 진행할 수 없습니다.\n먼저 활동을 기록하세요.`,'error');
         return false;
@@ -3482,7 +3513,8 @@ async function changeLeadStatus(leadId, {status, stage, note='', autoLog=true, a
     }
     // 계약 단계 추가 검증: 상담/제안 이력 필수
     if(stage==='계약'){
-      const hasConsult=lg('activities').some(a=>a.lead_id===leadId&&['meeting','proposal','online'].includes(a.type));
+      const _actCache2 = typeof allActivities!=='undefined'&&allActivities?.length ? allActivities : lg('activities');
+      const hasConsult=_actCache2.some(a=>a.lead_id===leadId&&['meeting','proposal','online'].includes(a.type));
       if(!hasConsult){
         showToast('계약 처리는 미팅/제안 이력이 최소 1건 이상 필요합니다.','error');
         return false;
@@ -5886,24 +5918,33 @@ async function importExcel(event){
 async function confirmImport(){
   if(!_pending.length){showToast('없음','error');return;}
   closeM('modal-import');
+  const total=_pending.length;
+  const now=new Date().toISOString();
+  const rows=_pending.map(r=>({
+    id:r.id||uuid(),
+    created_at:r.created_at||now,
+    updated_at:now,
+    ...r
+  }));
+  _pending=[];
+
   if(testMode){
     // 로컬 모드: 한번에 저장
     const existing=lg('leads');
-    const newRows=_pending.map(r=>({id:uuid(),created_at:new Date().toISOString(),updated_at:new Date().toISOString(),...r}));
-    ls('leads',[...newRows,...existing]);
-    const cnt=_pending.length; _pending=[];
-    showToast(`${cnt}건 등록 완료`,'success');
+    ls('leads',[...rows,...existing]);
+    showToast(`${total}건 등록 완료`,'success');
     loadLeads();
   } else {
-    // Supabase 모드: 건별 저장
-    showToast(`${_pending.length}건 업로드 중...`,'success');
-    let ok=0, fail=0;
-    for(const row of _pending){
-      try{ await dbI('leads', row); ok++; }
-      catch(e){ console.error('import fail:', e); fail++; }
+    // Supabase 모드: 배치 INSERT (50건씩)
+    showToast(`${total}건 업로드 중... (잠시 기다려주세요)`,'success');
+    const {ok,fail}=await sbPostBatch('leads', rows, 50);
+    if(fail===0){
+      showToast(`✅ ${ok}건 등록 완료`,'success');
+    } else if(ok===0){
+      showToast(`❌ 업로드 실패 — Supabase 연결을 확인하세요 (${fail}건)`,'error');
+    } else {
+      showToast(`⚠️ ${ok}건 성공 / ${fail}건 실패`,'warn');
     }
-    _pending=[];
-    showToast(`${ok}건 등록 완료${fail?` (실패 ${fail}건)`:''}`, fail?'error':'success');
     loadLeads();
   }
 }
@@ -7944,7 +7985,7 @@ function openAutoDist(){
     <label style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);cursor:pointer">
       <input type="checkbox" value="${b}" checked style="accent-color:var(--navy)">
       <span style="font-size:13px;font-weight:600">${b}</span>
-      <span style="margin-left:auto;font-size:11px;color:var(--gray-400)">현재 ${lg('leads').filter(l=>l.branch_name===b).length}건</span>
+      <span style="margin-left:auto;font-size:11px;color:var(--gray-400)">현재 ${(allLeads?.length?allLeads:lg('leads')).filter(l=>l.branch_name===b).length}건</span>
     </label>`).join('');
   ov.innerHTML=`<div class="ov-box" style="width:440px;max-width:96vw">
     <div style="font-size:17px;font-weight:800;color:var(--navy);margin-bottom:4px">⚡ 일괄 자동 배정</div>
@@ -7977,7 +8018,7 @@ async function confirmAutoDist(ids){
 }
 
 function openDbCleanup(){
-  const leads=lg('leads').filter(l=>l.status!=='deleted');
+  const leads=(allLeads?.length ? allLeads : lg('leads')).filter(l=>l.status!=='deleted');
   // 중복 감지 (회사명+전화번호)
   const seen={}, dups=[];
   leads.forEach(l=>{
@@ -8044,7 +8085,10 @@ function renderSchema(){
   }catch(e){}
 }
 function initData(){
-  if(lg('leads').length>0)return;
+  // 배포 환경(Supabase 모드)에서는 localStorage 초기 데이터 주입 완전 차단
+  // 로컬 파일 모드(testMode)에서만 INITIAL_LEADS 사용
+  if(!testMode) return;
+  if(lg('leads').length>0) return;
   if(window.INITIAL_LEADS?.length){
     ls('leads',window.INITIAL_LEADS);
     if(window.INITIAL_ACTIVITIES?.length)ls('activities',window.INITIAL_ACTIVITIES);
@@ -8619,7 +8663,7 @@ async function recallSelected(){
 
 let _dropAll=[], _dropFiltered=[];
 function renderDropPanel(){
-  _dropAll=lg('leads').filter(l=>l.status==='drop');
+  _dropAll=(allLeads?.length ? allLeads : lg('leads')).filter(l=>l.status==='drop');
   (document.getElementById('drop-sub')||{}).textContent=_dropAll.length+'건';
   filterDropLeads();
 }
@@ -8639,7 +8683,7 @@ function renderDropTable(){
   const tbody=document.getElementById('drop-tbody'); if(!tbody) return;
   if(!_dropFiltered.length){tbody.innerHTML='<tr><td colspan="8" class="empty">드랍 DB 없음</td></tr>';return;}
   tbody.innerHTML=_dropFiltered.map(l=>`<tr>
-    <td style="font-weight:700;color:var(--navy);cursor:pointer" onclick="openLeadDetailModal(lg('leads').find(x=>x.id==='${l.id}'))">${esc(l.company_name||'-')}</td>
+    <td style="font-weight:700;color:var(--navy);cursor:pointer" onclick="openLeadDetailModal((allLeads?.length?allLeads:lg('leads')).find(x=>x.id==='${l.id}'))">${esc(l.company_name||'-')}</td>
     <td>${esc(l.contact_name||'-')}</td>
     <td style="font-size:12px">${esc(l.phone||'-')}</td>
     <td style="font-size:11px">${esc(l.branch_name||'-')}</td>
