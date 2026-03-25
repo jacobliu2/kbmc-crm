@@ -1764,9 +1764,10 @@ tbody tr.selected td{background:var(--blue-50)!important}
             <input type="text" id="sb-url" placeholder="https://xxxxx.supabase.co" style="font-family:monospace;font-size:12px"></div>
           <div class="fg" style="margin-bottom:14px"><label>Anon Key</label>
             <input type="text" id="sb-key" placeholder="eyJhbGc..." style="font-family:monospace;font-size:12px"></div>
-          <div style="display:flex;gap:8px;align-items:center">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <button class="btn btn-primary btn-sm" onclick="applySbConfig()">저장 및 적용</button>
             <button class="btn btn-outline btn-sm" onclick="testSbConnection()">연결 테스트</button>
+            <button class="btn btn-blue btn-sm" onclick="syncAccountsToSB()" title="DB관리 계정 정보를 Supabase에 전체 업로드">☁️ 계정 Supabase 동기화</button>
             <span id="sb-status" style="font-size:12px;color:var(--gray-400)"></span>
           </div>
         </div>
@@ -1805,7 +1806,7 @@ tbody tr.selected td{background:var(--blue-50)!important}
           <div class="section-title">📢 공지 관리</div>
           <div class="fg" style="margin-bottom:8px"><label>대상</label>
             <select id="notice-target" style="padding:8px 11px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--gray-900)">
-              <option value="all">전체</option><option value="branch">지점장</option><option value="team">팀장</option><option value="tm">대전TM</option>
+              <option value="all">전체</option><option value="branch">지점장</option><option value="team">팀장</option><option value="tm">대전TM</option><option value="dbmanager">DB관리자</option>
             </select></div>
           <div class="fg" style="margin-bottom:8px"><label>제목</label>
             <input type="text" id="notice-title" placeholder="공지 제목"></div>
@@ -2191,7 +2192,7 @@ tbody tr.selected td{background:var(--blue-50)!important}
       <div class="fg"><label>이름</label><input type="text" id="uf-name"></div>
       <div class="fg"><label>역할</label>
         <select id="uf-role" onchange="updateUfBranch()" style="padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--gray-900)">
-          <option value="team">팀장</option><option value="branch">지점장</option><option value="tm">대전TM</option><option value="admin">관리자</option>
+          <option value="team">팀장</option><option value="branch">지점장</option><option value="tm">대전TM</option><option value="dbmanager">DB관리자</option><option value="admin">관리자</option>
         </select>
       </div>
       <div class="fg"><label>소속 지점</label>
@@ -2789,8 +2790,10 @@ async function approveLeaderReq(reqId){
     // 팀장 추가
     const branch=req.branch;
     if(!accs.find(a=>a.name===req.name)){
-      accs.push({id:req.name,pw:'1234',role:'team',name:req.name,branch});
+      const newAcc={id:req.name,pw:await hashPw('1234'),role:'team',name:req.name,branch,created_at:new Date().toISOString()};
+      accs.push(newAcc);
       saveAccs(accs);
+      if(!testMode) await sbUpsertAccount(newAcc);
     }
     syncBranchTeamMap();
     showToast(`${req.name} 팀장 추가 완료`,'success');
@@ -2812,7 +2815,12 @@ async function approveLeaderReq(reqId){
     }
     // 팀장 삭제
     const idx=accs.findIndex(a=>a.name===req.name&&a.role==='team');
-    if(idx>=0){ accs.splice(idx,1); saveAccs(accs); }
+    if(idx>=0){
+      const delId=accs[idx].id;
+      accs.splice(idx,1);
+      saveAccs(accs);
+      if(!testMode) await sbDeleteAccount(delId);
+    }
     syncBranchTeamMap();
     showToast(`${req.name} 팀장 삭제 완료`,'success');
     addN('system','✅ 팀장 삭제 승인',req.branch+' → '+req.name+' 삭제됨','system:settings');
@@ -3545,19 +3553,67 @@ function syncBranchTeamMap(){
 
 const ACCT_VER_KEY='kbmc_v2_acct_ver';
 const ACCT_VER_CURRENT='4';
+
+// ── accounts: Supabase 우선, fallback localStorage ────────
+// 동기 캐시 (로그인·렌더 등 동기 호출용)
+let _accsCache = null;
+
 function getAccs(){
-  const savedVer=localStorage.getItem(ACCT_VER_KEY);
+  // 캐시 있으면 즉시 반환
+  if(_accsCache) return _accsCache;
+  // localStorage fallback
   const s=localStorage.getItem(LS.accounts);
-  if(savedVer===ACCT_VER_CURRENT && s) try{return JSON.parse(s);}catch(e){}
+  if(s) try{ _accsCache=JSON.parse(s); return _accsCache; }catch(e){}
+  // 초기 기본값
   const SPECIAL_PW={'유영준':'44313a51f457afd48ad52fe8839cbf409da09c4c8ee84afac9030612ea42c502'};
-  const accs=[{id:'관리자',pw:'4cc42d81fa28330182277cfeace4674e96dbd9c47bfe9fed1312f9c8dfcf7246',role:'admin',name:'관리자',branch:''},{id:'대전',pw:'1234',role:'tm',name:'대전센터',branch:'대전'}];
+  const accs=[{id:'관리자',pw:'4cc42d81fa28330182277cfeace4674e96dbd9c47bfe9fed1312f9c8dfcf7246',role:'admin',name:'관리자',branch:''},{id:'대전',pw:'1234',role:'tm',name:'대전센터',branch:'대전'},{id:'김범기',pw:'03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4',role:'dbmanager',name:'김범기',branch:''}];
   BRANCHES.forEach(b=>accs.push({id:b,pw:'1234',role:'branch',name:b,branch:b}));
   Object.entries(TEAM_MAP).forEach(([br,tms])=>tms.forEach(t=>accs.push({id:t,pw:SPECIAL_PW[t]||'1234',role:'team',name:t,branch:br})));
+  _accsCache=accs;
   ls('accounts',accs);
-  localStorage.setItem(ACCT_VER_KEY,ACCT_VER_CURRENT);
   return accs;
 }
-function saveAccs(a){ls('accounts',a);}
+
+// Supabase에서 accounts 로드 후 캐시+localStorage 갱신
+async function loadAccsFromSB(){
+  if(testMode) return getAccs();
+  try{
+    const rows=await sbGet('accounts?select=*&order=created_at.asc&limit=500');
+    if(rows && rows.length>0){
+      _accsCache=rows;
+      ls('accounts',rows);
+      localStorage.setItem(ACCT_VER_KEY,ACCT_VER_CURRENT);
+      return rows;
+    }
+  }catch(e){ console.warn('loadAccsFromSB error',e); }
+  return getAccs();
+}
+
+// Supabase accounts 테이블에 upsert (신규/수정 공통)
+async function sbUpsertAccount(acc){
+  if(testMode) return false;
+  try{
+    // upsert: id 기준으로 insert or update
+    const h={...sbH(),'Prefer':'resolution=merge-duplicates,return=representation'};
+    const r=await fetch(SB_URL+'/rest/v1/accounts',{
+      method:'POST',headers:h,body:JSON.stringify({...acc,updated_at:new Date().toISOString()})
+    });
+    return r.ok;
+  }catch(e){ console.warn('sbUpsertAccount error',e); return false; }
+}
+
+async function sbDeleteAccount(id){
+  if(testMode) return false;
+  try{
+    const r=await fetch(SB_URL+'/rest/v1/accounts?id=eq.'+encodeURIComponent(id),{method:'DELETE',headers:sbH()});
+    return r.ok;
+  }catch(e){ return false; }
+}
+
+function saveAccs(a){
+  _accsCache=a;
+  ls('accounts',a);
+}
 
 async function hashPw(pw){ const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(pw)); return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join(''); }
 async function pwOk(inp,stored){ if(!stored)return false; if(stored.length===64&&/^[0-9a-f]+$/.test(stored))return(await hashPw(inp))===stored; return inp===stored; }
@@ -3575,11 +3631,12 @@ function doLogout(){localStorage.removeItem(SK);curUser=null;document.getElement
 // ── 앱 시작 ──────────────────────────────────────────────
 const NAV_CFG = {
   admin:[{id:'admin',l:'📊 대시보드'},{id:'leads',l:'🗄️ DB관리'},{id:'activity',l:'📅 활동'},{id:'settings',l:'⚙️ 설정'}],
+  dbmanager:[{id:'leads',l:'🗄️ DB관리'},{id:'activity',l:'📅 활동'}],
   branch:[{id:'branch',l:'🏢 지점관리'},{id:'leads',l:'🗄️ DB관리'},{id:'activity',l:'📅 활동'}],
   team:[{id:'leads',l:'🗄️ DB관리'},{id:'my-clients',l:'🏆 고객관리'},{id:'activity',l:'📅 활동'}],
   tm:[{id:'tm-panel',l:'📞 이관 DB'}],
 };
-const RL={admin:'관리자',branch:'지점장',team:'팀장',tm:'대전TM'};
+const RL={admin:'관리자',dbmanager:'DB관리자',branch:'지점장',team:'팀장',tm:'대전TM'};
 
 function startApp(){
   // 관리자 회수대상 팝업은 매 로그인마다 새로 표시
@@ -3616,6 +3673,10 @@ function startApp(){
 
 // ── 화면 전환 ─────────────────────────────────────────────
 function showScreen(id, btn){
+  // dbmanager: 대시보드·설정·지점관리 화면 접근 차단
+  if(curUser?.role==='dbmanager' && ['admin','settings','branch'].includes(id)){
+    showToast('DB관리자는 해당 화면에 접근할 수 없습니다.','error'); return;
+  }
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   const el=document.getElementById('screen-'+id); if(el)el.classList.add('active');
   buildNav(); // 탭 active 동기화
@@ -4096,11 +4157,19 @@ const PG=50;
 
 async function loadLeads(){
   // 역할별 엑셀 업로드 버튼 제어
-  const _canUpload = curUser?.role==='admin' || curUser?.role==='branch';
+  const _canUpload = curUser?.role==='admin' || curUser?.role==='branch' || curUser?.role==='dbmanager';
   const _uploadWrap = document.getElementById('btn-excel-upload-wrap');
   const _tplBtn = document.getElementById('btn-template-download');
   if(_uploadWrap) _uploadWrap.style.display = _canUpload ? '' : 'none';
   if(_tplBtn) _tplBtn.style.display = _canUpload ? '' : 'none';
+  // dbmanager: 배정/드랍/삭제 액션바 버튼 숨김
+  const _abarDist = document.querySelector('#leads-abar .abar-btn.blue');
+  const _abarDrop = document.querySelector('#leads-abar .abar-btn.warn');
+  const _abarDel  = document.querySelector('#leads-abar .abar-btn.err');
+  const _isDbMgr  = curUser?.role==='dbmanager';
+  if(_abarDist) _abarDist.style.display = _isDbMgr ? 'none' : '';
+  if(_abarDrop) _abarDrop.style.display = _isDbMgr ? 'none' : '';
+  if(_abarDel)  _abarDel.style.display  = _isDbMgr ? 'none' : '';
   const isYJ=curUser?.name==='유영준';
   const yjFilterEl=document.getElementById('leads-yj-filter');
   const yjTabEl=document.getElementById('qtab-yj-initial');
@@ -4110,8 +4179,8 @@ async function loadLeads(){
   const _ltb=document.getElementById('leads-tbody'); if(_ltb) _ltb.innerHTML='<tr><td colspan="12" class="loading">불러오는 중...</td></tr>';
   allLeads=await dbQ('leads');
   allLeads=allLeads.filter(l=>l.status!=='deleted');
-  if(curUser.role==='admin'){
-    // 관리자: 모든 DB 열람 — 필터 없음
+  if(curUser.role==='admin'||curUser.role==='dbmanager'){
+    // 관리자/DB관리자: 모든 DB 열람 — 필터 없음
   } else if(curUser.role==='branch'){
     // 지점장: 자기 지점 + 자신이 업로드한 DB
     allLeads=allLeads.filter(l=>
@@ -4126,8 +4195,8 @@ async function loadLeads(){
   const teamEl   = document.getElementById('leads-team');
   const brFbarEl = branchEl?.closest('.fbar') || branchEl?.parentElement;
 
-  if(curUser.role === 'admin'){
-    // 관리자: 전체 지점 선택 가능
+  if(curUser.role === 'admin' || curUser.role === 'dbmanager'){
+    // 관리자/DB관리자: 전체 지점 선택 가능
     if(branchEl) branchEl.innerHTML='<option value="">전체 지점</option>'+BRANCHES.map(b=>`<option>${b}</option>`).join('');
     if(branchEl) branchEl.style.display='';
     // 팀장 필터: 선택 지점에 따라 동적
@@ -4158,7 +4227,7 @@ function yjQuickFilter(val){document.querySelectorAll('[id^="qtab-"]').forEach(b
 function filterLeads(){
   const s=(document.getElementById('leads-search')?.value||'').toLowerCase();
   // 역할에 따라 지점/팀장 필터 적용 여부 결정
-  const br=curUser.role==='admin'?(document.getElementById('leads-branch')?.value||'')
+  const br=(curUser.role==='admin'||curUser.role==='dbmanager')?(document.getElementById('leads-branch')?.value||'')
           :curUser.role==='branch'?curUser.name:'';
   const tm=curUser.role==='team'?curUser.name:(document.getElementById('leads-team')?.value||'');
   const st=document.getElementById('leads-status')?.value||'';
@@ -4197,7 +4266,7 @@ function filterLeads(){
 function clearLeadFilters(){
   ['leads-search','leads-status','leads-type'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   // 관리자만 지점/팀장 필터 초기화
-  if(curUser.role==='admin'){
+  if(curUser.role==='admin'||curUser.role==='dbmanager'){
     ['leads-branch','leads-team'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   } else if(curUser.role==='branch'){
     const e=document.getElementById('leads-team');if(e)e.value='';
@@ -4387,6 +4456,7 @@ function updateAbar(){const bar=document.getElementById('leads-abar'),cnt=docume
 function fByStage(stage){_stageFilter=stage;showScreen('leads',document.querySelector('.nb[data-s="leads"]'));setTimeout(()=>filterLeads(),120);}
 function filterByStatus(s){_stageFilter='';showScreen('leads',document.querySelector('.nb[data-s="leads"]'));setTimeout(()=>{document.getElementById('leads-status').value=s;filterLeads();},120);}
 function openDrop(){
+  if(curUser?.role==='dbmanager'){showToast('DB관리자는 드랍 권한이 없습니다.','error');return;}
   if(!selIds.size){showToast('선택하세요.','error');return;}
   openDropModal([...selIds]);
 }
@@ -4573,7 +4643,7 @@ async function openPanel(lead){
     const isDone=lead.status==='contacted';
     footer=`<button class="btn btn-primary btn-sm" onclick="closePanel();openTmInput('${lead.id}','${esc(lead.company_name||'')}')">📞 TM 기록</button>
       ${isDone?`<button class="btn btn-sm" style="background:var(--ok);color:#fff;border-color:var(--ok)" onclick="tmToAdmin('${lead.id}')">✅ 관리자 이관</button>`:''} `+footer;
-  } else if(['team','branch','admin'].includes(curUser.role)){
+  } else if(['team','branch','admin','dbmanager'].includes(curUser.role)){
     footer=`<button class="btn btn-outline btn-sm" onclick="openActM('${lead.id}','${esc(lead.company_name||'')}')">💬 활동기록</button>
       
       <button class="btn btn-primary btn-sm" onclick="openLeadEdit('${lead.id}')">✏️ 수정</button>
@@ -5462,7 +5532,7 @@ async function checkUnrecorded(){
 }
 
 async function checkUnrecordedAdmin(){
-  if(curUser?.role!=='admin'||sessionStorage.getItem('warn48_admin_shown')) return;
+  if((curUser?.role!=='admin'&&curUser?.role!=='dbmanager')||sessionStorage.getItem('warn48_admin_shown')) return;
   const leads=await dbQ('leads');
   const acts=lg('activities'); const now=Date.now();
   const warn48=leads.filter(l=>{
@@ -5908,7 +5978,10 @@ async function doExport(){
 
 // ── 설정 ──────────────────────────────────────────────────
 function loadSettings(){
-  initTmDefaultTabUI();renderUserList();renderStagesList();renderNoticeList();loadSbUi();renderTabVisSettings();renderLeaderReqs();}
+  initTmDefaultTabUI();renderStagesList();renderNoticeList();loadSbUi();renderTabVisSettings();renderLeaderReqs();
+  // Supabase에서 최신 accounts 로드 후 렌더
+  loadAccsFromSB().then(()=>{ syncBranchTeamMap(); renderUserList(); });
+}
 
 // ══════════════════════════════════════════════════════
 // 탭 표시 설정 (관리자 On/Off)
@@ -6018,7 +6091,7 @@ async function testSbConnection(){
 function renderUserList(){
   const accs=getAccs().filter(a=>a.role!=='admin');
   const el=document.getElementById('user-list');if(!el)return;
-  const RL2={branch:'지점장',team:'팀장',tm:'대전TM'};
+  const RL2={branch:'지점장',team:'팀장',tm:'대전TM',dbmanager:'DB관리자'};
   if(!accs.length){el.innerHTML='<div style="font-size:12px;color:var(--gray-400)">사용자 없음</div>';return;}
   el.innerHTML='<div class="tbl-wrap"><table style="font-size:12px"><thead style="background:var(--navy)"><tr>'+['아이디','이름','역할','소속','비번상태',''].map(h=>`<th style="padding:7px 10px">${h}</th>`).join('')+'</tr></thead><tbody>'+
     accs.map(a=>`<tr><td style="padding:7px 10px">${esc(a.id)}</td><td style="padding:7px 10px;font-weight:600">${esc(a.name)}</td>
@@ -6035,12 +6108,58 @@ async function saveUser(){
   const accs=getAccs();
   if(!eid&&accs.find(a=>a.id===id)){showToast('이미 존재하는 아이디입니다.','error');return;}
   const hashed=pw?await hashPw(pw):'';
-  if(eid){const i=accs.findIndex(a=>a.id===eid);if(i>=0){accs[i]={...accs[i],name,role,branch};if(pw)accs[i].pw=hashed;}}
-  else accs.push({id,name,role,branch,pw:hashed||await hashPw('1234')});
-  saveAccs(accs);syncBranchTeamMap();closeM('modal-user');showToast('저장','success');renderUserList();
+  let accRow;
+  if(eid){
+    const i=accs.findIndex(a=>a.id===eid);
+    if(i>=0){
+      accs[i]={...accs[i],name,role,branch};
+      if(pw) accs[i].pw=hashed;
+      accRow=accs[i];
+    }
+  } else {
+    accRow={id,name,role,branch,pw:hashed||await hashPw('1234'),created_at:new Date().toISOString()};
+    accs.push(accRow);
+  }
+  saveAccs(accs);
+  if(!testMode && accRow){
+    const ok=await sbUpsertAccount(accRow);
+    if(!ok) showToast('⚠️ 로컬 저장됨 — Supabase 동기화 실패','warn');
+    else showToast('저장 완료 (Supabase 반영)','success');
+  } else {
+    showToast('저장','success');
+  }
+  syncBranchTeamMap();closeM('modal-user');renderUserList();
 }
 function updateUfBranch(){}
-function deleteUser(uid){if(!confirm('삭제?'))return;saveAccs(getAccs().filter(a=>a.id!==uid));syncBranchTeamMap();renderUserList();showToast('삭제됨');}
+
+// ── 계정 전체 Supabase 동기화 ────────────────────────────
+async function syncAccountsToSB(){
+  if(testMode){showToast('Supabase 미연결 상태입니다','error');return;}
+  const accs=getAccs();
+  const btn=document.querySelector('[onclick="syncAccountsToSB()"]');
+  if(btn){btn.disabled=true;btn.textContent='동기화 중...';}
+  let ok=0,fail=0;
+  for(const acc of accs){
+    const r=await sbUpsertAccount(acc);
+    if(r) ok++; else fail++;
+  }
+  if(btn){btn.disabled=false;btn.textContent='☁️ 계정 Supabase 동기화';}
+  if(fail===0) showToast(`✅ ${ok}개 계정 Supabase 동기화 완료`,'success');
+  else showToast(`⚠️ ${ok}개 성공 / ${fail}개 실패`,'warn');
+}
+async function deleteUser(uid){
+  if(!confirm('삭제?'))return;
+  const accs=getAccs().filter(a=>a.id!==uid);
+  saveAccs(accs);
+  if(!testMode){
+    const ok=await sbDeleteAccount(uid);
+    if(!ok) showToast('⚠️ 로컬 삭제됨 — Supabase 동기화 실패','warn');
+    else showToast('삭제 완료 (Supabase 반영)');
+  } else {
+    showToast('삭제됨');
+  }
+  syncBranchTeamMap();renderUserList();
+}
 
 // ── 단계 관리 ─────────────────────────────────────────────
 function getStages(){ return STAGE_LIST; }
@@ -7953,6 +8072,7 @@ function pickDistMode(mode, btn){
 }
 
 function openDistribute(){
+  if(curUser?.role==='dbmanager'){showToast('DB관리자는 배정 권한이 없습니다.','error');return;}
   if(!selIds.size){showToast('배정할 DB를 선택하세요.','error');return;}
   (document.getElementById('dist-sub')||{}).textContent=`선택 ${selIds.size}건`;
   // 초기화
@@ -8326,6 +8446,7 @@ function getTrash(){try{return JSON.parse(localStorage.getItem(TRASH_LS)||'[]');
 function saveTrash(t){localStorage.setItem(TRASH_LS,JSON.stringify(t));}
 
 async function openDelete(){
+  if(curUser?.role==='dbmanager'){showToast('DB관리자는 삭제 권한이 없습니다.','error');return;}
   if(!selIds.size){showToast('선택하세요.','error');return;}
   const count=selIds.size;
   // 삭제 확인 입력 팝업
@@ -9498,6 +9619,8 @@ async function doLogin(){
   const err=document.getElementById('login-error');
   err.style.display='none';
   if(!uid||!pw){setErr(err,'아이디와 비밀번호를 입력하세요.');return;}
+  // Supabase에서 최신 accounts 로드 후 인증
+  await loadAccsFromSB();
   const accs=getAccs(); let user=null;
   for(const a of accs){if(a.id===uid&&await pwOk(pw,a.pw)){user=a;break;}}
   if(!user){setErr(err,'아이디 또는 비밀번호가 올바르지 않습니다.');return;}
@@ -10233,7 +10356,7 @@ document.addEventListener('keydown',function(e){
       document.getElementById('global-search')?.focus(); break;
     case 'n': case 'N':
       if(curUser?.role==='team') openNAM(null,'');
-      else if(curUser?.role==='branch'||curUser?.role==='admin') openAddLead();
+      else if(curUser?.role==='branch'||curUser?.role==='admin'||curUser?.role==='dbmanager') openAddLead();
       break;
     case 'b': case 'B':
       if(selIds?.size>0) document.querySelector('[onclick*="openDistribute"]')?.click();
