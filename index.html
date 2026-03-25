@@ -1369,7 +1369,7 @@ tbody tr.selected td{background:var(--blue-50)!important}
           <div style="font-size:13px;margin-top:6px;color:var(--gray-300)">+ 고객 등록 또는 📷 명함으로 추가하세요</div>
         </div>
       </div>
-    </div
+    </div>
 
 <!-- ── 고객(담당자) 등록/수정 모달 ── -->
 <div class="modal-overlay" id="modal-contact">
@@ -1582,15 +1582,6 @@ tbody tr.selected td{background:var(--blue-50)!important}
         <div class="fg" style="margin-bottom:10px"><label>고객 미팅희망일자 (선택)</label>
           <input type="date" id="tm-meeting-date"></div>
 
-        <!-- 탭 표시 설정 -->
-        <div class="card" style="grid-column:1/-1">
-          <div class="section-title">📋 탭 표시 설정 <span style="font-size:11px;font-weight:400;color:var(--gray-400)">— 역할별 활동 탭 On/Off</span></div>
-          <div id="tab-vis-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:12px"></div>
-          <div style="margin-top:14px">
-            <button class="btn btn-primary btn-sm" onclick="saveTabVisibility()">💾 저장</button>
-            <span id="tab-vis-status" style="font-size:12px;color:var(--gray-400);margin-left:10px"></span>
-          </div>
-        </div>
         <!-- 해피콜 예정일 재설정 (해피콜 DB만 표시) -->
         <div id="tm-hc-wrap" style="display:none;margin-bottom:14px;padding:14px;background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:var(--r-sm)">
           <div style="font-size:12px;font-weight:700;color:var(--ok);margin-bottom:10px">😊 해피콜 관리 <span style="font-size:11px;font-weight:400;color:var(--gray-400)">(대전TM 전용)</span></div>
@@ -4377,7 +4368,7 @@ async function renderMonthlyChart(all){
 }
 
 // ── DB 관리 ───────────────────────────────────────────────
-let allLeads=[], filtered=[], selIds=new Set(), curPage=1, _lastSelId=null, _stageFilter='';
+let allLeads=[], filtered=[], selIds=new Set(), curPage=1, myPage=1, _lastSelId=null, _stageFilter='';
 let allActivities=[], allNextActions=[];  // Supabase 전역 캐시 (lg() 대체)
 // 지점 화면 전역 (openRemoveLeader 등이 화면 진입 전에도 호출될 수 있으므로 여기서 선언)
 let brAllLeads=[], brFiltered=[], brSelIds=new Set(), brPage=1;
@@ -10398,10 +10389,11 @@ function renderMyLeadsTable(){
   }).join('');
 
   // 페이지네이션
+  const PG2_TOTAL=data.length;
   const pgEl=document.getElementById('my-leads-pagination');
   if(pgEl){
-    const pages=Math.ceil(data.length/PG2);
-    pgEl.textContent=pages<=1?`총 ${data.length}건`:`${myPage}/${pages} (${data.length}건)`;
+    const pages2=Math.ceil(PG2_TOTAL/PG2);
+    pgEl.textContent=pages2<=1?`총 ${PG2_TOTAL}건`:`${myPage}/${pages2} (${PG2_TOTAL}건)`;
   }
   renderMyColChips();
 }
@@ -10720,6 +10712,126 @@ function initDarkMode(){
 })();
 
 
+
+
+// ══════════════════════════════════════════════════════════
+// KBMC CRM PERF PATCH — 활동 데이터 맵 캐싱 + debounce + 병렬화
+// ══════════════════════════════════════════════════════════
+
+// [PERF-1] 활동 맵 캐시 (O(n²) → O(1))
+(function(){
+  let _cache=null, _stamp=0;
+  window.getActsMap=function(){
+    const src=(typeof allActivities!=='undefined'&&allActivities?.length)
+      ?allActivities:(typeof lg==='function'?lg('activities'):[]);
+    if(_cache&&src.length===_stamp)return _cache;
+    const m={};
+    src.forEach(a=>{
+      if(!a.lead_id||a.type==='assign')return;
+      if(!m[a.lead_id])m[a.lead_id]={latest:null,count:0};
+      m[a.lead_id].count++;
+      const c=m[a.lead_id].latest;
+      if(!c||new Date(a.created_at)>new Date(c.created_at))m[a.lead_id].latest=a;
+    });
+    _cache=m; _stamp=src.length; return m;
+  };
+  // dbI 후 캐시 무효화
+  const _origDbI=typeof dbI!=='undefined'?window.dbI:null;
+  if(_origDbI){
+    window.dbI=async function(table,data){
+      const r=await _origDbI(table,data);
+      if(table==='activities'){_cache=null;}
+      return r;
+    };
+  }
+})();
+
+// [PERF-2] debounce 유틸
+window._debounce=function(fn,ms){let t;return function(...a){clearTimeout(t);t=setTimeout(()=>fn.apply(this,a),ms);};};
+
+// [PERF-2] 검색 입력 debounce 적용
+document.addEventListener('DOMContentLoaded',function(){
+  const si=document.getElementById('leads-search');
+  if(si){
+    si.removeAttribute('oninput');
+    si.addEventListener('input',window._debounce(()=>{if(typeof filterLeads==='function')filterLeads();},250));
+  }
+  const ms=document.getElementById('my-search');
+  if(ms){
+    ms.removeAttribute('oninput');
+    ms.addEventListener('input',window._debounce(()=>{if(typeof filterMyLeads==='function')filterMyLeads();},250));
+  }
+},{once:true});
+
+// [PERF-3] loadLeads activities/next_actions 병렬 조회
+(function(){
+  const _orig=typeof loadLeads!=='undefined'?window.loadLeads:null;
+  if(!_orig)return;
+  window.loadLeads=async function(){
+    await _orig();
+    if(typeof testMode!=='undefined'&&!testMode&&typeof dbQ==='function'){
+      if(!(typeof allActivities!=='undefined'&&allActivities&&allActivities.length>0)){
+        const[acts,nas]=await Promise.all([dbQ('activities'),dbQ('next_actions')]);
+        window.allActivities=acts||[];
+        window.allNextActions=nas||[];
+        window._actsMapCache=null;
+      }
+    }
+  };
+})();
+
+// [PERF-4] renderLeadsTable — actsMap 캐시 활용 래퍼
+(function(){
+  const _orig=typeof renderLeadsTable!=='undefined'?window.renderLeadsTable:null;
+  if(!_orig)return;
+  window.renderLeadsTable=function(){
+    window._actsMapCache=null;
+    if(typeof getActsMap==='function')getActsMap();
+    _orig();
+  };
+})();
+
+// [PERF-5] loadMyLeads 병렬화
+(function(){
+  const _orig=typeof loadMyLeads!=='undefined'?window.loadMyLeads:null;
+  if(!_orig)return;
+  window.loadMyLeads=async function(){
+    if(typeof testMode!=='undefined'&&!testMode&&typeof dbQ==='function'){
+      const[all,nas]=await Promise.all([dbQ('leads'),dbQ('next_actions')]);
+      window.allNextActions=nas||[];
+      if(typeof ls==='function')ls('next_actions',nas);
+      window.myLeads=(all||[]).filter(l=>l.team_name===curUser.name&&l.status!=='deleted');
+      const sub=document.getElementById('my-leads-sub');
+      if(sub)sub.textContent=myLeads.length+'건';
+      if(typeof renderMyGoal==='function')renderMyGoal();
+      if(typeof renderNAWidget==='function')renderNAWidget();
+      if(typeof renderTodayTodo==='function')renderTodayTodo();
+      if(typeof filterMyLeads==='function')filterMyLeads();
+      if(typeof checkUnrecorded==='function')checkUnrecorded();
+    }else{await _orig();}
+  };
+})();
+
+// [PERF-6] colVal last_activity — getActsMap 캐시 활용
+(function(){
+  const _origColVal=typeof colVal!=='undefined'?window.colVal:null;
+  if(!_origColVal)return;
+  window.colVal=function(l,key,acts){
+    if(key==='last_activity'){
+      const m=typeof getActsMap==='function'?getActsMap():acts;
+      const la=m?.[l.id];
+      const latest=la?.latest;
+      const cnt=la?.count||0;
+      if(!latest)return'<td style="font-size:11px;color:var(--gray-300)">-</td>';
+      const preview=typeof esc==='function'?esc((latest.content||'').slice(0,40)):(latest.content||'').slice(0,40);
+      const extra=cnt>1?` <span style="font-size:10px;color:var(--gray-400);white-space:nowrap">외 ${cnt-1}건</span>`:'';
+      return`<td style="font-size:11px;max-width:220px;color:var(--gray-700);overflow:hidden;text-overflow:ellipsis">${preview}${extra}</td>`;
+    }
+    return _origColVal(l,key,acts);
+  };
+})();
+
+console.log('[KBMC CRM] 성능 패치 v2 적용 완료 (PERF 1~6)');
 
 </script>
 </body>
