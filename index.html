@@ -3410,8 +3410,10 @@ function subscribeRealtime(){
       const st = document.getElementById('sb-status');
       if(status === 'SUBSCRIBED'){
         if(st){ st.textContent='✅ Supabase 연결됨 + 실시간 동기화 활성'; st.style.color='var(--ok)'; }
-        showToast('🔴 실시간 동기화 활성화', 'success');
+        // 재연결 시에만 토스트 (첫 연결은 조용히)
+        if(window._rtWasDisconnected){ showToast('🔄 실시간 동기화 재연결됨', 'success'); window._rtWasDisconnected=false; }
       } else if(status === 'CHANNEL_ERROR'){
+        window._rtWasDisconnected=true;
         if(st){ st.textContent='⚠️ 실시간 동기화 오류 — 재연결 시도 중'; st.style.color='var(--warn)'; }
         // 30초 후 재시도
         setTimeout(subscribeRealtime, 30000);
@@ -3432,10 +3434,19 @@ function handleRealtimeChange(table, payload){
 
   if(table === 'leads'){
     if(eventType === 'INSERT' && newRow){
-      if(!allLeads.find(l=>l.id===newRow.id)) allLeads.unshift(newRow);
+      // deleted/drop 상태면 추가 안 함
+      if(!['deleted'].includes(newRow.status) && !allLeads.find(l=>l.id===newRow.id)){
+        allLeads.unshift(newRow);
+      }
     } else if(eventType === 'UPDATE' && newRow){
       const i = allLeads.findIndex(l=>l.id===newRow.id);
-      if(i>=0) allLeads[i]={...allLeads[i],...newRow}; else allLeads.unshift(newRow);
+      if(newRow.status==='deleted'){
+        // deleted로 바뀌면 allLeads에서 즉시 제거
+        if(i>=0) allLeads.splice(i,1);
+      } else {
+        if(i>=0) allLeads[i]={...allLeads[i],...newRow};
+        else if(!['deleted'].includes(newRow.status)) allLeads.unshift(newRow);
+      }
     } else if(eventType === 'DELETE' && oldRow){
       const i = allLeads.findIndex(l=>l.id===oldRow.id);
       if(i>=0) allLeads.splice(i,1);
@@ -3443,6 +3454,7 @@ function handleRealtimeChange(table, payload){
     // debounce — 짧은 시간 내 여러 변경을 한 번에 렌더
     clearTimeout(_rtDebounceTimer);
     _rtDebounceTimer = setTimeout(()=>{
+      (document.getElementById('leads-sub')||{}).textContent=allLeads.filter(l=>l.status!=='deleted').length+'건';
       if(typeof filterLeads==='function') filterLeads();
       if(typeof updateLeadsSubTabCounts==='function') updateLeadsSubTabCounts();
       showToast('🔄 DB 데이터 업데이트됨', 'success');
@@ -3471,13 +3483,20 @@ function handleRealtimeChange(table, payload){
     }
 
   } else if(table === 'accounts'){
-    // 계정 변경 시 캐시 갱신
-    loadAccsFromSB().then(()=>{ syncBranchTeamMap(); });
+    // 계정 변경 시 캐시 즉시 갱신 (재조회)
+    loadAccsFromSB().then(()=>{
+      syncBranchTeamMap();
+      console.log('[Realtime] accounts 캐시 갱신 완료');
+    });
   }
 }
 
-// 내가 만든 변경을 Realtime에서 중복 처리하지 않도록 추적
+// 내가 만든 변경을 Realtime에서 중복 처리하지 않도록 추적 (5초 TTL)
 const _pendingLocalIds = new Set();
+function _trackLocalId(id){
+  _pendingLocalIds.add(id);
+  setTimeout(()=>_pendingLocalIds.delete(id), 5000); // 5초 후 자동 제거
+}
 
 (function loadSbCfg(){
   try {
@@ -3590,7 +3609,7 @@ async function dbI(table,data){
   const row={id:uuid(),created_at:new Date().toISOString(),updated_at:new Date().toISOString(),...data};
   if(testMode){ const a=lg(table); a.unshift(row); ls(table,a); return row; }
   // Realtime 중복 방지: 내가 만든 id를 미리 등록
-  _pendingLocalIds.add(row.id);
+  _trackLocalId(row.id);
   const result=await sbPost(table,row);
   // 전역 캐시에 즉시 반영 (재조회 없이 UI 즉시 갱신)
   if(result){
@@ -3605,7 +3624,7 @@ async function dbI(table,data){
 async function dbU(table,id,data){
   data.updated_at=new Date().toISOString();
   if(testMode){ const a=lg(table),i=a.findIndex(r=>r.id===id); if(i>=0)a[i]={...a[i],...data}; ls(table,a); return true; }
-  _pendingLocalIds.add(id); // Realtime 중복 방지
+  _trackLocalId(id); // Realtime 중복 방지
   const ok=await sbPatch(table,id,data);
   // 전역 캐시 갱신
   if(ok){
@@ -3617,7 +3636,7 @@ async function dbU(table,id,data){
 }
 async function dbD(table,id){
   if(testMode){ ls(table,lg(table).filter(r=>r.id!==id)); return true; }
-  _pendingLocalIds.add(id); // Realtime 중복 방지
+  _trackLocalId(id); // Realtime 중복 방지
   const ok=await sbDel(table,id);
   // 전역 캐시에서 제거
   if(ok){
@@ -3754,34 +3773,21 @@ const ACCT_VER_CURRENT='5'; // v5: DB관리자(김범기) 계정 추가
 let _accsCache = null;
 
 function getAccs(){
-  // 캐시 있으면 즉시 반환
+  // 배포 환경: 메모리 캐시(_accsCache)만 사용 — localStorage 읽지 않음
+  // → 항상 loadAccsFromSB()로 Supabase에서 로드한 값을 씀
   if(_accsCache) return _accsCache;
-  const savedVer=localStorage.getItem(ACCT_VER_KEY);
-  const s=localStorage.getItem(LS.accounts);
-  // 기존 계정 데이터 있을 때: 버전 무관하게 로드 후 누락 계정만 머지
-  if(s){
-    try{
-      let accs=JSON.parse(s);
-      // v5 업그레이드: 김범기 계정 누락 시 추가
-      if(savedVer!==ACCT_VER_CURRENT){
-        const SEED=[
-          {id:'김범기',pw:'03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4',role:'dbmanager',name:'김범기',branch:''},
-        ];
-        SEED.forEach(sa=>{ if(!accs.find(a=>a.id===sa.id)) accs.push(sa); });
-        ls('accounts',accs);
-        localStorage.setItem(ACCT_VER_KEY,ACCT_VER_CURRENT);
-      }
-      _accsCache=accs; return _accsCache;
-    }catch(e){}
+  if(!testMode){
+    // Supabase 모드인데 캐시가 없으면 빈 배열 반환 (loadAccsFromSB 완료 전 호출된 경우)
+    return [];
   }
-  // 완전 초기화 (최초 실행)
+  // 로컬 파일 모드: localStorage fallback
+  const s=localStorage.getItem(LS.accounts);
+  if(s){ try{ _accsCache=JSON.parse(s); return _accsCache; }catch(e){} }
   const SPECIAL_PW={'유영준':'44313a51f457afd48ad52fe8839cbf409da09c4c8ee84afac9030612ea42c502'};
   const accs=[{id:'관리자',pw:'4cc42d81fa28330182277cfeace4674e96dbd9c47bfe9fed1312f9c8dfcf7246',role:'admin',name:'관리자',branch:''},{id:'대전',pw:'1234',role:'tm',name:'대전센터',branch:'대전'},{id:'김범기',pw:'03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4',role:'dbmanager',name:'김범기',branch:''}];
   BRANCHES.forEach(b=>accs.push({id:b,pw:'1234',role:'branch',name:b,branch:b}));
   Object.entries(TEAM_MAP).forEach(([br,tms])=>tms.forEach(t=>accs.push({id:t,pw:SPECIAL_PW[t]||'1234',role:'team',name:t,branch:br})));
   _accsCache=accs;
-  ls('accounts',accs);
-  localStorage.setItem(ACCT_VER_KEY,ACCT_VER_CURRENT);
   return accs;
 }
 
@@ -3791,13 +3797,12 @@ async function loadAccsFromSB(){
   try{
     const rows=await sbGet('accounts?select=*&order=created_at.asc&limit=500');
     if(rows && rows.length>0){
-      _accsCache=rows;
-      ls('accounts',rows);
-      localStorage.setItem(ACCT_VER_KEY,ACCT_VER_CURRENT);
+      _accsCache=rows; // 메모리 캐시만 — localStorage 저장 안 함
+      syncBranchTeamMap();
       return rows;
     }
   }catch(e){ console.warn('loadAccsFromSB error',e); }
-  return getAccs();
+  return _accsCache||[];
 }
 
 // Supabase accounts 테이블에 upsert (신규/수정 공통)
@@ -3823,7 +3828,7 @@ async function sbDeleteAccount(id){
 
 function saveAccs(a){
   _accsCache=a;
-  ls('accounts',a);
+  if(testMode) ls('accounts',a); // 배포환경에서는 localStorage 저장 안 함
 }
 
 async function hashPw(pw){ const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(pw)); return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join(''); }
@@ -4398,7 +4403,11 @@ async function loadLeads(){
   const yjTabEl=document.getElementById('qtab-yj-initial');
   if(yjFilterEl) yjFilterEl.style.display=isYJ?'':'none';
   if(yjTabEl) yjTabEl.style.display=isYJ?'':'none';
-  _stageFilter=''; // 데이터 새로 불러올 때 stage 필터 초기화
+  _stageFilter=''; _quickTab='all'; // 데이터 새로 불러올 때 필터 초기화
+  // 빠른탭 UI도 전체로 리셋
+  document.querySelectorAll('[id^="qtab-"]').forEach(b=>{b.style.background='';b.style.color='';b.style.borderColor='';});
+  const _qtabAll=document.getElementById('qtab-all');
+  if(_qtabAll){_qtabAll.style.background='var(--navy)';_qtabAll.style.color='#fff';_qtabAll.style.borderColor='var(--navy)';}
   const _ltb=document.getElementById('leads-tbody'); if(_ltb) _ltb.innerHTML='<tr><td colspan="12" class="loading">불러오는 중...</td></tr>';
   allLeads=await dbQ('leads');
   allLeads=allLeads.filter(l=>l.status!=='deleted');
@@ -4764,8 +4773,11 @@ async function confirmDropWithReason(ids){
     await dbU('leads',id,{drop_reason:reason, drop_category:category});
     await changeStatus(id,'drop','',reason);
   }
+  // allLeads 캐시 즉시 갱신 (status → drop)
+  if(allLeads) ids.forEach(id=>{ const l=allLeads.find(r=>r.id===id); if(l) l.status='drop'; });
   closeOv('ov-drop-reason'); clearSel();
-  showToast(ids.length+'건 드랍 처리','success'); loadLeads();
+  showToast(ids.length+'건 드랍 처리','success');
+  filterLeads(); updateLeadsSubTabCounts();
 }
 // openDelete → js2에서 재정의 (소프트딜리트)
 
@@ -8085,6 +8097,7 @@ function _applyQuickTab(tab, btn){
   if(btn){btn.style.background='var(--gray-900)';btn.style.color='#fff';btn.style.borderColor='var(--gray-900)';}
   ['leads-search','leads-branch','leads-team','leads-type'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   _stageFilter='';
+  _quickTab=tab; // ← 핵심: filterLeads()가 읽는 변수 세팅
   const statusEl=document.getElementById('leads-status');
   if(tab==='all'){if(statusEl)statusEl.value='';}
   else if(tab==='unassigned'){if(statusEl)statusEl.value='';}
@@ -8731,15 +8744,19 @@ function checkDelConfirm(){
 async function doSoftDelete(){
   const ids=[...selIds];
   const trash=getTrash();
-  const all=await dbQ('leads');
+  const all=allLeads?.length?allLeads:await dbQ('leads');
   for(const id of ids){
     const lead=all.find(l=>l.id===id);
     if(lead) trash.unshift({...lead,_deleted_at:new Date().toISOString(),_deleted_by:curUser.name});
     await changeLeadStatus(id,{status:'deleted',note:'휴지통 이동',autoLog:true});
   }
   saveTrash(trash.slice(0,500));
+  // allLeads 캐시에서 즉시 제거 → 탭 카운트 즉시 반영
+  if(allLeads) allLeads=allLeads.filter(l=>!ids.includes(l.id));
+  _trashCount=(_trashCount||0)+ids.length; // 휴지통 카운트 즉시 증가
   closeOv('ov-delete-confirm'); clearSel();
-  showToast(`${ids.length}건 휴지통으로 이동`,'success'); loadLeads();
+  showToast(`${ids.length}건 휴지통으로 이동`,'success');
+  filterLeads(); updateLeadsSubTabCounts();
 }
 
 // ── DB관리 하위 탭 ──────────────────────────────────────
@@ -8771,7 +8788,7 @@ function updateLeadsSubTabCounts(){
   const now=Date.now();
   const active=leads.filter(l=>l.status!=='deleted'&&l.status!=='drop').length;
   const drop=leads.filter(l=>l.status==='drop').length;
-  const trash=getTrash().length;
+  const trash=_trashCount||getTrash().length; // Supabase 모드에서는 _trashCount 사용
   const recall=leads.filter(l=>{
     if(l.status==='deleted'||l.status==='drop'||l.yj_transferred) return false;
     if(['계약','관리고객'].includes(l.current_stage||'')) return false;
@@ -8788,6 +8805,7 @@ function updateLeadsSubTabCounts(){
 
 // ── 회수대상 패널 ──────────────────────────────────────
 let _recallAll=[], _recallSel=new Set();
+let _trashCount=0; // Supabase 모드 휴지통 카운트 캐시
 function renderRecallPanel(){
   const leads=allLeads?.length?allLeads:lg('leads');
   const acts=allActivities?.length?allActivities:lg('activities');
@@ -8894,11 +8912,23 @@ async function restoreDrop(id){
   if(_leadsSubTab==='active') loadLeads();
 }
 
-function renderTrashInline(){
+async function renderTrashInline(){
   const tbody=document.getElementById('trash-inline-tbody'); if(!tbody) return;
-  const trash=getTrash();
+  tbody.innerHTML='<tr><td colspan="5" class="loading">불러오는 중...</td></tr>';
+  // Supabase 모드: deleted 상태 항목을 직접 조회
+  let trash=[];
+  if(!testMode){
+    try{
+      const rows=await sbGet('leads?select=*&status=eq.deleted&order=updated_at.desc&limit=200');
+      trash=rows||[];
+    }catch(e){ trash=getTrash(); }
+  } else {
+    trash=getTrash();
+  }
   const sub=document.getElementById('trash-inline-sub');
+  _trashCount=trash.length;
   if(sub) sub.textContent=trash.length+'건';
+  updateLeadsSubTabCounts();
   if(!trash.length){tbody.innerHTML='<tr><td colspan="5" class="empty" style="padding:30px">휴지통이 비어 있습니다</td></tr>';return;}
   tbody.innerHTML=trash.map(l=>`<tr>
     <td style="font-weight:700">${esc(l.company_name||'-')}</td>
