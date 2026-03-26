@@ -533,7 +533,8 @@ body.dark-mode .unrecorded-row{background:rgba(255,210,50,.05) !important}
 body.dark-mode .scroll-nav-btn{background:#1f2e42;color:var(--gray-700)}
 body.dark-mode #font-size-fab button{background:#1f2e42 !important;color:var(--gray-700) !important}
 body.dark-mode .toast{background:#1f2e42;color:var(--gray-900)}
-body.dark-mode #leads-sort-bar{background:#131e2e;border-color:#1f2e42;color:var(--gray-700)}
+body.dark-mode #notif-panel{background:#111d2e;border-color:#1f2e42;color:var(--gray-900)}
+body.dark-mode #notif-panel div{border-color:#1f2e42 !important}
 body.dark-mode .badge{opacity:.9}
 body.dark-mode .tbl-wrap table,body.dark-mode .db-wrap table{background:#111d2e}
 body.dark-mode td,body.dark-mode th{border-color:#1f2e42 !important}
@@ -1128,31 +1129,6 @@ tbody tr.selected td{background:var(--blue-50)!important}
       <div id="col-toggle-bar" style="margin-bottom:10px;background:var(--gray-50);border:1px solid var(--gray-200);border-radius:var(--r-sm);overflow:hidden">
         <div id="col-group-rows"></div>
 
-      </div>
-      <!-- 정렬 컨트롤 바 -->
-      <div id="leads-sort-bar" style="display:flex;align-items:center;gap:10px;margin-bottom:10px;padding:8px 12px;background:var(--gray-50);border:1px solid var(--gray-200);border-radius:var(--r-sm);flex-wrap:wrap">
-        <span style="font-size:11px;font-weight:700;color:var(--gray-500);letter-spacing:.3px">정렬 기준</span>
-        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;font-weight:600;color:var(--gray-700)">
-          <input type="radio" name="leads-sort-key" id="lsk-updated" value="updated_at" onchange="applyLeadSortBar()" checked style="accent-color:var(--navy)">
-          최신 업데이트순
-        </label>
-        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;font-weight:600;color:var(--gray-700)">
-          <input type="radio" name="leads-sort-key" id="lsk-applied" value="applied_at" onchange="applyLeadSortBar()" style="accent-color:var(--navy)">
-          신청일자순
-        </label>
-        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;font-weight:600;color:var(--gray-700)">
-          <input type="radio" name="leads-sort-key" id="lsk-created" value="created_at" onchange="applyLeadSortBar()" style="accent-color:var(--navy)">
-          등록일순
-        </label>
-        <div style="width:1px;height:18px;background:var(--gray-200);margin:0 2px"></div>
-        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;font-weight:600;color:var(--gray-700)">
-          <input type="radio" name="leads-sort-dir" id="lsd-desc" value="desc" onchange="applyLeadSortBar()" checked style="accent-color:var(--blue)">
-          ↓ 최신→과거
-        </label>
-        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;font-weight:600;color:var(--gray-700)">
-          <input type="radio" name="leads-sort-dir" id="lsd-asc" value="asc" onchange="applyLeadSortBar()" style="accent-color:var(--blue)">
-          ↑ 과거→최신
-        </label>
       </div>
       <!-- 필터바 -->
       <div class="fbar">
@@ -3924,7 +3900,7 @@ async function changeLeadStatus(leadId, {status, stage, note='', autoLog=true, a
     if(stage==='계약' && prevStage!=='계약'){
       const lead=(allLeads?.length?allLeads:lg('leads')).find(l=>l.id===leadId);
       if(typeof addN==='function')
-        addN('contract','🎉 계약 달성',`${lead?.company_name||''} — ${curUser?.name||''}`,'contract:'+leadId);
+        addN('contract','🎉 계약 달성',`${lead?.company_name||''} — ${curUser?.name||''}`,'contract:'+leadId, curUser?.name);
     }
   }
   return true;
@@ -4271,26 +4247,110 @@ async function gsOpen(id){
 // ── 알림 ─────────────────────────────────────────────────
 const NK='kbmc_v2_notifs';
 function getNs(){try{return JSON.parse(localStorage.getItem(NK)||'[]');}catch(e){return[];}}
-function addN(type,title,body,ref){
-  const arr=getNs(); arr.unshift({id:uuid(),type,title,body,ref,read:false,at:new Date().toISOString()});
-  localStorage.setItem(NK,JSON.stringify(arr.slice(0,50))); updateNBadge();
+
+// addN(type, title, body, ref, target?)
+// target: 수신자 이름. undefined/null 이면 현재 로그인 유저 본인 알림
+function addN(type,title,body,ref,target){
+  const arr=getNs();
+  arr.unshift({
+    id:uuid(),type,title,body,ref,read:false,
+    at:new Date().toISOString(),
+    target: target||curUser?.name||null   // 수신자 지정
+  });
+  localStorage.setItem(NK,JSON.stringify(arr.slice(0,50)));
+  updateNBadge();
+}
+
+// 현재 사용자에게 해당하는 알림만 필터링
+function getMyNs(){
+  const me = curUser?.name;
+  const role = curUser?.role;
+  return getNs().filter(n=>{
+    // target이 없으면 모두에게 (구버전 호환)
+    if(!n.target) return true;
+    // target이 지정된 경우: 정확히 본인 것만
+    return n.target === me;
+  });
 }
 function updateNBadge(){
-  const n=getNs().filter(x=>!x.read).length;
+  const n=getMyNs().filter(x=>!x.read).length;
   const b=document.getElementById('notif-badge');
   if(b){b.textContent=n;b.style.display=n?'flex':'none';}
 }
+// 알림 타입별 메타
+const NOTIF_META = {
+  assign:        {icon:'📬', clr:'var(--blue)',      label:'신규배정'},
+  overdue_30h:   {icon:'⏰', clr:'var(--err)',       label:'30h경과'},
+  anniv:         {icon:'🎂', clr:'#f59e0b',          label:'기념일'},
+  companion_req: {icon:'👥', clr:'var(--navy)',      label:'동행요청'},
+  na:            {icon:'📅', clr:'var(--blue)',      label:'액션알림'},
+  contract:      {icon:'🎉', clr:'var(--ok)',        label:'계약달성'},
+  report_req:    {icon:'📢', clr:'var(--warn)',      label:'보고요청'},
+  system:        {icon:'🔔', clr:'var(--gray-500)', label:'시스템'},
+};
+
+function _renderNotifPanel(){
+  const p=document.getElementById('notif-panel'); if(!p) return;
+  const arr = getMyNs();
+  // 내 알림만 읽음 처리
+  const allNs = getNs();
+  allNs.forEach(n=>{ if(!n.target||n.target===curUser?.name) n.read=true; });
+  localStorage.setItem(NK,JSON.stringify(allNs));
+  updateNBadge();
+
+  if(!arr.length){
+    p.innerHTML=`<div style="padding:28px 16px;text-align:center;color:var(--gray-400)">
+      <div style="font-size:28px;margin-bottom:8px">🔕</div>
+      <div style="font-size:13px;font-weight:500">새 알림 없음</div>
+    </div>`;
+    p.style.display='block'; return;
+  }
+
+  const rows = arr.slice(0,30).map(n=>{
+    const m = NOTIF_META[n.type]||{icon:'🔔',clr:'var(--gray-500)',label:n.type||''};
+    const timeStr=(n.at||'').slice(5,16).replace('T',' ');
+    return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-bottom:1px solid var(--gray-100);cursor:pointer;transition:background .1s"
+      onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''"
+      onclick="notifGo('${n.ref||''}')">
+      <div style="width:30px;height:30px;border-radius:8px;background:color-mix(in srgb,${m.clr} 12%,white);
+        display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;margin-top:1px">${m.icon}</div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:5px;margin-bottom:2px">
+          <span style="font-size:10px;font-weight:700;color:${m.clr};background:color-mix(in srgb,${m.clr} 10%,white);padding:1px 6px;border-radius:10px">${m.label}</span>
+          <span style="font-size:10px;color:var(--gray-400)">${timeStr}</span>
+        </div>
+        <div style="font-size:12px;font-weight:700;color:var(--gray-900);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(n.title||'')}</div>
+        <div style="font-size:11px;color:var(--gray-500);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(n.body||'')}</div>
+      </div>
+      <button onclick="event.stopPropagation();deleteNotif('${n.id}')"
+        style="background:none;border:none;color:var(--gray-300);cursor:pointer;font-size:13px;padding:2px 5px;flex-shrink:0;line-height:1" title="삭제">✕</button>
+    </div>`;
+  }).join('');
+
+  p.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:2px solid var(--gray-100)">
+      <span style="font-size:12px;font-weight:700;color:var(--gray-700)">알림 <span style="color:var(--blue)">${arr.length}</span>건</span>
+      <button onclick="clearAllNotifs()" style="background:none;border:none;font-size:11px;color:var(--gray-400);cursor:pointer;padding:2px 6px;border-radius:4px" onmouseover="this.style.color='var(--err)'" onmouseout="this.style.color='var(--gray-400)'">전체 삭제</button>
+    </div>
+    ${rows}`;
+  p.style.display='block';
+}
+
+function deleteNotif(id){
+  const arr=getNs().filter(n=>n.id!==id);
+  localStorage.setItem(NK,JSON.stringify(arr)); updateNBadge(); _renderNotifPanel();
+}
+function clearAllNotifs(){
+  const me=curUser?.name;
+  const arr=getNs().filter(n=>n.target&&n.target!==me);
+  localStorage.setItem(NK,JSON.stringify(arr)); updateNBadge();
+  document.getElementById('notif-panel').style.display='none';
+}
+
 function toggleNotif(){
   const p=document.getElementById('notif-panel');
   if(p.style.display==='block'){p.style.display='none';return;}
-  const arr=getNs(); arr.forEach(n=>n.read=true); localStorage.setItem(NK,JSON.stringify(arr)); updateNBadge();
-  if(!arr.length){p.innerHTML='<div style="padding:24px;text-align:center;color:var(--gray-400);font-size:13px">알림 없음</div>';}
-  else p.innerHTML=arr.slice(0,20).map(n=>`<div onclick="notifGo('${n.ref}')" style="padding:11px 14px;border-bottom:1px solid var(--gray-100);cursor:pointer" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
-    <div style="font-size:12px;font-weight:700;color:var(--gray-900)">${esc(n.title)}</div>
-    <div style="font-size:11px;color:var(--gray-500);margin-top:1px">${esc(n.body)}</div>
-    <div style="font-size:10px;color:var(--gray-400);margin-top:2px">${fmtD(n.at)}</div>
-  </div>`).join('');
-  p.style.display='block';
+  _renderNotifPanel();
 }
 async function notifGo(ref){
   document.getElementById('notif-panel').style.display='none';
@@ -4346,19 +4406,95 @@ async function notifGo(ref){
 }
 function checkAlerts(){
   if(!curUser) return; updateNBadge();
-  // 관리자: 팀장 요청 badge
-  if(curUser.role==='admin'){
+  const role = curUser.role;
+  const me   = curUser.name;
+  const today = new Date().toISOString().slice(0,10);
+  const now   = Date.now();
+  const H30   = 30*3600*1000;
+
+  // ── 관리자: 팀장 요청 badge ──────────────────────────────
+  if(role==='admin'){
     const pendingReqs=getLeaderReqs().filter(r=>r.status==='pending').length;
     const badge=document.getElementById('leader-req-badge');
     if(badge){badge.textContent=pendingReqs;badge.style.display=pendingReqs?'inline':'none';}
   }
-  if(curUser.role==='team'){
-    const today=new Date().toISOString().slice(0,10);
-    (allNextActions?.length?allNextActions:lg('next_actions')).filter(a=>a.team_leader===curUser.name&&a.status==='예정').forEach(a=>{
-      const diff=Math.ceil((new Date(a.due_date)-new Date())/(86400000));
-      if(diff<=a.remind_days&&diff>=0)
-        addN('na',`📅 액션 알림`,`${a.lead_name} — ${a.action_type} (${fmtD(a.due_date)})`,'na:'+a.lead_id);
+
+  // ── [1] 신규 배정 DB 알림 (팀장) ────────────────────────
+  if(role==='team'){
+    const myLeadsLocal = allLeads?.length
+      ? allLeads.filter(l=>l.team_name===me)
+      : lg('leads').filter(l=>l.team_name===me);
+    const acts = allActivities?.length ? allActivities : lg('activities');
+    const _seenKey = 'kbmc_notif_assign_seen_'+me;
+    const seen = new Set(JSON.parse(localStorage.getItem(_seenKey)||'[]'));
+    myLeadsLocal.filter(l=>l.status==='assigned'&&!seen.has(l.id)).forEach(l=>{
+      addN('assign','📬 신규 배정 DB',`${l.company_name||'-'} — ${l.consult_type||''}`, 'na:'+l.id, me);
+      seen.add(l.id);
     });
+    localStorage.setItem(_seenKey, JSON.stringify([...seen].slice(-200)));
+  }
+
+  // ── [2] 30시간 경과 고객 발생 (팀장/지점장) ─────────────
+  if(role==='team'||role==='branch'){
+    const myL = role==='team'
+      ? (allLeads?.length?allLeads:lg('leads')).filter(l=>l.team_name===me)
+      : (brAllLeads?.length?brAllLeads:lg('leads')).filter(l=>l.branch_name===me);
+    const acts = allActivities?.length?allActivities:lg('activities');
+    const _seenKey30 = 'kbmc_notif_30h_seen_'+me;
+    const seen30 = new Set(JSON.parse(localStorage.getItem(_seenKey30)||'[]'));
+    myL.filter(l=>{
+      if(seen30.has(l.id)) return false;
+      if(l.yj_transferred||['drop','deleted'].includes(l.status)||['계약','관리고객'].includes(l.current_stage||'')) return false;
+      const t=new Date(l.assigned_at||l.created_at||0).getTime();
+      if((now-t)<H30) return false;
+      return !acts.some(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type));
+    }).forEach(l=>{
+      addN('overdue_30h','⏰ 30h 미기록 고객',`${l.company_name||'-'} — 즉시 연락 필요`,'na:'+l.id, me);
+      seen30.add(l.id);
+    });
+    localStorage.setItem(_seenKey30, JSON.stringify([...seen30].slice(-200)));
+  }
+
+  // ── [3] 고객 기념일 D-3 이내 (팀장/지점장) ──────────────
+  if(role==='team'||role==='branch'){
+    const d3 = new Date(now+3*86400000).toISOString().slice(0,10);
+    const _seenKeyA = 'kbmc_notif_anniv_seen_'+me+'_'+today;
+    const seenA = new Set(JSON.parse(localStorage.getItem(_seenKeyA)||'[]'));
+    const myL2 = role==='team'
+      ? [...(myLeads||[]),...(_mcAll||[])]
+      : (brAllLeads||[]);
+    const uniq=new Set();
+    myL2.filter(l=>{ if(uniq.has(l.id))return false;uniq.add(l.id);return true; }).forEach(l=>{
+      (getMcAnniv?.(l.id)||[]).forEach(a=>{
+        try{
+          const n=nextAnnivDate?.(a.date,a.repeat!==false);
+          if(!n||n<today||n>d3) return;
+          const key=l.id+':'+a.label+':'+n;
+          if(seenA.has(key)) return;
+          const days=Math.ceil((new Date(n)-new Date(today))/86400000);
+          const label=days===0?'오늘 기념일':`D-${days} 기념일`;
+          addN('anniv',`🎂 ${label}`,`${l.company_name||'-'} — ${a.label}`,'na:'+l.id, me);
+          seenA.add(key);
+        }catch(e){}
+      });
+    });
+    localStorage.setItem(_seenKeyA, JSON.stringify([...seenA].slice(-100)));
+  }
+
+  // ── [4] 다음 액션 알림 (팀장) — 기존 로직 유지 ──────────
+  if(role==='team'){
+    const _seenKeyNA = 'kbmc_notif_na_seen_'+me;
+    const seenNA = new Set(JSON.parse(localStorage.getItem(_seenKeyNA)||'[]'));
+    (allNextActions?.length?allNextActions:lg('next_actions'))
+      .filter(a=>a.team_leader===me&&a.status==='예정').forEach(a=>{
+        const diff=Math.ceil((new Date(a.due_date)-new Date())/(86400000));
+        const key=a.id+':'+a.due_date;
+        if(diff<=a.remind_days&&diff>=0&&!seenNA.has(key)){
+          addN('na',`📅 액션 알림`,`${a.lead_name} — ${a.action_type} (${fmtD(a.due_date)})`,'na:'+a.lead_id, me);
+          seenNA.add(key);
+        }
+      });
+    localStorage.setItem(_seenKeyNA, JSON.stringify([...seenNA].slice(-100)));
   }
 }
 
@@ -4623,9 +4759,6 @@ async function loadLeads(){
   if(tabConsulting) tabConsulting.style.display = isTeam ? '' : 'none';
   if(tabContract)   tabContract.style.display   = isTeam ? '' : 'none';
   _stageFilter=''; _quickTab='all'; // 데이터 새로 불러올 때 필터 초기화
-  // 정렬 바 기본값: 최신업데이트 내림차순
-  if(!_sortKey){ _sortKey='updated_at'; _sortDir='desc'; }
-  syncLeadSortBarUI();
   // 빠른탭 UI도 전체로 리셋
   document.querySelectorAll('[id^="qtab-"]').forEach(b=>{b.style.background='';b.style.color='';b.style.borderColor='';});
   const _qtabAll=document.getElementById('qtab-all');
@@ -6488,7 +6621,7 @@ function sendReportRequest(){
   if(!checked.length){ showToast('요청 대상을 선택하세요','error'); return; }
   if(!deadline){ showToast('마감일을 지정하세요','error'); return; }
   checked.forEach(target=>{
-    addN('report_req','📢 보고 요청',`마감: ${deadline}${message?' — '+message:''}`, 'report_req:'+target);
+    addN('report_req','📢 보고 요청',`마감: ${deadline}${message?' — '+message:''}`, 'report_req:'+target, target);
   });
   closeM('modal-req-report');
   showToast(`${checked.length}명에게 보고 요청 발송됨`,'success');
@@ -6502,7 +6635,7 @@ function sendBranchReportRequest(){
   if(!checked.length){ showToast('요청 대상을 선택하세요','error'); return; }
   if(!deadline){ showToast('마감일을 지정하세요','error'); return; }
   checked.forEach(target=>{
-    addN('report_req','📢 팀장 보고 요청',`마감: ${deadline}${message?' — '+message:''}`, 'report_req:'+target);
+    addN('report_req','📢 팀장 보고 요청',`마감: ${deadline}${message?' — '+message:''}`, 'report_req:'+target, target);
   });
   closeM('modal-branch-req-report');
   showToast(`${checked.length}명에게 보고 요청 발송됨`,'success');
@@ -10338,7 +10471,7 @@ function saveActEntry(){
   else entries.unshift(row);
   saveActEntries(entries);
   // 동행 요청 알림 발송
-  companions.forEach(c=>addN('companion_req','👥 동행 요청',`${curUser.name}: ${fmtD(date)} ${ACT_TYPE_LABEL[row.type]||''} "${content.slice(0,40)}"`,null));
+  companions.forEach(c=>addN('companion_req','👥 동행 요청',`${curUser.name}: ${fmtD(date)} ${ACT_TYPE_LABEL[row.type]||''} "${content.slice(0,40)}"`,null,c));
   closeM('modal-act-entry');
   showToast('활동 등록 완료'+(companions.length?` · 동행 요청 ${companions.length}명`:''),'success');
   renderActCal(); renderActList();
@@ -11076,30 +11209,9 @@ function setColWidth(k,w){const m=getColWidths();m[k]=w;localStorage.setItem(COL
 
 // ── 정렬 상태 ─────────────────────────────────────────────
 let _sortKey='', _sortDir='asc';
-
-// ── 정렬 바 제어 ──────────────────────────────────────────
-// DB관리 상단 정렬 라디오 → _sortKey/_sortDir 세팅 후 렌더
-function applyLeadSortBar(){
-  const keyEl = document.querySelector('input[name="leads-sort-key"]:checked');
-  const dirEl = document.querySelector('input[name="leads-sort-dir"]:checked');
-  _sortKey = keyEl ? keyEl.value : 'updated_at';
-  _sortDir = dirEl ? dirEl.value : 'desc';
-  curPage = 1;
-  renderLeadsTable();
-}
-
-// DB관리 진입 시 정렬 바 상태를 _sortKey/_sortDir 에 반영
-function syncLeadSortBarUI(){
-  const keyEl = document.querySelector(`input[name="leads-sort-key"][value="${_sortKey}"]`);
-  const dirEl = document.querySelector(`input[name="leads-sort-dir"][value="${_sortDir}"]`);
-  if(keyEl) keyEl.checked = true;
-  if(dirEl) dirEl.checked = true;
-}
-
 function sortBy(key){
   if(_sortKey===key) _sortDir=_sortDir==='asc'?'desc':'asc';
   else{_sortKey=key;_sortDir='asc';}
-  syncLeadSortBarUI();
   renderLeadsTable(); renderMyLeadsTable();
 }
 
@@ -11213,20 +11325,10 @@ function applyColFilters(data){
 // ── applySort ─────────────────────────────────────────────
 function applySort(data){
   if(!_sortKey) return data;
-  // 날짜 컬럼은 Date 비교, 나머지는 문자열
-  const DATE_COLS=['updated_at','created_at','applied_at','distributed_at','assigned_at','dropped_at'];
-  const isDate = DATE_COLS.includes(_sortKey);
   return [...data].sort((a,b)=>{
     let av=a[_sortKey]||'', bv=b[_sortKey]||'';
-    let cmp;
-    if(isDate){
-      const da = av ? new Date(av).getTime() : 0;
-      const db = bv ? new Date(bv).getTime() : 0;
-      cmp = da < db ? -1 : da > db ? 1 : 0;
-    } else {
-      if(typeof av==='string') av=av.toLowerCase(), bv=bv.toLowerCase();
-      cmp = av<bv?-1:av>bv?1:0;
-    }
+    if(typeof av==='string') av=av.toLowerCase(), bv=bv.toLowerCase();
+    const cmp=av<bv?-1:av>bv?1:0;
     return _sortDir==='asc'?cmp:-cmp;
   });
 }
