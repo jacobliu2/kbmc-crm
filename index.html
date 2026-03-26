@@ -7613,11 +7613,10 @@ async function loadTmPanel(){
 
   // ── 탭별 카운트
   const cntAll=tmLeads.length;
-  // 신규배정: 금일 배정(assigned_at 또는 생성일이 오늘) + assigned/pending 상태
+  // 신규배정: assigned/pending 상태 + 통화 기록 없는 것
   const cntNew=tmLeads.filter(l=>{
     if(l.status!=='assigned'&&l.status!=='pending') return false;
-    const d=(l.assigned_at||l.created_at||'').slice(0,10);
-    return d===today;
+    return !acts.some(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type));
   }).length;
   // 통화예정: 미팅확정(next_action 있는) 또는 no_answer 중 재통화 예정
   const nas=(allNextActions?.length?allNextActions:lg('next_actions')).filter(a=>a.status==='예정');
@@ -7713,10 +7712,10 @@ function _filterForTab(tab,s,br){
     if(br&&l.branch_name!==br)return false;
     if(tab==='all') return true;
     if(tab==='new'){
-      // 금일 배정 (신규 이관일 오늘) + assigned/pending 상태
+      // 신규배정: assigned/pending 상태 + 통화 기록 없는 것
       if(l.status!=='assigned'&&l.status!=='pending') return false;
-      const d=(l.assigned_at||l.created_at||'').slice(0,10);
-      return d===today;
+      const tmActs=allActivities?.length?allActivities:lg('activities');
+      return !tmActs.some(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type));
     }
     if(tab==='scheduled') return nas.some(a=>a.lead_id===l.id);
     if(tab==='contacted') return l.status==='contacted';
