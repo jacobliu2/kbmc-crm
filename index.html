@@ -1128,6 +1128,36 @@ tbody tr.selected td{background:var(--blue-50)!important}
         <div id="col-group-rows"></div>
 
       </div>
+      <!-- 정렬 컨트롤바 -->
+      <div id="leads-sort-bar" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:8px 12px;margin-bottom:8px;background:var(--gray-50);border:1px solid var(--gray-200);border-radius:var(--r-sm)">
+        <span style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap">정렬 기준</span>
+        <div style="display:flex;gap:6px;align-items:center">
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--gray-700);cursor:pointer;padding:4px 10px;border-radius:20px;border:1.5px solid var(--gray-200);background:#fff;transition:all .15s" id="lsort-lbl-progress">
+            <input type="radio" name="leads-sort-mode" value="last_activity_at" id="lsort-progress" onchange="applyLeadSortMode()" style="accent-color:var(--navy);width:13px;height:13px">
+            💬 진행순
+          </label>
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--gray-700);cursor:pointer;padding:4px 10px;border-radius:20px;border:1.5px solid var(--gray-200);background:#fff;transition:all .15s" id="lsort-lbl-regdate">
+            <input type="radio" name="leads-sort-mode" value="created_at" id="lsort-regdate" onchange="applyLeadSortMode()" style="accent-color:var(--navy);width:13px;height:13px">
+            📋 등록일순
+          </label>
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--gray-700);cursor:pointer;padding:4px 10px;border-radius:20px;border:1.5px solid var(--gray-200);background:#fff;transition:all .15s" id="lsort-lbl-applied">
+            <input type="radio" name="leads-sort-mode" value="applied_at" id="lsort-applied" onchange="applyLeadSortMode()" style="accent-color:var(--navy);width:13px;height:13px">
+            📅 신청일순
+          </label>
+        </div>
+        <div style="width:1px;height:20px;background:var(--gray-200)"></div>
+        <div style="display:flex;gap:4px;align-items:center">
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--gray-700);cursor:pointer;padding:4px 10px;border-radius:20px;border:1.5px solid var(--gray-200);background:#fff;transition:all .15s" id="lsort-lbl-desc">
+            <input type="radio" name="leads-sort-dir" value="desc" id="lsort-desc" onchange="applyLeadSortMode()" checked style="accent-color:var(--blue);width:13px;height:13px">
+            ↓ 내림차순
+          </label>
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--gray-700);cursor:pointer;padding:4px 10px;border-radius:20px;border:1.5px solid var(--gray-200);background:#fff;transition:all .15s" id="lsort-lbl-asc">
+            <input type="radio" name="leads-sort-dir" value="asc" id="lsort-asc" onchange="applyLeadSortMode()" style="accent-color:var(--blue);width:13px;height:13px">
+            ↑ 오름차순
+          </label>
+        </div>
+        <span id="leads-sort-hint" style="font-size:11px;color:var(--gray-400);margin-left:4px"></span>
+      </div>
       <!-- 필터바 -->
       <div class="fbar">
         <input type="text" id="leads-search" placeholder="🔍 회사명·신청자·연락처" oninput="filterLeads()">
@@ -9141,6 +9171,8 @@ document.addEventListener('DOMContentLoaded',async ()=>{
     startApp();
     initData();
   }
+  // 정렬 라디오 버튼 초기 스타일
+  setTimeout(_updateSortLabelStyles, 300);
 });
 
 // ── [script block 2 merged] ──
@@ -9629,6 +9661,10 @@ function switchLeadsSubTab(tab, btn){
   if(tab==='drop') renderDropPanel();
   if(tab==='trash') renderTrashInline();
   if(tab==='recall') renderRecallPanel();
+  // 정렬 컨트롤바: active 탭에서만 표시
+  const sortBar=document.getElementById('leads-sort-bar');
+  if(sortBar) sortBar.style.display=tab==='active'?'':'none';
+  if(tab==='active') setTimeout(_updateSortLabelStyles,50);
   updateLeadsSubTabCounts();
 }
 
@@ -11053,6 +11089,66 @@ function sortBy(key){
   renderLeadsTable(); renderMyLeadsTable();
 }
 
+// ── DB관리 정렬 모드 (라디오 버튼) ───────────────────────
+function applyLeadSortMode(){
+  const modeEl=document.querySelector('input[name="leads-sort-mode"]:checked');
+  const dirEl=document.querySelector('input[name="leads-sort-dir"]:checked');
+  if(!modeEl){
+    // 기준 미선택 시 정렬 해제
+    _sortKey=''; _sortDir='asc';
+    const hint=document.getElementById('leads-sort-hint');
+    if(hint) hint.textContent='';
+    _updateSortLabelStyles();
+    curPage=1; renderLeadsTable(); return;
+  }
+  const mode=modeEl.value;
+  const dir=dirEl?dirEl.value:'desc';
+  _sortKey=mode;
+  _sortDir=dir;
+  // 힌트 텍스트
+  const hint=document.getElementById('leads-sort-hint');
+  if(hint){
+    const modeLabel=mode==='last_activity_at'?'최신 진행기록':mode==='created_at'?'DB 등록일':'신청일';
+    const dirLabel=dir==='desc'?'최신→오래된 순':'오래된→최신 순';
+    hint.textContent=`(${modeLabel} · ${dirLabel})`;
+  }
+  _updateSortLabelStyles();
+  curPage=1; renderLeadsTable();
+}
+
+function _updateSortLabelStyles(){
+  // 기준 라디오 라벨 강조 (네이비)
+  ['lsort-lbl-progress','lsort-lbl-regdate','lsort-lbl-applied'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    const radio=el.querySelector('input[type=radio]');
+    if(radio&&radio.checked){
+      el.style.background='var(--navy)';
+      el.style.color='#fff';
+      el.style.borderColor='var(--navy)';
+    } else {
+      el.style.background='#fff';
+      el.style.color='var(--gray-700)';
+      el.style.borderColor='var(--gray-200)';
+    }
+  });
+  // 방향 라디오 라벨 강조 (블루)
+  ['lsort-lbl-desc','lsort-lbl-asc'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    const radio=el.querySelector('input[type=radio]');
+    if(radio&&radio.checked){
+      el.style.background='var(--blue)';
+      el.style.color='#fff';
+      el.style.borderColor='var(--blue)';
+    } else {
+      el.style.background='#fff';
+      el.style.color='var(--gray-700)';
+      el.style.borderColor='var(--gray-200)';
+    }
+  });
+}
+
 // ── 헤더 인라인 필터 값 ───────────────────────────────────
 const _colFilters={}; // {colKey: value}
 function initResizers(tableId){
@@ -11161,13 +11257,74 @@ function applyColFilters(data){
 }
 
 // ── applySort ─────────────────────────────────────────────
+// 날짜 파싱: ISO(2026-03-02), 한국점표기(2026. 3. 2 / 2025. 12.), 기타 모두 처리
+function _toTs(raw){
+  if(!raw) return 0;
+  const s=String(raw).trim();
+  if(!s) return 0;
+  if(/^\d{4}-\d{2}/.test(s)){ const t=Date.parse(s); return isNaN(t)?0:t; }
+  const km=s.match(/^(\d{4})\.\s*(\d{1,2})\.?\s*(\d{0,2})/);
+  if(km){ const y=+km[1],m=+km[2],d=+(km[3]||1)||1; const t=Date.UTC(y,m-1,d); return isNaN(t)?0:t; }
+  const t=Date.parse(s); return isNaN(t)?0:t;
+}
 function applySort(data){
   if(!_sortKey) return data;
-  return [...data].sort((a,b)=>{
-    let av=a[_sortKey]||'', bv=b[_sortKey]||'';
-    if(typeof av==='string') av=av.toLowerCase(), bv=bv.toLowerCase();
-    const cmp=av<bv?-1:av>bv?1:0;
-    return _sortDir==='asc'?cmp:-cmp;
+  // dir: asc=오래된순(작은값 앞), desc=최신순(큰값 앞)
+  const dir=_sortDir==='asc'?1:-1;
+
+  // ① 진행순: allActivities에서 lead별 최신 활동 timestamp 맵
+  if(_sortKey==='last_activity_at'){
+    const actMap={};
+    (allActivities&&allActivities.length?allActivities:lg('activities'))
+      .filter(function(a){return a.type!=='assign';})
+      .forEach(function(a){
+        const t=_toTs(a.created_at);
+        if(!actMap[a.lead_id]||t>actMap[a.lead_id]) actMap[a.lead_id]=t;
+      });
+    return data.slice().sort(function(a,b){
+      const av=actMap[a.id]||0, bv=actMap[b.id]||0;
+      if(av===bv) return 0;
+      return (av-bv)*dir;
+    });
+  }
+
+  // ② 등록일순: 엑셀 업로드 시점 = created_at 순수 사용 (fallback 없음)
+  if(_sortKey==='created_at'){
+    return data.slice().sort(function(a,b){
+      const av=_toTs(a.created_at), bv=_toTs(b.created_at);
+      if(av===bv) return 0;
+      return (av-bv)*dir;
+    });
+  }
+
+  // ③ 신청일순: applied_at 기준, 값 없는 항목은 항상 후미
+  if(_sortKey==='applied_at'){
+    return data.slice().sort(function(a,b){
+      const av=_toTs(a.applied_at), bv=_toTs(b.applied_at);
+      if(!av&&!bv) return 0;
+      if(!av) return 1;
+      if(!bv) return -1;
+      if(av===bv) return 0;
+      return (av-bv)*dir;
+    });
+  }
+
+  // ④ 기타 날짜 필드 (헤더 클릭 정렬)
+  const DATE_KEYS=['updated_at','distributed_at','assigned_at','dropped_at'];
+  if(DATE_KEYS.indexOf(_sortKey)>=0){
+    return data.slice().sort(function(a,b){
+      const av=_toTs(a[_sortKey]), bv=_toTs(b[_sortKey]);
+      if(av===bv) return 0;
+      return (av-bv)*dir;
+    });
+  }
+
+  // ⑤ 일반 문자열/숫자 정렬
+  return data.slice().sort(function(a,b){
+    var av=a[_sortKey]||'', bv=b[_sortKey]||'';
+    if(typeof av==='string'){av=av.toLowerCase(); bv=bv.toLowerCase();}
+    var cmp=av<bv?-1:av>bv?1:0;
+    return cmp*dir;
   });
 }
 
