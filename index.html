@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>KBMC CRM 20260325_024914</title>
+<title>KBMC CRM v2.1.0</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;800&display=swap" rel="stylesheet">
@@ -512,8 +512,9 @@ body.dark-mode .stat-label{color:var(--gray-500)}
 body.dark-mode .stat-val{color:var(--gray-900)}
 body.dark-mode .login-logo{color:var(--gray-900)}
 body.dark-mode .login-sub{color:var(--gray-500)}
-body.dark-mode .col-chip{background:#1a2535;border-color:#263650;color:var(--gray-600)}
-body.dark-mode .col-chip.on{background:#0c1e35;color:var(--blue)}
+body.dark-mode .col-chip{background:#1a2535;border-color:#263650;color:var(--gray-500)}
+body.dark-mode .col-chip.on{background:#0c1e35;color:var(--chip-clr,var(--blue));border-color:var(--chip-clr,var(--blue))}
+body.dark-mode .col-chip.on:hover{background:#0f2a45}
 body.dark-mode .cg-btn{border-color:#263650 !important;background:#1a2535 !important;color:var(--gray-700) !important}
 body.dark-mode .cg-btn.on{background:#0f2444 !important;color:var(--blue) !important}
 body.dark-mode .overdue-48h-row{background:rgba(255,200,40,.10) !important}
@@ -684,11 +685,21 @@ input[type=date],input[type=time]{color-scheme:light}
   white-space:nowrap;
   /* 기본 off 상태 */
   background:var(--white);
-  color:var(--gray-500);
+  color:var(--gray-400);
   border:1px solid var(--gray-200);
 }
 .col-chip:hover{background:var(--gray-50);color:var(--gray-700)}
-.col-chip.locked{opacity:.5;cursor:default;pointer-events:none}
+/* 활성(on) 상태 — 그룹 색상 변수 활용 */
+.col-chip.on{
+  background:color-mix(in srgb, var(--chip-clr, var(--blue)) 12%, white);
+  color:var(--chip-clr, var(--blue));
+  border-color:color-mix(in srgb, var(--chip-clr, var(--blue)) 40%, white);
+  font-weight:700;
+}
+.col-chip.on:hover{
+  background:color-mix(in srgb, var(--chip-clr, var(--blue)) 20%, white);
+}
+.col-chip.locked{opacity:.6;cursor:default;pointer-events:none}
 
 /* ══ 횡스크롤 네비 ══ */
 .scroll-nav{position:fixed;right:20px;bottom:24px;z-index:500;display:flex;gap:4px;opacity:0;pointer-events:none;transition:opacity .2s}
@@ -1105,8 +1116,9 @@ tbody tr.selected td{background:var(--blue-50)!important}
         <button class="btn btn-outline btn-sm" id="qtab-all" onclick="quickTab('all',this)" style="background:var(--navy);color:#fff;border-color:var(--navy)">전체</button>
         <button class="btn btn-outline btn-sm" id="qtab-unassigned" onclick="quickTab('unassigned',this)">🔴 미배정</button>
         <button class="btn btn-outline btn-sm" id="qtab-assigned" onclick="quickTab('assigned',this)">✅ 배정완료</button>
+        <button class="btn btn-outline btn-sm" id="qtab-new" onclick="quickTab('new_db',this)">🆕 신규DB</button>
         <button class="btn btn-outline btn-sm" id="qtab-consulting" onclick="quickTab('contacted',this)">📞 접촉중</button>
-        <button class="btn btn-outline btn-sm" id="qtab-contract" onclick="fByStageTab('계약',this)">🎉 계약</button>
+        <button class="btn btn-outline btn-sm" id="qtab-contract" onclick="quickTab('contract_stage',this)">🎉 계약</button>
         <button class="btn btn-outline btn-sm" id="qtab-yj-initial" onclick="yjQuickFilter('yj_voucher')" style="display:none;background:rgba(139,92,246,.08);border-color:rgba(139,92,246,.3);color:#7c3aed">🗺️ 지방바우처</button>
         <div style="margin-left:auto;font-size:12px;color:var(--gray-400)" id="leads-stats-mini"></div>
       </div>
@@ -1424,63 +1436,101 @@ tbody tr.selected td{background:var(--blue-50)!important}
 
     <!-- 내 고객 상세 모달 -->
     <div class="modal-overlay" id="modal-my-client">
-      <div class="modal" style="width:640px;max-height:88vh;overflow-y:auto">
+      <div class="modal" style="width:660px;max-height:88vh;overflow-y:auto">
         <div class="mh">
-          <div class="mt" id="mc-modal-title">고객 정보</div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div class="mt" id="mc-modal-title">고객 정보</div>
+            <span id="mc-modal-badge" style="font-size:11px;padding:2px 9px;border-radius:10px;background:var(--blue-50);color:var(--blue);font-weight:700"></span>
+          </div>
           <button class="mc" onclick="closeM('modal-my-client')">✕</button>
         </div>
         <!-- 탭 -->
         <div style="display:flex;gap:0;border-bottom:2px solid var(--gray-100);margin-bottom:16px">
-          <button class="mc-tab-btn active" onclick="switchMcTab('info',this)"
-            style="padding:9px 18px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:700;color:var(--blue);border-bottom:2px solid var(--blue);margin-bottom:-1px;font-family:inherit">📋 고객정보</button>
-          <button class="mc-tab-btn" onclick="switchMcTab('history',this)"
-            style="padding:8px 16px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">🎂 기념일</button>
-          <button class="mc-tab-btn" onclick="switchMcTab('history',this)"
-            style="padding:8px 16px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">📜 히스토리</button>
+          <button class="mc-tab-btn" id="mc-tb-info" onclick="switchMcTab('info',this)"
+            style="padding:9px 18px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:700;color:var(--blue);border-bottom:2px solid var(--blue);margin-bottom:-2px;font-family:inherit">📋 고객 상세정보</button>
+          <button class="mc-tab-btn" id="mc-tb-history" onclick="switchMcTab('history',this)"
+            style="padding:9px 16px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">📜 히스토리</button>
+          <button class="mc-tab-btn" id="mc-tb-anniv" onclick="switchMcTab('anniv',this)"
+            style="padding:9px 16px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">🎂 기념일</button>
         </div>
         <input type="hidden" id="mc-lead-id">
-        <!-- 기본정보 탭 -->
+
+        <!-- ① 고객 상세정보 탭 -->
         <div id="mc-tab-info">
-          <div class="form-grid">
-            <div class="fg"><label>회사명 *</label><input type="text" id="mc-company" placeholder="회사명"></div>
-            <div class="fg"><label>대표자</label><input type="text" id="mc-ceo" placeholder="대표자명"></div>
-            <div class="fg"><label>담당자</label><input type="text" id="mc-contact" placeholder="담당자명"></div>
-            <div class="fg"><label>담당자 연락처</label><input type="tel" id="mc-phone" placeholder="010-0000-0000"></div>
-            <div class="fg"><label>담당자 이메일</label><input type="email" id="mc-email" placeholder="email@company.com"></div>
-            <div class="fg"><label>업종</label><input type="text" id="mc-industry" placeholder="업종"></div>
-            <div class="fg"><label>소재지</label>
-              <select id="mc-region" style="padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;width:100%">
-                <option value="">선택</option>
-                <option>수도권(서울,경기,인천)</option><option>충청권(충북/대전/충남)</option>
-                <option>경상권(부산/대구/울산/경남/경북)</option><option>전라권(광주/전남/전북)</option><option>강원/제주</option>
-              </select>
+          <!-- 카드형 정보 뷰 (기본 표시) -->
+          <div id="mc-info-card-view">
+            <div style="background:var(--gray-50);border:1px solid var(--gray-100);border-radius:var(--r);padding:20px;margin-bottom:14px">
+              <!-- 헤더: 회사명 + 편집 버튼 -->
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+                <div>
+                  <div style="font-size:18px;font-weight:800;color:var(--gray-900);letter-spacing:-.4px" id="mc-card-company"></div>
+                  <div style="font-size:12px;color:var(--gray-400);margin-top:3px" id="mc-card-type"></div>
+                </div>
+                <button class="btn btn-outline btn-sm" onclick="switchMcInfoEdit(true)" style="flex-shrink:0">✏️ 편집</button>
+              </div>
+              <!-- 정보 그리드 -->
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px" id="mc-card-grid"></div>
             </div>
-            <div class="fg"><label>매출 규모</label>
-              <select id="mc-revenue" style="padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;width:100%">
-                <option value="">선택</option>
-                <option>3억_미만</option><option>3억~5억_미만</option><option>5억~10억_미만</option>
-                <option>10억~20억_미만</option><option>20억~30억_미만</option><option>30억~50억_미만</option>
-                <option>50억~100억_미만</option><option>100억_이상</option>
-              </select>
+            <!-- 계약 경과 배너 (계약/관리고객만 표시) -->
+            <div id="mc-contract-elapsed" style="display:none;margin-bottom:14px"></div>
+            <!-- 메모 -->
+            <div id="mc-card-note-wrap" style="display:none;padding:12px 16px;background:#fffef0;border:1px solid #f0e68c;border-radius:var(--r-sm);margin-bottom:14px">
+              <div style="font-size:11px;font-weight:700;color:var(--gray-400);margin-bottom:4px">📝 메모</div>
+              <div style="font-size:13px;color:var(--gray-700);white-space:pre-wrap;line-height:1.6" id="mc-card-note"></div>
             </div>
-            <div class="fg"><label>컨설팅 유형</label><input type="text" id="mc-consult-type" placeholder="컨설팅 유형" list="type-list"></div>
-            <div class="fg"><label>계약일</label><input type="date" id="mc-contract-date"></div>
-            <div class="fg full"><label>메모</label><textarea id="mc-note" rows="3" placeholder="특이사항, 관계 메모 등"></textarea></div>
           </div>
-          <div class="mf" style="margin-top:14px">
-            <button class="btn btn-outline" onclick="closeM('modal-my-client')">취소</button>
-            <button class="btn btn-primary" onclick="saveMcInfoFn()">💾 저장</button>
+
+          <!-- 편집 폼 (편집 버튼 클릭 시 표시) -->
+          <div id="mc-info-edit-view" style="display:none">
+            <div class="form-grid">
+              <div class="fg"><label>회사명 *</label><input type="text" id="mc-company" placeholder="회사명"></div>
+              <div class="fg"><label>대표자</label><input type="text" id="mc-ceo" placeholder="대표자명"></div>
+              <div class="fg"><label>담당자</label><input type="text" id="mc-contact" placeholder="담당자명"></div>
+              <div class="fg"><label>담당자 연락처</label><input type="tel" id="mc-phone" placeholder="010-0000-0000"></div>
+              <div class="fg"><label>담당자 이메일</label><input type="email" id="mc-email" placeholder="email@company.com"></div>
+              <div class="fg"><label>업종</label><input type="text" id="mc-industry" placeholder="업종"></div>
+              <div class="fg"><label>소재지</label>
+                <select id="mc-region" style="padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;width:100%">
+                  <option value="">선택</option>
+                  <option>수도권(서울,경기,인천)</option><option>충청권(충북/대전/충남)</option>
+                  <option>경상권(부산/대구/울산/경남/경북)</option><option>전라권(광주/전남/전북)</option><option>강원/제주</option>
+                </select>
+              </div>
+              <div class="fg"><label>매출 규모</label>
+                <select id="mc-revenue" style="padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;width:100%">
+                  <option value="">선택</option>
+                  <option>3억_미만</option><option>3억~5억_미만</option><option>5억~10억_미만</option>
+                  <option>10억~20억_미만</option><option>20억~30억_미만</option><option>30억~50억_미만</option>
+                  <option>50억~100억_미만</option><option>100억_이상</option>
+                </select>
+              </div>
+              <div class="fg"><label>상담유형</label><input type="text" id="mc-consult-type" placeholder="상담유형" list="type-list"></div>
+              <div class="fg"><label>유입경로</label><input type="text" id="mc-inflow" placeholder="인스타그램, 페이스북..."></div>
+              <div class="fg"><label>체납여부</label>
+                <select id="mc-tax" style="padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;width:100%">
+                  <option value="">선택</option><option>없음</option><option>있음</option><option>확인필요</option>
+                </select>
+              </div>
+              <div class="fg"><label>계약일</label><input type="date" id="mc-contract-date"></div>
+              <div class="fg full"><label>메모</label><textarea id="mc-note" rows="3" placeholder="특이사항, 관계 메모 등"></textarea></div>
+            </div>
+            <div class="mf" style="margin-top:14px">
+              <button class="btn btn-outline" onclick="switchMcInfoEdit(false)">취소</button>
+              <button class="btn btn-primary" onclick="saveMcInfoFn()">💾 저장</button>
+            </div>
           </div>
         </div>
-        <!-- 기념일 탭 -->
+
+        <!-- ② 히스토리 탭 -->
+        <div id="mc-tab-history" style="display:none">
+          <div id="mc-history-body" style="display:flex;flex-direction:column;gap:8px;max-height:460px;overflow-y:auto"></div>
+        </div>
+
+        <!-- ③ 기념일 탭 -->
         <div id="mc-tab-anniv" style="display:none">
           <div style="font-size:12px;color:var(--gray-400);margin-bottom:14px">최대 10개 · D-3일 전 자동 알림</div>
           <div id="mc-anniv-list"></div>
           <button class="btn btn-outline btn-sm" id="mc-anniv-add-btn" onclick="addMcAnniv()" style="margin-top:8px">+ 기념일 추가</button>
-        </div>
-        <!-- 히스토리 탭 -->
-        <div id="mc-tab-history" style="display:none">
-          <div id="mc-history-body" style="display:flex;flex-direction:column;gap:8px;max-height:420px;overflow-y:auto"></div>
         </div>
       </div>
     </div>
@@ -1582,15 +1632,6 @@ tbody tr.selected td{background:var(--blue-50)!important}
         <div class="fg" style="margin-bottom:10px"><label>고객 미팅희망일자 (선택)</label>
           <input type="date" id="tm-meeting-date"></div>
 
-        <!-- 탭 표시 설정 -->
-        <div class="card" style="grid-column:1/-1">
-          <div class="section-title">📋 탭 표시 설정 <span style="font-size:11px;font-weight:400;color:var(--gray-400)">— 역할별 활동 탭 On/Off</span></div>
-          <div id="tab-vis-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:12px"></div>
-          <div style="margin-top:14px">
-            <button class="btn btn-primary btn-sm" onclick="saveTabVisibility()">💾 저장</button>
-            <span id="tab-vis-status" style="font-size:12px;color:var(--gray-400);margin-left:10px"></span>
-          </div>
-        </div>
         <!-- 해피콜 예정일 재설정 (해피콜 DB만 표시) -->
         <div id="tm-hc-wrap" style="display:none;margin-bottom:14px;padding:14px;background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:var(--r-sm)">
           <div style="font-size:12px;font-weight:700;color:var(--ok);margin-bottom:10px">😊 해피콜 관리 <span style="font-size:11px;font-weight:400;color:var(--gray-400)">(대전TM 전용)</span></div>
@@ -1772,6 +1813,15 @@ tbody tr.selected td{background:var(--blue-50)!important}
             <span id="sb-status" style="font-size:12px;color:var(--gray-400)"></span>
           </div>
         </div>
+        <!-- 탭 표시 설정 (관리자용) -->
+        <div class="card" style="grid-column:1/-1">
+          <div class="section-title">📋 탭 표시 설정 <span style="font-size:11px;font-weight:400;color:var(--gray-400)">— 역할별 활동 탭 On/Off</span></div>
+          <div id="tab-vis-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:12px"></div>
+          <div style="margin-top:14px">
+            <button class="btn btn-primary btn-sm" onclick="saveTabVisibility()">💾 저장</button>
+            <span id="tab-vis-status" style="font-size:12px;color:var(--gray-400);margin-left:10px"></span>
+          </div>
+        </div>
         <!-- 팀장 요청 관리 -->
         <div class="card" id="leader-req-card">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
@@ -1873,11 +1923,11 @@ tbody tr.selected td{background:var(--blue-50)!important}
       <button class="mc" onclick="closeM('modal-lead-detail')">✕</button>
     </div>
     <div style="display:flex;border-bottom:1px solid var(--gray-200);flex-shrink:0">
-      <button class="ldetail-tab active" onclick="switchLDetailTab('info',this)"
+      <button class="ldetail-tab" id="ldetail-tb-info" onclick="switchLDetailTab('info',this)"
         style="padding:9px 18px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:700;color:var(--blue);border-bottom:2px solid var(--blue);margin-bottom:-1px;font-family:inherit">📋 고객정보</button>
-      <button class="ldetail-tab" onclick="switchLDetailTab('history',this)"
+      <button class="ldetail-tab" id="ldetail-tb-history" onclick="switchLDetailTab('history',this)"
         style="padding:9px 18px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:500;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-1px;font-family:inherit">📜 히스토리</button>
-      <button class="ldetail-tab" onclick="switchLDetailTab('anniv',this)"
+      <button class="ldetail-tab" id="ldetail-tb-anniv" onclick="switchLDetailTab('anniv',this)"
         style="padding:9px 18px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:500;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-1px;font-family:inherit">🎂 기념일</button>
     </div>
     <input type="hidden" id="ldetail-lead-id">
@@ -3405,6 +3455,10 @@ function subscribeRealtime(){
       { event:'*', schema:'public', table:'accounts' },
       (payload) => handleRealtimeChange('accounts', payload)
     )
+    .on('postgres_changes',
+      { event:'*', schema:'public', table:'notices' },
+      (payload) => handleRealtimeChange('notices', payload)
+    )
     .subscribe((status) => {
       console.log('Realtime 상태:', status);
       const st = document.getElementById('sb-status');
@@ -3488,6 +3542,15 @@ function handleRealtimeChange(table, payload){
       syncBranchTeamMap();
       console.log('[Realtime] accounts 캐시 갱신 완료');
     });
+
+  } else if(table === 'notices'){
+    // 공지 변경 시 알림 목록 즉시 갱신
+    clearTimeout(_rtDebounceTimer);
+    _rtDebounceTimer = setTimeout(()=>{
+      if(typeof renderNoticeList==='function') renderNoticeList();
+      if(typeof renderAdminNoticeList==='function') renderAdminNoticeList();
+      console.log('[Realtime] notices 갱신 완료');
+    }, 400);
   }
 }
 
@@ -3517,14 +3580,17 @@ function sbH(){ return {'Content-Type':'application/json','apikey':SB_KEY,'Autho
 async function sbGet(path){
   if(testMode) return [];
   try{
-    const ctrl=new AbortController();
-    const timer=setTimeout(()=>ctrl.abort(),8000); // 8초 타임아웃
-    const r=await fetch(SB_URL+'/rest/v1/'+path,{headers:sbH(),signal:ctrl.signal});
-    clearTimeout(timer);
+    // AbortController.signal을 fetch에 직접 넘기면 postMessage 경유 시
+    // DataCloneError 발생 → Promise.race 타임아웃으로 대체
+    const fetchPromise = fetch(SB_URL+'/rest/v1/'+path, {headers:sbH()});
+    const timeoutPromise = new Promise((_,rej) =>
+      setTimeout(()=>rej(new Error('sbGet_timeout')), 8000)
+    );
+    const r = await Promise.race([fetchPromise, timeoutPromise]);
     if(!r.ok){ console.warn('sbGet err:',r.status); return null; }
     const t=await r.text(); return t?JSON.parse(t):[];
   }catch(e){
-    if(e.name==='AbortError') console.warn('sbGet 타임아웃:', path);
+    if(e.message==='sbGet_timeout') console.warn('sbGet 타임아웃:', path);
     else console.warn('sbGet 연결 실패:', e);
     return null;
   }
@@ -3746,7 +3812,7 @@ async function changeStatus(leadId, status, stage, note, silent){
 let BRANCHES = ['신상국','정명구','정혜윤','최종길'];
 let TEAM_MAP = {
   '신상국':['강정희','김관형','김두한','박상혁','백두진','서도겸','신인균','유인수','이동혁','이현준','최택호','이희용'],
-  '정명구':['김철희','문범모','문성희','박성훈','안대승','조재완','최희수'],
+  '정명구':['김철희','문범모','문성희','박성훈','안대승','조재완','최회수'],
   '정혜윤':['강정환','김봉필','김연한','김용희','김종빈','박문수','서갑기','양은모','양환기','유동관','임석중','정우성','차만희','추정한','형주영'],
   '최종길':['박상욱','박승규','이성원','유영준','전용준'],
 };
@@ -3898,9 +3964,18 @@ function startApp(){
 
 // ── 화면 전환 ─────────────────────────────────────────────
 function showScreen(id, btn){
-  // dbmanager: 대시보드·설정·지점관리 화면 접근 차단
-  if(curUser?.role==='dbmanager' && ['admin','settings','branch'].includes(id)){
-    showToast('DB관리자는 해당 화면에 접근할 수 없습니다.','error'); return;
+  // 역할별 접근 가능 화면 화이트리스트
+  const ALLOWED = {
+    admin:     ['admin','leads','activity','settings'],
+    dbmanager: ['leads','activity'],
+    branch:    ['branch','leads','activity'],
+    team:      ['leads','my-leads','my-clients','activity'],
+    tm:        ['tm-panel'],
+  };
+  const role = curUser?.role;
+  const allowed = ALLOWED[role] || [];
+  if(allowed.length && !allowed.includes(id)){
+    showToast('해당 화면에 접근할 수 없습니다.','error'); return;
   }
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   const el=document.getElementById('screen-'+id); if(el)el.classList.add('active');
@@ -4401,6 +4476,19 @@ async function loadLeads(){
   const yjTabEl=document.getElementById('qtab-yj-initial');
   if(yjFilterEl) yjFilterEl.style.display=isYJ?'':'none';
   if(yjTabEl) yjTabEl.style.display=isYJ?'':'none';
+
+  // 팀장 화면: 미배정·배정완료 탭 숨기고, 신규DB·접촉중·계약 표시
+  const isTeam = curUser?.role==='team';
+  const tabUnassigned = document.getElementById('qtab-unassigned');
+  const tabAssigned   = document.getElementById('qtab-assigned');
+  const tabNew        = document.getElementById('qtab-new');
+  const tabConsulting = document.getElementById('qtab-consulting');
+  const tabContract   = document.getElementById('qtab-contract');
+  if(tabUnassigned) tabUnassigned.style.display = isTeam ? 'none' : '';
+  if(tabAssigned)   tabAssigned.style.display   = isTeam ? 'none' : '';
+  if(tabNew)        tabNew.style.display        = isTeam ? '' : 'none';
+  if(tabConsulting) tabConsulting.style.display = isTeam ? '' : 'none';
+  if(tabContract)   tabContract.style.display   = isTeam ? '' : 'none';
   _stageFilter=''; _quickTab='all'; // 데이터 새로 불러올 때 필터 초기화
   // 빠른탭 UI도 전체로 리셋
   document.querySelectorAll('[id^="qtab-"]').forEach(b=>{b.style.background='';b.style.color='';b.style.borderColor='';});
@@ -4451,10 +4539,18 @@ async function loadLeads(){
 
   (document.getElementById('leads-sub')||{}).textContent=allLeads.length+'건';
 
-  // Supabase 모드: activities + next_actions 전역 캐시 로드
+  // activities / next_actions — 백그라운드 로드 후 테이블 갱신
+  // leads 먼저 렌더 → 이후 진행내용 컬럼만 업데이트 (지연 없음)
   if(!testMode){
-    dbQ('activities').then(rows=>{ allActivities=rows||[]; }).catch(()=>{});
-    dbQ('next_actions').then(rows=>{ allNextActions=rows||[]; }).catch(()=>{});
+    Promise.all([
+      dbQ('activities').catch(()=>[]),
+      dbQ('next_actions').catch(()=>[]),
+    ]).then(([acts, nas])=>{
+      allActivities = acts;
+      allNextActions = nas;
+      // 진행내용 컬럼만 재렌더 (전체 재조회 없이)
+      renderLeadsTable();
+    });
   } else {
     allActivities=lg('activities');
     allNextActions=lg('next_actions');
@@ -4483,8 +4579,9 @@ function filterLeads(){
     if(rg){const rgKey=rg.split('(')[0].trim();if(!(l.region||'').includes(rgKey)&&l.region!==rg)return false;}
     // 유영준 필터
     if(yjF==='yj_voucher'){
-      // 초도이관 = yj_transferred가 true이거나 yj_from_role이 admin인 것
-      if(!l.yj_transferred && l.yj_from_role!=='admin') return false;
+      // 초도이관 진행 중 = yj_transferred가 true (완료된 건 yj_done=true 제외)
+      if(!l.yj_transferred) return false;
+      if(l.yj_done) return false; // 초도상담 완료 후 복귀된 건 제외
     } else if(yjF==='yj_normal'){
       // 일반DB = 지점장(branch)이 배정한 것 — yj_from_role이 branch
       if(l.yj_from_role!=='branch') return false;
@@ -4497,6 +4594,21 @@ function filterLeads(){
   else if(_quickTab==='assigned'){
     if(curUser.role==='branch') filtered=filtered.filter(l=>l.branch_name&&l.team_name&&l.team_name!=='');
     else filtered=filtered.filter(l=>l.branch_name&&l.branch_name!=='');
+  }
+  else if(_quickTab==='new_db'){
+    // 신규DB: 배정됐지만 활동기록 없는 것
+    const _recorded = new Set((allActivities?.length?allActivities:lg('activities'))
+      .filter(a=>!['assign','status_change'].includes(a.type)).map(a=>a.lead_id));
+    filtered=filtered.filter(l=>!_recorded.has(l.id)&&!['drop','deleted'].includes(l.status));
+  }
+  else if(_quickTab==='contacted'){
+    // 접촉중: 활동기록 있는 것 (계약 제외)
+    const _recorded2 = new Set((allActivities?.length?allActivities:lg('activities'))
+      .filter(a=>!['assign','status_change'].includes(a.type)).map(a=>a.lead_id));
+    filtered=filtered.filter(l=>_recorded2.has(l.id)&&l.current_stage!=='계약');
+  }
+  else if(_quickTab==='contract_stage'){
+    filtered=filtered.filter(l=>l.current_stage==='계약');
   }
   curPage=1; renderLeadsTable();
   (document.getElementById('leads-sub')||{}).textContent=filtered.length+'건';
@@ -4791,122 +4903,201 @@ async function confirmDropWithReason(ids){
 
 // ── 고객 상세 패널 ────────────────────────────────────────
 async function openPanel(lead){
-  const panel=document.getElementById('detail-panel'), ov=document.getElementById('panel-overlay');
-  (document.getElementById('dp-title')||{}).textContent=lead.company_name||'고객 상세';
+  if(!lead) return;
+  window._panelLead = lead;
+  window._panelLeadId = lead.id;
 
-  // 미팅 전 브리핑 체크
-  const _today=new Date().toISOString().slice(0,10);
-  const _allNas=(allNextActions?.length?allNextActions:lg('next_actions')).filter(a=>a.lead_id===lead.id&&a.status==='예정');
-  const _todayMeet=_allNas.find(a=>a.due_date===_today&&a.action_type==='미팅');
-  if(_todayMeet){
-    const _meetActs=(allActivities?.length?allActivities:lg('activities')).filter(a=>a.lead_id===lead.id&&a.type!=='assign')
-      .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)).slice(0,3);
-    const _memo=localStorage.getItem('kbmc_memo_'+lead.id)||'';
-    const _briefKey='kbmc_meet_brief_'+lead.id+'_'+_today;
-    if(!sessionStorage.getItem(_briefKey)){
-      sessionStorage.setItem(_briefKey,'1');
-      // 미팅 브리핑 토스트 대신 패널 상단에 배너 삽입 예정
-      window._showMeetBrief={lead, acts:_meetActs, memo:_memo, meet:_todayMeet};
+  // ── 활동 이력 로드 (Supabase 모드: 최신 직접 조회)
+  let acts;
+  if(!testMode){
+    try{
+      const rows = await sbGet(`activities?select=*&lead_id=eq.${lead.id}&order=created_at.desc&limit=200`);
+      acts = (rows||[]).filter(a=>a.type!=='assign');
+      // 캐시 갱신
+      if(Array.isArray(allActivities)){
+        rows.forEach(r=>{ if(!allActivities.find(a=>a.id===r.id)) allActivities.unshift(r); });
+      }
+    } catch(e){
+      acts = (allActivities?.length?allActivities:lg('activities'))
+             .filter(a=>a.lead_id===lead.id&&a.type!=='assign')
+             .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
     }
+  } else {
+    acts = lg('activities').filter(a=>a.lead_id===lead.id&&a.type!=='assign')
+           .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
   }
+  window._ldetailActs = acts;
 
-  // 활동이력 + Next Action
-  const acts=(allActivities?.length?allActivities:lg('activities')).filter(a=>a.lead_id===lead.id&&a.type!=='assign').sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
-  const today=new Date().toISOString().slice(0,10);
+  // ── 모달 타이틀
+  const titleEl = document.getElementById('ldetail-title');
+  if(titleEl) titleEl.textContent = lead.company_name||'고객 상세';
+  const idEl = document.getElementById('ldetail-lead-id');
+  if(idEl) idEl.value = lead.id;
 
-  let naHtml='';
-  if(nas.length) naHtml=`<div style="margin-bottom:14px">
-    <div class="sec-title">📅 다음 액션</div>
-    ${nas.map(a=>`<div class="na-item ${a.due_date<today?'na-overdue':a.due_date===today?'na-today':''}">
-      <div><div style="font-size:12px;font-weight:700;color:var(--gray-900)">${esc(a.action_type)}</div>
-      <div style="font-size:11px;color:var(--gray-400)">${fmtD(a.due_date)} ${a.due_time||''} ${a.memo?'· '+esc(a.memo.slice(0,30)):''}</div></div>
-      <button class="btn btn-outline btn-xs" onclick="doneNA('${a.id}')">완료</button>
-    </div>`).join('')}
-  </div>`;
+  // ── 역할별 버튼 제어
+  const editBtn = document.getElementById('ldetail-edit-btn');
+  const actBtn  = document.getElementById('ldetail-act-btn');
+  if(editBtn) editBtn.style.display = ['team','branch','admin','dbmanager'].includes(curUser?.role)?'':'none';
+  if(actBtn)  actBtn.style.display  = ['team','branch','admin','dbmanager'].includes(curUser?.role)?'':'none';
 
-  // 미팅 전 브리핑 배너
-  let meetBriefHtml='';
-  if(window._showMeetBrief&&window._showMeetBrief.lead.id===lead.id){
-    const mb=window._showMeetBrief;
-    const _recentActsHtml=mb.acts.map(function(a){
-    return '<div style="font-size:11px;color:var(--gray-600);padding:2px 0;border-left:2px solid var(--gray-200);padding-left:8px;margin-bottom:3px">'+
-      (a.created_at||'').slice(0,10)+' '+esc((a.content||'').slice(0,50))+'</div>';
-  }).join('');
-  meetBriefHtml='<div style="padding:12px 14px;background:linear-gradient(135deg,rgba(37,99,235,.1),rgba(37,99,235,.05));'+
-    'border:1px solid rgba(37,99,235,.2);border-radius:8px;margin-bottom:14px">'+
-    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'+
-      '<span style="font-size:18px">🤝</span>'+
-      '<div>'+
-        '<div style="font-size:13px;font-weight:800;color:var(--blue)">오늘 미팅 예정</div>'+
-        '<div style="font-size:11px;color:var(--gray-400)">'+(mb.meet.due_time||'시간 미정')+' · '+esc(mb.meet.memo||'')+'</div>'+
-      '</div>'+
-    '</div>'+
-    (mb.acts.length?'<div style="font-size:11px;font-weight:700;color:var(--gray-500);margin-bottom:4px">최근 활동</div>'+_recentActsHtml:'')+
-    (mb.memo?'<div style="margin-top:8px;font-size:11px;font-weight:700;color:var(--gray-500)">메모</div>'+
-    '<div style="font-size:11px;color:var(--gray-600);margin-top:2px;font-style:italic">'+esc(mb.memo.slice(0,80))+'</div>':'')+
-  '</div>';
-    window._showMeetBrief=null;
-  }
+  // ── 고객정보 탭 렌더
+  _renderLDetailInfo(lead);
 
-  (document.getElementById('dp-body')||document.createElement('div')).innerHTML=meetBriefHtml+naHtml+`
-    <div class="info-grid">
-      <div class="info-item"><label>상태</label><span>${sBadge(lead.status)}</span></div>
-      <div class="info-item"><label>진행단계</label>
-        <select onchange="changeLeadStatus('${lead.id}',{stage:this.value,note:'단계 직접 변경'}).then(()=>openLeadDetailModal(allLeads.find(l=>l.id==='${lead.id}')|||myLeads?.find(l=>l.id==='${lead.id}')))"
-          style="padding:4px 8px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:12px;font-family:inherit;background:#fff">
-          <option value="">선택</option>
-          ${STAGE_LIST.map(s=>`<option value="${s}" ${lead.current_stage===s?'selected':''}>${s}</option>`).join('')}
-        </select>
-      </div>
-      <div class="info-item"><label>신청자</label><span>${esc(lead.contact_name||'-')}</span></div>
-      <div class="info-item"><label>연락처</label><span>${esc(lead.phone||'-')}</span></div>
-      <div class="info-item"><label>지점</label><span>${esc(lead.branch_name||'-')}</span></div>
-      <div class="info-item"><label>팀장</label><span>${esc(lead.team_name||'-')}</span></div>
-      <div class="info-item"><label>소재지</label><span>${esc(lead.region||'-')}</span></div>
-      <div class="info-item"><label>업종</label><span>${esc(lead.industry||'-')}</span></div>
-      <div class="info-item"><label>매출</label><span>${esc(lead.revenue||'-')}</span></div>
-      <div class="info-item"><label>상담유형</label><span style="font-size:11px">${esc(lead.consult_type||'-')}</span></div>
-      ${lead.db_type?`<div class="info-item"><label>DB 구분</label><span style="font-weight:700;color:var(--blue)">${{'self':'🏢 자체 DB','intro':'🤝 소개 DB','other':'📋 기타 DB'}[lead.db_type]||lead.db_type}${lead.intro_name?' ('+esc(lead.intro_name)+')':''}</span></div>`:''}
-      ${lead.note?`<div class="info-item full"><label>비고</label><span>${esc(lead.note)}</span></div>`:''}
-      ${lead.tm_happycall?`<div class="info-item full" style="border-top:1px solid var(--gray-100);padding-top:10px;margin-top:4px">
-        <label style="color:var(--ok)">😊 팀장 진행내용</label>
-        <span style="font-size:12px;line-height:1.6;white-space:pre-wrap">${esc(lead.tm_happycall)}</span>
-      </div>`:''}
-      ${lead.happycall_date?`<div class="info-item"><label style="color:var(--ok)">해피콜 예정일</label><span style="font-weight:700;color:var(--ok)">${lead.happycall_date}${lead.happycall_done?' ✅':''}</span></div>`:''}
-    </div>
-    ${renderTimeline(acts)}
-`;
+  // ── 히스토리 탭 렌더
+  _renderLDetailHistory(acts, lead.id);
 
+  // ── 기념일 탭 렌더
+  _renderLDetailAnniv(lead.id);
 
+  // ── 탭 초기화 → 고객정보 탭
+  switchLDetailTab('info', document.getElementById('ldetail-tb-info'));
 
-  const _lid=lead.id;
-  const memoSection='';
-
-  // 즐겨찾기 버튼 업데이트
-  const FAV_KEY='kbmc_fav';
-  let favs=[]; try{favs=JSON.parse(localStorage.getItem(FAV_KEY)||'[]');}catch(e){}
-  const isFav=favs.includes(lead.id);
-  const starBtn=document.getElementById('dp-star-btn');
-  if(starBtn) starBtn.textContent=isFav?'⭐':'☆';
-  window._panelLeadId=lead.id;
-
-  let footer=`<button class="btn btn-outline btn-sm" onclick="closePanel()">닫기</button>`;
-  if(curUser.role==='tm'){
-    const isDone=lead.status==='contacted';
-    footer=`<button class="btn btn-primary btn-sm" onclick="closePanel();openTmInput('${lead.id}','${esc(lead.company_name||'')}')">📞 TM 기록</button>
-      ${isDone?`<button class="btn btn-sm" style="background:var(--ok);color:#fff;border-color:var(--ok)" onclick="tmToAdmin('${lead.id}')">✅ 관리자 이관</button>`:''} `+footer;
-  } else if(['team','branch','admin','dbmanager'].includes(curUser.role)){
-    footer=`<button class="btn btn-outline btn-sm" onclick="openActM('${lead.id}','${esc(lead.company_name||'')}')">💬 활동기록</button>
-      
-      <button class="btn btn-primary btn-sm" onclick="openLeadEdit('${lead.id}')">✏️ 수정</button>
-      `+footer;
-  }
-  // 메모 섹션을 dp-body 끝에 추가
-  const _dpb=document.getElementById('dp-body'); if(_dpb) _dpb.innerHTML += memoSection;
-  (document.getElementById('dp-footer')||document.createElement('div')).innerHTML=footer;
-  panel.classList.add('open'); ov.style.display='block';
-  window._panelLead=lead;
+  openM('modal-lead-detail');
 }
+
+// ── 고객정보 탭 렌더 ─────────────────────────────────────────
+function _renderLDetailInfo(lead){
+  const grid = document.getElementById('ldetail-info-grid'); if(!grid) return;
+  const row=(l,v,opt={})=>`
+    <div style="padding:9px 14px;border-bottom:1px solid var(--gray-100);display:flex;gap:8px;align-items:flex-start">
+      <span style="font-size:11px;color:var(--gray-400);font-weight:500;min-width:72px;flex-shrink:0;padding-top:1px">${l}</span>
+      <span style="font-size:13px;color:${opt.err?'var(--err)':'var(--gray-800)'};font-weight:${opt.bold?'700':'500'};line-height:1.4">${esc(v)||'<span style="color:var(--gray-200)">—</span>'}</span>
+    </div>`;
+  const statusHtml=`
+    <div style="padding:9px 14px;border-bottom:1px solid var(--gray-100);display:flex;gap:8px;align-items:center">
+      <span style="font-size:11px;color:var(--gray-400);font-weight:500;min-width:72px;flex-shrink:0">상태</span>
+      ${sBadge(lead.status)}
+    </div>
+    <div style="padding:9px 14px;border-bottom:1px solid var(--gray-100);display:flex;gap:8px;align-items:center">
+      <span style="font-size:11px;color:var(--gray-400);font-weight:500;min-width:72px;flex-shrink:0">진행단계</span>
+      <select onchange="changeLeadStatus('${lead.id}',{stage:this.value,note:'단계 직접 변경'}).then(()=>{const l=allLeads?.find(x=>x.id==='${lead.id}')||myLeads?.find(x=>x.id==='${lead.id}');if(l)openPanel(l);})"
+        style="padding:4px 8px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:12px;font-family:inherit;background:#fff">
+        <option value="">선택</option>
+        ${STAGE_LIST.map(s=>`<option value="${s}" ${lead.current_stage===s?'selected':''}>${s}</option>`).join('')}
+      </select>
+    </div>`;
+  grid.innerHTML = statusHtml +
+    row('신청자',   lead.contact_name) +
+    row('연락처',   lead.phone) +
+    row('이메일',   lead.email) +
+    row('지점',     lead.branch_name) +
+    row('팀장',     lead.team_name) +
+    row('소재지',   lead.region) +
+    row('업종',     lead.industry) +
+    row('매출',     lead.revenue) +
+    row('상담유형', lead.consult_type) +
+    row('유입경로', lead.inflow) +
+    row('체납여부', lead.tax_delinquent, {err:lead.tax_delinquent&&lead.tax_delinquent!=='없음'}) +
+    row('분배날짜', lead.distributed_at?lead.distributed_at.slice(0,10):'') +
+    (lead.note?row('비고', lead.note):'') +
+    (lead.proposal?row('제안부분', lead.proposal):'');
+}
+
+// ── 히스토리 탭 렌더 ─────────────────────────────────────────
+function _renderLDetailHistory(acts, leadId){
+  const el = document.getElementById('ldetail-history-body'); if(!el) return;
+  const ICON={call:'📞',meeting:'🤝',email:'📧',online:'💻',note:'📝',proposal:'📋',contract:'🎉',internal:'🏢',other:'📌',status_change:'🔄'};
+  if(!acts.length){
+    el.innerHTML='<div style="text-align:center;padding:32px 16px;font-size:13px;color:var(--gray-300)">활동 기록이 없습니다</div>';
+    return;
+  }
+  el.innerHTML=acts.map(a=>`
+    <div style="display:flex;gap:10px;padding:11px 0;border-bottom:1px solid var(--gray-100)">
+      <span style="font-size:16px;flex-shrink:0;margin-top:1px">${ICON[a.type]||'📌'}</span>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+          <span style="font-size:12px;font-weight:700;color:var(--navy)">${esc(a.author||'-')}</span>
+          <span style="font-size:10px;color:var(--gray-400)">${(a.date||a.created_at||'').slice(0,10)}</span>
+        </div>
+        ${a.stage?`<span style="font-size:10px;padding:1px 6px;background:var(--blue-50);color:var(--blue);border-radius:8px;margin-bottom:4px;display:inline-block">${esc(a.stage)}</span>`:''}
+        <div style="font-size:12px;color:var(--gray-700);line-height:1.6;white-space:pre-wrap;word-break:break-all">${esc(a.content||'')}</div>
+      </div>
+    </div>`).join('');
+}
+
+// ── 기념일 탭 렌더 ─────────────────────────────────────────
+function _renderLDetailAnniv(leadId){
+  const el = document.getElementById('ldetail-anniv-list'); if(!el) return;
+  const annivs = getMcAnniv(leadId)||[];
+  const addBtn = document.getElementById('ldetail-anniv-add-btn');
+  if(addBtn) addBtn.style.display = annivs.length>=10?'none':'';
+  el.innerHTML = annivs.map((a,i)=>`
+    <div style="display:flex;gap:8px;align-items:center;padding:9px 12px;background:var(--gray-50);border-radius:var(--r-sm)">
+      <span style="font-size:14px">🎂</span>
+      <span style="flex:1;font-size:13px;font-weight:600">${esc(a.label)}</span>
+      <span style="font-size:12px;color:var(--gray-500)">${a.date||''}</span>
+      <span style="font-size:10px;padding:2px 6px;border-radius:10px;background:${a.repeat!==false?'rgba(49,130,246,.1)':'var(--gray-100)'};color:${a.repeat!==false?'var(--blue)':'var(--gray-400)'}">${a.repeat!==false?'🔄 매년':'1회'}</span>
+      <button onclick="deleteLDetailAnniv('${leadId}',${i})" style="background:none;border:none;color:var(--gray-300);cursor:pointer;font-size:14px;padding:0">✕</button>
+    </div>`).join('') || '<div style="text-align:center;padding:24px 0;font-size:13px;color:var(--gray-300)">등록된 기념일이 없습니다</div>';
+}
+function deleteLDetailAnniv(leadId, idx){
+  const annivs=getMcAnniv(leadId); annivs.splice(idx,1);
+  saveMcAnniv(leadId,annivs); _renderLDetailAnniv(leadId);
+}
+function addLDetailAnniv(){
+  const leadId=document.getElementById('ldetail-lead-id')?.value; if(!leadId) return;
+  addMcAnnivFor(leadId, ()=>_renderLDetailAnniv(leadId));
+}
+// 기념일 추가 범용 헬퍼 (leadId + callback)
+function addMcAnnivFor(leadId, cb){
+  const annivs=getMcAnniv(leadId);
+  if(annivs.length>=10){showToast('최대 10개까지 등록 가능합니다','error');return;}
+  let ov=document.getElementById('ov-mc-anniv-add');
+  if(!ov){ov=document.createElement('div');ov.id='ov-mc-anniv-add';ov.className='ov-bg';document.body.appendChild(ov);}
+  ov.innerHTML=`<div class="ov-box" style="width:360px;max-width:96vw">
+    <div style="font-size:15px;font-weight:800;color:var(--navy);margin-bottom:14px">🎂 기념일 추가</div>
+    <div class="form-grid">
+      <div class="fg full"><label>기념일 이름 *</label>
+        <input type="text" id="mc-anniv-label-inp" placeholder="예: 생일, 계약기념일, 창립기념일" style="width:100%;padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit">
+      </div>
+      <div class="fg full"><label>날짜 *</label>
+        <input type="date" id="mc-anniv-date-inp" style="width:100%;padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit">
+      </div>
+      <div class="fg full">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="mc-anniv-repeat-inp" checked style="accent-color:var(--blue);width:16px;height:16px">
+          <span style="font-size:13px;font-weight:600">매년 반복</span>
+        </label>
+      </div>
+    </div>
+    <div class="mf" style="margin-top:14px">
+      <button class="btn btn-outline" onclick="closeOv('ov-mc-anniv-add')">취소</button>
+      <button class="btn btn-primary" onclick="saveMcAnnivNew('${leadId}',${cb?'window._ldetailAnnivCb':undefined})">저장</button>
+    </div>
+  </div>`;
+  window._ldetailAnnivCb = cb;
+  ov.classList.add('open');
+  setTimeout(()=>document.getElementById('mc-anniv-label-inp')?.focus(),80);
+}
+
+// ── 탭 전환 ─────────────────────────────────────────────────
+function switchLDetailTab(tab, btn){
+  document.querySelectorAll('.ldetail-tab').forEach(b=>{
+    b.style.color='var(--gray-500)'; b.style.borderBottom='2px solid transparent'; b.style.fontWeight='500';
+  });
+  if(btn){ btn.style.color='var(--blue)'; btn.style.borderBottom='2px solid var(--blue)'; btn.style.fontWeight='700'; }
+  ['info','history','anniv'].forEach(t=>{
+    const el=document.getElementById('ldetail-tab-'+t);
+    if(el) el.style.display=(t===tab?'':'none');
+  });
+}
+
+// ── 하단 버튼 핸들러 ─────────────────────────────────────────
+function openLDetailAct(){
+  const leadId=document.getElementById('ldetail-lead-id')?.value; if(!leadId) return;
+  const lead=allLeads?.find(l=>l.id===leadId)||myLeads?.find(l=>l.id===leadId);
+  closeM('modal-lead-detail');
+  openActM(leadId, lead?.company_name||'');
+}
+function openLDetailEdit(){
+  const leadId=document.getElementById('ldetail-lead-id')?.value; if(!leadId) return;
+  closeM('modal-lead-detail');
+  openLeadEdit(leadId);
+}
+function openLDetailActFromHistory(){
+  openLDetailAct();
+}
+
 function renderTimeline(acts){
   if(!acts.length) return '<div class="empty" style="padding:20px;font-size:13px;text-align:center;color:var(--gray-400)">활동 이력 없음</div>';
   const TYPE_LABEL={call:'📞 전화',meeting:'🤝 미팅',email:'📧 이메일',note:'📝 메모',online:'💻 화상회의',assign:'📨 배정',proposal:'📋 제안서',contract:'🎉 계약',online:'💻 화상상담',other:'기타'};
@@ -6098,7 +6289,7 @@ async function importExcel(event){
   const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
   if(rows.length<2){showToast('데이터가 없습니다.','error');return;}
   const hdrs=rows[0].map(h=>h?String(h).trim().replace(/\n/g,''):'');
-  const ALIAS={company_name:['회사명','기업명','업체명'],contact_name:['신청자','담당자','대표자'],phone:['연락처','전화번호'],email:['이메일'],region:['소재지','지역'],industry:['업종'],revenue:['매출','매출액'],consult_type:['상담유형','유형'],inflow:['유입경로'],tax_delinquent:['체납여부'],note:['비고'],branch_name:['지점장','배정지점장'],team_name:['팀장','배정팀장'],distributed_at:['분배날짜'],};
+  const ALIAS={company_name:['회사명','기업명','업체명'],contact_name:['신청자','담당자','대표자'],phone:['연락처','전화번호'],email:['이메일'],region:['소재지','지역'],industry:['업종'],revenue:['매출','매출액'],consult_type:['상담유형','유형'],inflow:['유입경로'],tax_delinquent:['체납여부'],note:['비고'],branch_name:['지점장','배정지점장'],team_name:['팀장','배정팀장'],distributed_at:['분배날짜'],applied_at:['상담신청시간','신청시간','신청일시'],};
   const hm={};Object.entries(ALIAS).forEach(([key,al])=>al.forEach(a=>hm[a.toLowerCase()]=key));
   const toD=v=>{if(!v)return null;if(v instanceof Date)return v.toISOString().slice(0,10);const s=String(v);if(/^\d{4}-\d{2}-\d{2}/.test(s))return s.slice(0,10);return null;};
   const STATUS_NORM={x:'no_answer',X:'no_answer','x(문자 남김)':'no_answer','부재중':'no_answer','전화통화':'contacted','전화상담':'contacted','분배완료':'contacted','상담중':'consulting','방문':'consulting','상담완료':'done','계약':'contract','drop':'drop'};
@@ -6121,15 +6312,20 @@ async function importExcel(event){
     const _bname = curUser?.role==='branch' ? curUser.name : _branch;
     const _autoStatus2 = _bname ? 'assigned' : 'pending';
     const _assignedAt2 = _bname ? (toD(map.distributed_at)||new Date().toISOString()) : null;
-    _pending.push({id:uuid(),company_name:co,contact_name:String(map.contact_name||'').trim(),phone:formatPhone(String(map.phone||'')).trim(),email:String(map.email||'').trim(),region:String(map.region||'').trim(),industry:String(map.industry||'').trim(),revenue:String(map.revenue||'').trim(),consult_type:String(map.consult_type||'').trim(),inflow:String(map.inflow||'').trim(),tax_delinquent:String(map.tax_delinquent||'').trim(),note:String(map.note||'').trim(),branch_name:_bname,team_name:_team,team_names:_team?JSON.stringify([_team]):null,distributed_at:toD(map.distributed_at),assigned_at:_assignedAt2,status:_autoStatus2,registered_by:curUser?.name||'',created_at:new Date().toISOString(),updated_at:new Date().toISOString()});
+    _pending.push({id:uuid(),company_name:co,contact_name:String(map.contact_name||'').trim(),phone:formatPhone(String(map.phone||'')).trim(),email:String(map.email||'').trim(),region:String(map.region||'').trim(),industry:String(map.industry||'').trim(),revenue:String(map.revenue||'').trim(),consult_type:String(map.consult_type||'').trim(),inflow:String(map.inflow||'').trim(),tax_delinquent:String(map.tax_delinquent||'').trim(),note:String(map.note||'').trim(),branch_name:_bname,team_name:_team,team_names:_team?JSON.stringify([_team]):null,distributed_at:toD(map.distributed_at),applied_at:map.applied_at?String(map.applied_at).trim():null,assigned_at:_assignedAt2,status:_autoStatus2,registered_by:curUser?.name||'',created_at:new Date().toISOString(),updated_at:new Date().toISOString()});
   }
   const _autoAssigned=_pending.filter(r=>r.status==='assigned').length;
   const _noPending=_pending.filter(r=>r.status==='pending').length;
-  (document.getElementById('import-summary')||document.createElement('div')).innerHTML=`<strong>${_pending.length}건</strong> 등록 예정`+(_autoAssigned?` · <span style="color:var(--ok);font-weight:700">✓ 자동배정 ${_autoAssigned}건</span>`:'')+(_noPending?` · <span style="color:var(--warn)">미배정 ${_noPending}건</span>`:'')+( dup?` · <span style="color:var(--gray-400)">중복제외 ${dup}건</span>`:'');
+  const _sumEl=document.getElementById('import-summary');
+  const _headEl=document.getElementById('import-head');
+  const _bodyEl=document.getElementById('import-body');
+  const _warnEl=document.getElementById('import-warn');
+  if(!_sumEl||!_headEl||!_bodyEl){ showToast('미리보기 UI 오류 — 페이지를 새로고침하세요','error'); return; }
+  _sumEl.innerHTML=`<strong>${_pending.length}건</strong> 등록 예정`+(_autoAssigned?` · <span style="color:var(--ok);font-weight:700">✓ 자동배정 ${_autoAssigned}건</span>`:'')+(_noPending?` · <span style="color:var(--warn)">미배정 ${_noPending}건</span>`:'')+( dup?` · <span style="color:var(--gray-400)">중복제외 ${dup}건</span>`:'');
   const PCOLS=['company_name','contact_name','phone','region','consult_type','branch_name','team_name'];
-  (document.getElementById('import-head')||document.createElement('div')).innerHTML='<tr>'+PCOLS.map(c=>`<th style="padding:8px 10px">${c}</th>`).join('')+'</tr>';
-  (document.getElementById('import-body')||document.createElement('div')).innerHTML=_pending.slice(0,20).map(r=>'<tr>'+PCOLS.map(c=>`<td style="padding:7px 10px;border-bottom:1px solid var(--gray-100)">${esc(r[c]||'-')}</td>`).join('')+'</tr>').join('');
-  (document.getElementById('import-warn')||{}).textContent=_pending.length>20?`전체 ${_pending.length}건 중 20건만 미리보기`:'';
+  _headEl.innerHTML='<tr>'+PCOLS.map(c=>`<th style="padding:8px 10px">${c}</th>`).join('')+'</tr>';
+  _bodyEl.innerHTML=_pending.slice(0,20).map(r=>'<tr>'+PCOLS.map(c=>`<td style="padding:7px 10px;border-bottom:1px solid var(--gray-100)">${esc(r[c]||'-')}</td>`).join('')+'</tr>').join('');
+  if(_warnEl) _warnEl.textContent=_pending.length>20?`전체 ${_pending.length}건 중 20건만 미리보기`:'';
   openM('modal-import');
 }
 async function confirmImport(){
@@ -6378,34 +6574,94 @@ function renderUserList(){
     <td style="padding:7px 10px"><div style="display:flex;gap:4px"><button class="btn btn-outline btn-xs" onclick="openEditUser('${a.id}')">수정</button><button class="btn btn-danger btn-xs" onclick="deleteUser('${a.id}')">삭제</button></div></td></tr>`).join('')+'</tbody></table></div>';
 }
 function openAddUser(){(document.getElementById('user-form-title')||{}).textContent='사용자 추가';(document.getElementById('uf-edit-id')||{}).value='';['uf-id','uf-name','uf-branch'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});(document.getElementById('uf-role')||{}).value='team';(document.getElementById('uf-pw')||{}).value='1234';if(document.getElementById('uf-id'))document.getElementById('uf-id').readOnly=false;openM('modal-user');}
-function openEditUser(uid){const a=getAccs().find(x=>x.id===uid);if(!a)return;(document.getElementById('user-form-title')||{}).textContent='사용자 수정';(document.getElementById('uf-edit-id')||{}).value=uid;(document.getElementById('uf-id')||{}).value=a.id;document.getElementById('uf-id').readOnly=true;(document.getElementById('uf-name')||{}).value=a.name;(document.getElementById('uf-role')||{}).value=a.role;(document.getElementById('uf-branch')||{}).value=a.branch||'';(document.getElementById('uf-pw')||{}).value='';openM('modal-user');}
+function openEditUser(uid){
+  const a=getAccs().find(x=>x.id===uid); if(!a) return;
+  (document.getElementById('user-form-title')||{}).textContent='사용자 수정';
+  (document.getElementById('uf-edit-id')||{}).value=uid;
+  (document.getElementById('uf-id')||{}).value=a.id;
+  // 아이디 변경 허용 (readOnly 제거)
+  const idEl=document.getElementById('uf-id');
+  if(idEl) idEl.readOnly=false;
+  (document.getElementById('uf-name')||{}).value=a.name;
+  (document.getElementById('uf-role')||{}).value=a.role;
+  (document.getElementById('uf-branch')||{}).value=a.branch||'';
+  (document.getElementById('uf-pw')||{}).value='';
+  openM('modal-user');
+}
 async function saveUser(){
-  const eid=document.getElementById('uf-edit-id').value,id=document.getElementById('uf-id').value.trim(),name=document.getElementById('uf-name').value.trim(),role=document.getElementById('uf-role').value,branch=document.getElementById('uf-branch').value,pw=document.getElementById('uf-pw').value;
-  if(!id||!name){showToast('아이디와 이름을 입력하세요.','error');return;}
-  const accs=getAccs();
-  if(!eid&&accs.find(a=>a.id===id)){showToast('이미 존재하는 아이디입니다.','error');return;}
-  const hashed=pw?await hashPw(pw):'';
-  let accRow;
-  if(eid){
-    const i=accs.findIndex(a=>a.id===eid);
-    if(i>=0){
-      accs[i]={...accs[i],name,role,branch};
-      if(pw) accs[i].pw=hashed;
-      accRow=accs[i];
-    }
-  } else {
-    accRow={id,name,role,branch,pw:hashed||await hashPw('1234'),created_at:new Date().toISOString()};
+  const eid   = document.getElementById('uf-edit-id')?.value||'';
+  const id    = document.getElementById('uf-id')?.value.trim()||'';
+  const name  = document.getElementById('uf-name')?.value.trim()||'';
+  const role  = document.getElementById('uf-role')?.value||'team';
+  const branch= document.getElementById('uf-branch')?.value||'';
+  const pw    = document.getElementById('uf-pw')?.value||'';
+
+  if(!id||!name){ showToast('아이디와 이름을 입력하세요.','error'); return; }
+
+  const accs = getAccs();
+
+  // ── 신규 추가 ──────────────────────────────────────────
+  if(!eid){
+    if(accs.find(a=>a.id===id)){ showToast('이미 존재하는 아이디입니다.','error'); return; }
+    const hashed = await hashPw(pw||'1234');
+    const accRow = {id, name, role, branch, pw:hashed, created_at:new Date().toISOString(), updated_at:new Date().toISOString()};
     accs.push(accRow);
-  }
-  saveAccs(accs);
-  if(!testMode && accRow){
-    const ok=await sbUpsertAccount(accRow);
-    if(!ok) showToast('⚠️ 로컬 저장됨 — Supabase 동기화 실패','warn');
-    else showToast('저장 완료 (Supabase 반영)','success');
+    saveAccs(accs);
+    if(!testMode){
+      const ok = await sbUpsertAccount(accRow);
+      if(!ok) showToast('⚠️ 로컬 저장됨 — Supabase 동기화 실패','warn');
+      else    showToast('추가 완료 (Supabase 반영)','success');
+    } else {
+      showToast('추가 완료','success');
+    }
+
+  // ── 기존 수정 ──────────────────────────────────────────
   } else {
-    showToast('저장','success');
+    const i = accs.findIndex(a=>a.id===eid);
+    if(i<0){ showToast('계정을 찾을 수 없습니다.','error'); return; }
+
+    // 아이디 변경 여부 확인
+    const idChanged = (id !== eid);
+    if(idChanged && accs.find(a=>a.id===id)){
+      showToast('이미 존재하는 아이디입니다.','error'); return;
+    }
+
+    const hashed = pw ? await hashPw(pw) : null;
+    const updatedAt = new Date().toISOString();
+
+    // 캐시 업데이트
+    accs[i] = {
+      ...accs[i],
+      id,       // 아이디 변경 반영
+      name, role, branch,
+      updated_at: updatedAt,
+      ...(hashed ? {pw: hashed} : {}),
+    };
+    saveAccs(accs);
+
+    if(!testMode){
+      if(idChanged){
+        // 아이디 변경: 기존 삭제 → 새 id로 INSERT
+        await sbDeleteAccount(eid);
+        const ok = await sbUpsertAccount(accs[i]);
+        if(!ok) showToast('⚠️ 로컬 저장됨 — Supabase 동기화 실패','warn');
+        else    showToast('아이디 변경 완료 (Supabase 반영)','success');
+      } else {
+        // 아이디 동일: PATCH
+        const patchData = {name, role, branch, updated_at: updatedAt};
+        if(hashed) patchData.pw = hashed;
+        const ok = await sbPatch('accounts', eid, patchData);
+        if(!ok) showToast('⚠️ 로컬 저장됨 — Supabase 동기화 실패','warn');
+        else    showToast('수정 완료 (Supabase 반영)','success');
+      }
+    } else {
+      showToast('수정 완료','success');
+    }
   }
-  syncBranchTeamMap();closeM('modal-user');renderUserList();
+
+  syncBranchTeamMap();
+  closeM('modal-user');
+  renderUserList();
 }
 function updateUfBranch(){}
 
@@ -7006,11 +7262,48 @@ function getGroups(){try{return JSON.parse(localStorage.getItem(GROUP_KEY)||'[]'
 function saveGroups(arr){localStorage.setItem(GROUP_KEY,JSON.stringify(arr.slice(0,10)));}
 
 function getMcInfoAll(){try{return JSON.parse(localStorage.getItem(MC_KEY)||'{}');}catch(e){return{};}}
-function getMcInfo(id){return getMcInfoAll()[id]||{};}
-function saveMcInfoStore(id,data){const all=getMcInfoAll();all[id]={...(all[id]||{}), ...data};localStorage.setItem(MC_KEY,JSON.stringify(all));}
+function getMcInfo(id){
+  // Supabase 모드: allLeads 캐시의 mc_info 컬럼 우선, fallback localStorage
+  if(!testMode && allLeads){
+    const lead=allLeads.find(l=>l.id===id);
+    if(lead?.mc_info){ try{return JSON.parse(lead.mc_info);}catch(e){} }
+  }
+  return getMcInfoAll()[id]||{};
+}
+function saveMcInfoStore(id,data){
+  // localStorage 갱신
+  const all=getMcInfoAll();
+  all[id]={...(all[id]||{}), ...data};
+  localStorage.setItem(MC_KEY,JSON.stringify(all));
+  // Supabase 모드: leads.mc_info 컬럼에 JSON 저장 (비동기, 결과 무시)
+  if(!testMode){
+    const json=JSON.stringify(all[id]);
+    dbU('leads',id,{mc_info:json}).catch(()=>{});
+    // allLeads 캐시 즉시 반영
+    if(allLeads){ const i=allLeads.findIndex(r=>r.id===id); if(i>=0) allLeads[i].mc_info=json; }
+  }
+}
 function getMcAnnivAll(){try{return JSON.parse(localStorage.getItem(MC_ANNIV_KEY)||'{}');}catch(e){return{};}}
-function getMcAnniv(id){return getMcAnnivAll()[id]||[];}
-function saveMcAnniv(id,arr){const all=getMcAnnivAll();all[id]=arr;localStorage.setItem(MC_ANNIV_KEY,JSON.stringify(all));}
+function getMcAnniv(id){
+  // Supabase 모드: allLeads 캐시의 mc_anniv 컬럼 우선, fallback localStorage
+  if(!testMode && allLeads){
+    const lead=allLeads.find(l=>l.id===id);
+    if(lead?.mc_anniv){ try{return JSON.parse(lead.mc_anniv);}catch(e){} }
+  }
+  return getMcAnnivAll()[id]||[];
+}
+function saveMcAnniv(id,arr){
+  // localStorage 갱신
+  const all=getMcAnnivAll();
+  all[id]=arr;
+  localStorage.setItem(MC_ANNIV_KEY,JSON.stringify(all));
+  // Supabase 모드: leads.mc_anniv 컬럼에 JSON 저장
+  if(!testMode){
+    const json=JSON.stringify(arr);
+    dbU('leads',id,{mc_anniv:json}).catch(()=>{});
+    if(allLeads){ const i=allLeads.findIndex(r=>r.id===id); if(i>=0) allLeads[i].mc_anniv=json; }
+  }
+}
 
 // ── 고객사 카드 클릭 → 상세 모달 ──────────────────────────
 function openMcCardDetail(leadId){
@@ -7022,46 +7315,218 @@ function openMcModal(leadId){
   const lead=((_mcAll||[]).find(l=>l.id===leadId))||((allLeads?.length?allLeads:lg('leads')).find(l=>l.id===leadId));
   if(!lead) return;
   const info=getMcInfo(leadId)||{};
-  const set=(id,v)=>{const e=document.getElementById(id);if(e)e.value=v||'';};
-  set('mc-lead-id',leadId);
-  set('mc-company',lead.company_name||'');
-  set('mc-ceo',info.ceo||lead.ceo||'');
-  set('mc-contact',lead.contact_name||info.contact||'');
-  set('mc-phone',lead.phone||info.phone||'');
-  set('mc-email',lead.email||info.email||'');
-  set('mc-industry',lead.industry||info.industry||'');
-  set('mc-region',lead.region||info.region||'');
-  set('mc-revenue',lead.revenue||info.revenue||'');
-  set('mc-consult-type',lead.consult_type||info.consult_type||'');
-  set('mc-contract-date',lead.contract_date||info.contract_date||'');
-  set('mc-note',info.note||lead.note||'');
+
+  // hidden id
+  const setV=(id,v)=>{const e=document.getElementById(id);if(e)e.value=v||'';};
+  setV('mc-lead-id',leadId);
+
+  // 편집폼 값 세팅 (저장용)
+  setV('mc-company',   lead.company_name||'');
+  setV('mc-ceo',       info.ceo||lead.ceo||'');
+  setV('mc-contact',   lead.contact_name||info.contact||'');
+  setV('mc-phone',     lead.phone||info.phone||'');
+  setV('mc-email',     lead.email||info.email||'');
+  setV('mc-industry',  lead.industry||info.industry||'');
+  setV('mc-region',    lead.region||info.region||'');
+  setV('mc-revenue',   lead.revenue||info.revenue||'');
+  setV('mc-consult-type', lead.consult_type||info.consult_type||'');
+  setV('mc-contract-date',lead.contract_date||info.contract_date||'');
+  setV('mc-inflow',       lead.inflow||info.inflow||'');
+  setV('mc-tax',          lead.tax_delinquent||info.tax_delinquent||'');
+  setV('mc-note',      info.note||lead.note||'');
+
+  // 모달 타이틀
   const titleEl=document.getElementById('mc-modal-title');
-  if(titleEl)titleEl.textContent=lead.company_name||'고객사 정보';
-  switchMcTab('info',document.querySelector('#modal-my-client .mc-tab-btn'));
+  if(titleEl) titleEl.textContent=lead.company_name||'고객사 정보';
+
+  // 뱃지 (고객구분) — leads DB는 current_stage 기반, potentials는 customer_type 기반
+  const badgeEl=document.getElementById('mc-modal-badge');
+  if(badgeEl){
+    let ctLabel='', bgClr='var(--gray-100)', txtClr='var(--gray-500)';
+    if(lead.current_stage==='계약'){
+      ctLabel='계약고객'; bgClr='#e8faf2'; txtClr='#00a060';
+    } else if(lead.current_stage==='관리고객'){
+      ctLabel='관리고객'; bgClr='var(--blue-50)'; txtClr='var(--blue)';
+    } else if(lead.customer_type==='contract'){
+      ctLabel='계약고객'; bgClr='#e8faf2'; txtClr='#00a060';
+    } else if(lead.customer_type==='managed'){
+      ctLabel='관리고객'; bgClr='var(--blue-50)'; txtClr='var(--blue)';
+    } else if(lead.customer_type==='potential'){
+      ctLabel='잠재고객';
+    }
+    badgeEl.textContent=ctLabel;
+    badgeEl.style.background=bgClr;
+    badgeEl.style.color=txtClr;
+    badgeEl.style.display=ctLabel?'':'none';
+  }
+
+  // 카드뷰 렌더
+  _renderMcInfoCard(lead, info);
+
+  // 편집모드 초기화 → 카드뷰 표시
+  switchMcInfoEdit(false);
+
+  // 탭 초기화 → 고객상세정보 탭 활성
+  switchMcTab('info', document.getElementById('mc-tb-info'));
+
   renderMcAnniv(leadId);
   renderMcHistory(leadId);
   openM('modal-my-client');
 }
+
+// 고객 정보 카드뷰 렌더
+function _renderMcInfoCard(lead, info){
+  const g=(a,b)=>a||b||'';
+
+  // 회사명
+  const compEl=document.getElementById('mc-card-company');
+  if(compEl) compEl.textContent=lead.company_name||'-';
+
+  // 부제목: 업종 · 소재지
+  const typeEl=document.getElementById('mc-card-type');
+  if(typeEl){
+    const sub=[g(lead.industry,info.industry), g(lead.region,info.region)].filter(Boolean);
+    typeEl.textContent=sub.join(' · ');
+  }
+
+  // 고객구분 (current_stage 우선, customer_type fallback)
+  const _ct = lead.current_stage==='계약' ? 'contract'
+             : lead.current_stage==='관리고객' ? 'managed'
+             : (lead.customer_type||'potential');
+  const CT_LBL={contract:'계약 고객', managed:'관리 고객', potential:'잠재 고객'};
+
+  // 등록양식과 동일한 레이아웃 — 값 없어도 전체 필드 표시
+  const dash='<span style="color:var(--gray-200)">—</span>';
+  const fld=(label,val,opt={})=>{
+    const display = val
+      ? (opt.tel
+          ? `<a href="tel:${esc(val)}" style="color:var(--blue);text-decoration:none;font-weight:600">📞 ${esc(val)}</a>`
+          : `<span style="font-weight:600;color:${opt.warn&&val!=='없음'?'var(--err)':'var(--gray-800)'}">${esc(val)}</span>`)
+      : dash;
+    return `<div style="display:flex;flex-direction:column;gap:3px">
+      <span style="font-size:11px;color:var(--gray-400);font-weight:500">${label}</span>
+      <span style="font-size:13px">${display}</span>
+    </div>`;
+  };
+
+  const grid=document.getElementById('mc-card-grid');
+  if(grid){
+    grid.innerHTML=`
+      ${fld('회사명',    g(lead.company_name,''))}
+      ${fld('신청자',    g(lead.contact_name,  info.contact))}
+      ${fld('연락처',    g(lead.phone,         info.phone),  {tel:true})}
+      ${fld('이메일',    g(lead.email,         info.email))}
+      ${fld('소재지',    g(lead.region,        info.region))}
+      ${fld('업종',      g(lead.industry,      info.industry))}
+      ${fld('매출',      g(lead.revenue,       info.revenue))}
+      ${fld('상담유형',  g(lead.consult_type,  info.consult_type))}
+      ${fld('유입경로',  g(lead.inflow,        info.inflow))}
+      ${fld('체납여부',  g(lead.tax_delinquent,info.tax_delinquent), {warn:true})}
+      ${fld('고객 구분', CT_LBL[_ct]||'')}
+      ${fld('대표자',    g(info.ceo,           lead.ceo))}
+      ${fld('계약일',    g(lead.contract_date, info.contract_date))}
+    `;
+  }
+
+  // 비고 메모
+  const noteWrap=document.getElementById('mc-card-note-wrap');
+  const noteEl=document.getElementById('mc-card-note');
+  const noteVal=g(info.note, lead.note);
+  if(noteWrap) noteWrap.style.display=noteVal?'':'none';
+  if(noteEl)   noteEl.textContent=noteVal;
+
+  // 계약 경과 배너 (계약/관리고객만)
+  const elapsedEl=document.getElementById('mc-contract-elapsed');
+  if(elapsedEl){
+    const contractDate=g(lead.contract_date, info.contract_date);
+    const isContractType=_ct==='contract'||_ct==='managed';
+    if(isContractType && contractDate){
+      const diffMs=Date.now()-new Date(contractDate).getTime();
+      const diffDays=Math.max(0,Math.floor(diffMs/86400000));
+      const years=Math.floor(diffDays/365);
+      const months=Math.floor((diffDays%365)/30);
+      const days=diffDays%(30);
+
+      // 경과 텍스트
+      let elapsedTxt='';
+      if(years>0)  elapsedTxt+=`${years}년 `;
+      if(months>0) elapsedTxt+=`${months}개월 `;
+      elapsedTxt+=`${days}일 경과`;
+
+      // 색상: 30일 이내 초록, 6개월 이내 파랑, 1년 이내 주황, 1년 초과 빨강
+      const clr = diffDays<=30  ? 'var(--ok)'
+                : diffDays<=180 ? 'var(--blue)'
+                : diffDays<=365 ? 'var(--warn)'
+                : 'var(--err)';
+
+      elapsedEl.style.display='';
+      elapsedEl.innerHTML=`
+        <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;
+          background:${clr}0d;border:1.5px solid ${clr}33;border-radius:var(--r-sm)">
+          <div style="flex:1">
+            <div style="font-size:11px;font-weight:700;color:var(--gray-400);margin-bottom:3px">📅 계약일</div>
+            <div style="font-size:15px;font-weight:800;color:${clr};letter-spacing:-.3px">${esc(contractDate)}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:11px;font-weight:700;color:var(--gray-400);margin-bottom:3px">계약 경과</div>
+            <div style="font-size:15px;font-weight:800;color:${clr};letter-spacing:-.3px">${elapsedTxt}</div>
+          </div>
+          <div style="width:3px;align-self:stretch;border-radius:2px;background:${clr};flex-shrink:0"></div>
+        </div>`;
+    } else {
+      elapsedEl.style.display='none';
+      elapsedEl.innerHTML='';
+    }
+  }
+}
+
+// 카드뷰 ↔ 편집폼 전환
+function switchMcInfoEdit(editMode){
+  const card=document.getElementById('mc-info-card-view');
+  const edit=document.getElementById('mc-info-edit-view');
+  if(card) card.style.display=editMode?'none':'';
+  if(edit) edit.style.display=editMode?'':'none';
+}
+
 function switchMcTab(tab,btn){
   document.querySelectorAll('.mc-tab-btn').forEach(b=>{
     b.style.color='var(--gray-500)';b.style.borderBottom='2px solid transparent';b.style.fontWeight='600';
   });
   if(btn){btn.style.color='var(--blue)';btn.style.borderBottom='2px solid var(--blue)';btn.style.fontWeight='700';}
-  ['info','anniv','history'].forEach(t=>{
+  ['info','history','anniv'].forEach(t=>{
     const el=document.getElementById('mc-tab-'+t);
     if(el)el.style.display=t===tab?'':'none';
   });
 }
 function saveMcInfoFn(){
-  const leadId=document.getElementById('mc-lead-id')?.value; if(!leadId) return;
+  const rawId=document.getElementById('mc-lead-id')?.value; if(!rawId) return;
   const get=(id)=>document.getElementById(id)?.value||'';
-  saveMcInfoStore(leadId,{
+  const newInfo={
     ceo:get('mc-ceo'),contact:get('mc-contact'),phone:get('mc-phone'),
     email:get('mc-email'),industry:get('mc-industry'),region:get('mc-region'),
     revenue:get('mc-revenue'),consult_type:get('mc-consult-type'),
-    contract_date:get('mc-contract-date'),note:get('mc-note'),
-  });
-  closeM('modal-my-client');showToast('저장됐어요','success');
+    contract_date:get('mc-contract-date'),
+    inflow:get('mc-inflow'),tax_delinquent:get('mc-tax'),
+    note:get('mc-note'),
+  };
+
+  // 잠재고객(potential:xxx) vs 일반 leads 분기
+  if(rawId.startsWith('potential:')){
+    const potId=rawId.replace('potential:','');
+    const pots=getPotentials();
+    const idx=pots.findIndex(p=>p.id===potId);
+    if(idx>=0){
+      pots[idx]={...pots[idx],...newInfo,company_name:get('mc-company')||pots[idx].company_name};
+      savePotentials(pots);
+    }
+    _renderMcInfoCard({company_name:get('mc-company'),customer_type:'potential',...newInfo}, newInfo);
+  } else {
+    saveMcInfoStore(rawId, newInfo);
+    const lead=((_mcAll||[]).find(l=>l.id===rawId))||((allLeads?.length?allLeads:lg('leads')).find(l=>l.id===rawId))||{};
+    _renderMcInfoCard({...lead, company_name:get('mc-company')}, newInfo);
+  }
+  switchMcInfoEdit(false);
+  showToast('저장됐어요','success');
   if(typeof loadMyClients==='function') loadMyClients();
 }
 function renderMcAnniv(leadId){
@@ -7079,7 +7544,7 @@ function renderMcAnniv(leadId){
         ${a.repeat!==false?'🔄 매년':'1회'}
       </span>
       <button onclick="deleteMcAnniv('${leadId}',${i})" style="background:none;border:none;color:var(--gray-300);cursor:pointer;font-size:14px">✕</button>
-    </div>`).join('')||'<div style="font-size:12px;color:var(--gray-400);padding:8px 0">기념일이 없습니다</div>';
+    </div>`).join('');
 }
 function addMcAnniv(){
   const leadId=document.getElementById('mc-lead-id')?.value; if(!leadId) return;
@@ -7151,26 +7616,53 @@ function renderMcHistory(leadId){
     </div>`).join('');
 }
 function openPotentialDetail(potId){
+  // 잠재고객도 동일한 고객 상세 모달로 통합
   const p=getPotentials().find(x=>x.id===potId); if(!p) return;
-  let ov=document.getElementById('ov-potential-detail');
-  if(!ov){ov=document.createElement('div');ov.id='ov-potential-detail';ov.className='ov-bg';document.body.appendChild(ov);}
-  ov.innerHTML=`<div class="ov-box" style="width:440px;max-width:96vw">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-      <div style="font-size:17px;font-weight:800;color:var(--navy)">${esc(p.company_name||'-')}</div>
-      <button onclick="closeOv('ov-potential-detail')" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--gray-400)">✕</button>
-    </div>
-    ${[['담당자',p.contact_name],['연락처',p.phone],['이메일',p.email],['업종',p.industry],['소재지',p.region],['매출',p.revenue],['유형',p.consult_type]].filter(([,v])=>v).map(([k,v])=>`
-    <div style="display:flex;gap:8px;padding:7px 0;border-bottom:1px solid var(--gray-100)">
-      <span style="font-size:11px;color:var(--gray-400);width:60px;flex-shrink:0">${k}</span>
-      <span style="font-size:13px;color:var(--gray-900)">${esc(v)}</span>
-    </div>`).join('')}
-    ${p.note?`<div style="margin-top:10px;padding:8px 10px;background:var(--gray-50);border-radius:var(--r-sm);font-size:12px;color:var(--gray-700)">${esc(p.note)}</div>`:''}
-    <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">
-      <button class="btn btn-outline" onclick="closeOv('ov-potential-detail')">닫기</button>
-      <button class="btn btn-danger btn-sm" onclick="closeOv('ov-potential-detail');deletePotential('${potId}')">삭제</button>
-    </div>
-  </div>`;
-  ov.classList.add('open');
+  // modal-my-client 에 잠재고객 데이터 직접 주입
+  const setV=(id,v)=>{const e=document.getElementById(id);if(e)e.value=v||'';};
+  setV('mc-lead-id','potential:'+potId);
+  setV('mc-company',   p.company_name||'');
+  setV('mc-ceo',       p.ceo||'');
+  setV('mc-contact',   p.contact_name||'');
+  setV('mc-phone',     p.phone||'');
+  setV('mc-email',     p.email||'');
+  setV('mc-industry',  p.industry||'');
+  setV('mc-region',    p.region||'');
+  setV('mc-revenue',   p.revenue||'');
+  setV('mc-consult-type', p.consult_type||'');
+  setV('mc-contract-date','');
+  setV('mc-inflow',       p.inflow||'');
+  setV('mc-tax',          p.tax_delinquent||'');
+  setV('mc-note',      p.note||'');
+
+  const titleEl=document.getElementById('mc-modal-title');
+  if(titleEl) titleEl.textContent=p.company_name||'잠재 고객사';
+
+  const badgeEl=document.getElementById('mc-modal-badge');
+  if(badgeEl){
+    badgeEl.textContent='잠재고객';
+    badgeEl.style.background='var(--gray-100)';
+    badgeEl.style.color='var(--gray-500)';
+    badgeEl.style.display='';
+  }
+
+  // 카드뷰 렌더
+  _renderMcInfoCard({
+    company_name:p.company_name, contact_name:p.contact_name,
+    phone:p.phone, industry:p.industry, region:p.region,
+    revenue:p.revenue, consult_type:p.consult_type,
+    customer_type:'potential'
+  }, {ceo:p.ceo, note:p.note});
+
+  switchMcInfoEdit(false);
+  switchMcTab('info', document.getElementById('mc-tb-info'));
+
+  // 히스토리·기념일 — 잠재고객도 동일하게 렌더 (id 기반)
+  // potential: prefix가 붙은 id는 leads DB 없으므로 빈 상태로 렌더
+  renderMcAnniv('potential:'+potId);
+  renderMcHistory('potential:'+potId);
+
+  openM('modal-my-client');
 }
 
 let _mcAll=[], _mcFiltered=[];
@@ -8121,6 +8613,9 @@ function _applyQuickTab(tab, btn){
   if(tab==='all'){if(statusEl)statusEl.value='';}
   else if(tab==='unassigned'){if(statusEl)statusEl.value='';}
   else if(tab==='assigned'){if(statusEl)statusEl.value='';}
+  else if(tab==='new_db'){if(statusEl)statusEl.value='';}
+  else if(tab==='contacted'){if(statusEl)statusEl.value='';}
+  else if(tab==='contract_stage'){if(statusEl)statusEl.value='';}
   else if(tab==='consulting'){if(statusEl)statusEl.value='contacted';}
   else if(tab==='drop'){if(statusEl)statusEl.value='drop';}
   filterLeads();
@@ -8317,9 +8812,14 @@ function initData(){
   }
 }
 
-document.addEventListener('DOMContentLoaded',()=>{
+document.addEventListener('DOMContentLoaded',async ()=>{
   renderSchema();
-  if(loadSession()){startApp();initData();}
+  if(loadSession()){
+    // 세션 복구 시 Supabase에서 accounts 먼저 로드 → syncBranchTeamMap 정상 동작 보장
+    if(typeof loadAccsFromSB === 'function') await loadAccsFromSB();
+    startApp();
+    initData();
+  }
 });
 
 // ── [script block 2 merged] ──
@@ -8976,16 +9476,40 @@ async function restoreFromTrashInline(id){
   renderTrashInline(); updateLeadsSubTabCounts();
 }
 
-function permDeleteInline(id){
+async function permDeleteInline(id){
   if(!confirm('영구 삭제하시겠습니까? 복구 불가합니다.'))return;
-  saveTrash(getTrash().filter(t=>t.id!==id));
+  // Supabase 모드: DB에서 실제 행 삭제
+  if(!testMode){
+    const ok = await sbDel('leads', id);
+    if(!ok){ showToast('삭제 실패 — 다시 시도해주세요','error'); return; }
+    // allLeads 캐시에서도 제거
+    if(allLeads){ const i=allLeads.findIndex(r=>r.id===id); if(i>=0) allLeads.splice(i,1); }
+  } else {
+    saveTrash(getTrash().filter(t=>t.id!==id));
+  }
   renderTrashInline(); updateLeadsSubTabCounts();
   showToast('영구 삭제됨');
 }
 
-function emptyTrashInline(){
+async function emptyTrashInline(){
   if(!confirm('휴지통을 모두 비우시겠습니까? 복구 불가합니다.'))return;
-  saveTrash([]); renderTrashInline(); updateLeadsSubTabCounts();
+  if(!testMode){
+    // Supabase 모드: deleted 상태 건 전부 조회 후 일괄 삭제
+    try{
+      const rows = await sbGet('leads?select=id&status=eq.deleted&limit=500');
+      if(rows && rows.length){
+        await Promise.all(rows.map(r => sbDel('leads', r.id)));
+        // allLeads 캐시 정리
+        if(allLeads){
+          const delIds = new Set(rows.map(r=>r.id));
+          for(let i=allLeads.length-1;i>=0;i--){ if(delIds.has(allLeads[i].id)) allLeads.splice(i,1); }
+        }
+      }
+    }catch(e){ showToast('일부 삭제 실패 — 새로고침 후 확인하세요','error'); }
+  } else {
+    saveTrash([]);
+  }
+  renderTrashInline(); updateLeadsSubTabCounts();
   showToast('휴지통 비움');
 }
 
@@ -9016,9 +9540,15 @@ async function restoreFromTrash(id){
   saveTrash(trash.filter(t=>t.id!==id));
   showToast('복구 완료','success'); openTrash();
 }
-function permDelete(id){
+async function permDelete(id){
   if(!confirm('영구 삭제하시겠습니까? 복구 불가합니다.'))return;
-  saveTrash(getTrash().filter(t=>t.id!==id));
+  if(!testMode){
+    const ok = await sbDel('leads', id);
+    if(!ok){ showToast('삭제 실패 — 다시 시도해주세요','error'); return; }
+    if(allLeads){ const i=allLeads.findIndex(r=>r.id===id); if(i>=0) allLeads.splice(i,1); }
+  } else {
+    saveTrash(getTrash().filter(t=>t.id!==id));
+  }
   showToast('영구 삭제됨'); openTrash();
 }
 // ════════════════════════════════════════════════════════════
@@ -10568,14 +11098,12 @@ function toggleOneColChip(key, target){
   if(target==='my') renderMyLeadsTable(); else renderLeadsTable();
 }
 
-// renderLeadsTable / renderMyLeadsTable 후 토글바 동기화 (기존 renderColChips 대체)
-const _origRenderColChips=typeof renderColChips==='function'?renderColChips:null;
+// renderColChips / renderMyColChips — renderColToggleBar로 위임 (원본 미존재 확인 후 재정의)
+// 주의: 이 선언보다 앞서 동명 함수가 없으므로 완전 정의로 처리
 function renderColChips(){ renderColToggleBar('leads'); }
-const _origRenderMyColChips=typeof renderMyColChips==='function'?renderMyColChips:null;
 function renderMyColChips(){ renderColToggleBar('my'); }
 
-// loadLeads 이후 초기 렌더
-const _orig_lLeads=typeof loadLeads==='function'?loadLeads:null;
+// loadLeads 이후 초기 렌더 (미사용 _orig 변수 제거)
 // syncGroupBtns 대체
 function syncGroupBtns(target){ renderColToggleBar(target); }
 
