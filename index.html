@@ -3391,7 +3391,7 @@ async function importExcel(event){
   const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
   if(rows.length<2){showToast('데이터가 없습니다.','error');return;}
   const hdrs=rows[0].map(h=>h?String(h).trim().replace(/\n/g,''):'');
-  const ALIAS={company_name:['회사명','기업명','업체명'],contact_name:['신청자','담당자','대표자'],phone:['연락처','전화번호'],email:['이메일'],region:['소재지','지역'],industry:['업종'],revenue:['매출','매출액'],consult_type:['상담유형','유형'],inflow:['유입경로'],tax_delinquent:['체납여부'],note:['비고'],branch_name:['지점장','배정지점장'],team_name:['팀장','배정팀장'],distributed_at:['분배날짜'],};
+  const ALIAS={company_name:['회사명','기업명','업체명'],contact_name:['신청자','담당자','대표자'],phone:['연락처','전화번호'],email:['이메일'],region:['소재지','지역'],industry:['업종'],revenue:['매출','매출액'],consult_type:['상담유형','유형'],inflow:['유입경로'],tax_delinquent:['체납여부'],note:['비고'],branch_name:['지점장','배정지점장'],team_name:['팀장','배정팀장'],distributed_at:['분배날짜'],applied_at:['상담신청시간','신청시간','신청일시'],};
   const hm={};Object.entries(ALIAS).forEach(([key,al])=>al.forEach(a=>hm[a.toLowerCase()]=key));
   const toD=v=>{
     if(!v) return null;
@@ -3433,7 +3433,7 @@ async function importExcel(event){
     const _bname = curUser?.role==='branch' ? curUser.name : _branch;
     const _autoStatus2 = _bname ? 'assigned' : 'pending';
     const _assignedAt2 = _bname ? (toD(map.distributed_at)||new Date().toISOString().slice(0,10)) : null;
-    _pending.push({id:uuid(),company_name:co,contact_name:String(map.contact_name||'').trim(),phone:formatPhone(String(map.phone||'')).trim(),email:String(map.email||'').trim(),region:String(map.region||'').trim(),industry:String(map.industry||'').trim(),revenue:String(map.revenue||'').trim(),consult_type:String(map.consult_type||'').trim(),inflow:String(map.inflow||'').trim(),tax_delinquent:String(map.tax_delinquent||'').trim(),note:String(map.note||'').trim(),branch_name:_bname,team_name:_team,team_names:_team?JSON.stringify([_team]):null,distributed_at:toD(map.distributed_at),assigned_at:_assignedAt2,status:_autoStatus2,registered_by:curUser?.name||'',created_at:new Date().toISOString(),updated_at:new Date().toISOString()});
+    _pending.push({id:uuid(),company_name:co,contact_name:String(map.contact_name||'').trim(),phone:formatPhone(String(map.phone||'')).trim(),email:String(map.email||'').trim(),region:String(map.region||'').trim(),industry:String(map.industry||'').trim(),revenue:String(map.revenue||'').trim(),consult_type:String(map.consult_type||'').trim(),inflow:String(map.inflow||'').trim(),tax_delinquent:String(map.tax_delinquent||'').trim(),note:String(map.note||'').trim(),branch_name:_bname,team_name:_team,team_names:_team?JSON.stringify([_team]):null,distributed_at:toD(map.distributed_at),applied_at:toD(map.applied_at)||String(map.applied_at||'').slice(0,10)||null,assigned_at:_assignedAt2,status:_autoStatus2,registered_by:curUser?.name||'',created_at:new Date().toISOString(),updated_at:new Date().toISOString()});
   }
   const _autoAssigned=_pending.filter(r=>r.status==='assigned').length;
   const _noPending=_pending.filter(r=>r.status==='pending').length;
