@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>KBMC CRM v2.1.0</title>
+<title>KBMC CRM v2.2.0</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;800&display=swap" rel="stylesheet">
@@ -2159,61 +2159,85 @@ tbody tr.selected td{background:var(--blue-50)!important}
 
 <!-- 활동 기록 모달 -->
 <div class="modal-overlay" id="modal-activity">
-  <div class="modal" style="width:520px;max-height:90vh;overflow-y:auto">
-    <div class="mh"><div class="mt">💬 활동 기록</div><button class="mc" onclick="closeM('modal-activity')">✕</button></div>
+  <div class="modal" style="width:540px;max-height:90vh;display:flex;flex-direction:column;padding:0;overflow:hidden">
+    <!-- 헤더 -->
+    <div class="mh" style="padding:20px 24px 0;flex-shrink:0">
+      <div>
+        <div class="mt">📝 활동 등록</div>
+        <div style="font-size:13px;font-weight:700;color:var(--navy);margin-top:4px" id="act-company-name"></div>
+      </div>
+      <button class="mc" onclick="closeM('modal-activity')">✕</button>
+    </div>
+    <!-- 탭 -->
+    <div style="display:flex;border-bottom:2px solid var(--gray-100);margin:12px 24px 0;flex-shrink:0">
+      <button class="act-modal-tab" id="act-tab-form" onclick="switchActModalTab('form',this)"
+        style="padding:8px 16px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:700;color:var(--blue);border-bottom:2px solid var(--blue);margin-bottom:-2px;font-family:inherit">✏️ 활동 등록</button>
+      <button class="act-modal-tab" id="act-tab-history" onclick="switchActModalTab('history',this)"
+        style="padding:8px 16px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:500;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">📜 히스토리</button>
+    </div>
     <input type="hidden" id="act-lead-id">
     <input type="hidden" id="act-edit-id">
-    <div style="font-size:14px;font-weight:700;color:var(--navy);margin-bottom:14px" id="act-company-name"></div>
-    <div style="margin-bottom:12px"><label style="font-size:12px;font-weight:700;color:var(--gray-600)">활동 날짜</label><br><input type="date" id="act-date" style="margin-top:5px;padding:8px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;width:180px"></div>
-    <!-- 상태 변경 -->
-    <div style="margin-bottom:14px">
-      <div style="font-size:12px;font-weight:700;color:var(--gray-600);margin-bottom:8px">상태 변경</div>
-      <div class="status-select" id="status-select-wrap"></div>
-    </div>
-    <div class="form-grid" style="margin-bottom:12px">
-      <div class="fg"><label>활동 유형</label>
-        <select id="act-type" style="padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--gray-900)">
-          <option value="call">전화</option><option value="meeting">미팅</option>
-          <option value="email">이메일</option><option value="online">화상회의</option><option value="note">메모</option>
+
+    <!-- ① 활동 등록 탭 -->
+    <div id="act-tab-panel-form" style="flex:1;overflow-y:auto;padding:16px 24px">
+      <div style="margin-bottom:12px"><label style="font-size:12px;font-weight:700;color:var(--gray-600)">활동 날짜</label><br><input type="date" id="act-date" style="margin-top:5px;padding:8px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;width:180px"></div>
+      <div style="margin-bottom:14px">
+        <div style="font-size:12px;font-weight:700;color:var(--gray-600);margin-bottom:8px">상태 변경</div>
+        <div class="status-select" id="status-select-wrap"></div>
+      </div>
+      <div class="form-grid" style="margin-bottom:12px">
+        <div class="fg"><label>활동 유형</label>
+          <select id="act-type" style="padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--gray-900)">
+            <option value="call">전화</option><option value="meeting">미팅</option>
+            <option value="email">이메일</option><option value="online">화상회의</option><option value="note">메모</option>
+          </select>
+        </div>
+        <div class="fg"><label>진행단계</label>
+          <select id="act-stage" onchange="onStageChange(this)" style="padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--gray-900)">
+            <option value="">선택 안함</option>
+            <option>초기접촉</option><option>상담</option><option>제안</option><option>협의</option><option>계약</option><option>관리고객</option><option>드랍</option><option>보류</option>
+          </select>
+        </div>
+      </div>
+      <div id="act-contract-date-wrap" style="display:none;margin-bottom:12px;padding:10px 14px;background:rgba(0,192,115,.06);border:1px solid rgba(0,192,115,.25);border-radius:var(--r-sm)">
+        <label style="font-size:12px;font-weight:700;color:var(--ok);display:block;margin-bottom:6px">🎉 계약일 지정</label>
+        <input type="date" id="act-contract-date" style="padding:8px 12px;background:#fff;border:1.5px solid rgba(0,192,115,.4);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--gray-900);width:180px">
+        <div style="font-size:11px;color:var(--gray-400);margin-top:4px">비워두면 오늘 날짜로 자동 저장됩니다</div>
+      </div>
+      <div class="fg" style="margin-bottom:10px"><label>상담 내용 *</label>
+        <textarea id="act-content" rows="4" placeholder="상담 내용을 입력하세요"></textarea>
+      </div>
+      <div class="fg" style="margin-bottom:12px"><label>서류접수 여부</label>
+        <select id="act-doc-received" style="padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--gray-900)">
+          <option value="">변경 없음</option>
+          <option value="준비중">📂 준비중</option>
+          <option value="서류 접수">📥 서류 접수</option>
+          <option value="검토 완료">✅ 검토 완료</option>
         </select>
       </div>
-      <div class="fg"><label>진행단계</label>
-        <select id="act-stage" onchange="onStageChange(this)" style="padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--gray-900)">
-          <option value="">선택 안함</option>
-          <option>초기접촉</option><option>상담</option><option>제안</option><option>협의</option><option>계약</option><option>관리고객</option><option>드랍</option><option>보류</option>
-        </select>
+      <div class="fg" style="margin-bottom:12px"><label>제안부분 <span style="font-size:11px;font-weight:400;color:var(--gray-400)">(선택 — DB관리 제안부분 컬럼에 저장)</span></label>
+        <input type="text" id="act-proposal" placeholder="예: DX바우처, 스마트공장, ISO인증 등">
+      </div>
+      <div class="fg" style="margin-bottom:14px"><label>다음 액션 (선택)</label>
+        <input type="text" id="act-next" placeholder="예: 3/28 오후 2시 미팅 예정">
+      </div>
+      <div id="act-yj-reassign" style="display:none;margin-bottom:14px;padding:12px 14px;background:rgba(124,58,237,.06);border:1px solid rgba(124,58,237,.2);border-radius:var(--r-sm)">
+        <div style="font-size:12px;font-weight:700;color:#3684FF;margin-bottom:8px">👤 초도상담 완료 처리</div>
+        <div style="font-size:11px;color:var(--gray-500);margin-bottom:10px" id="yj-return-desc">활동기록을 유지한 채 배정 주체에게 자동 이관됩니다.</div>
+        <button class="btn btn-sm" style="width:100%;background:#3684FF;color:#fff;border-color:#3684FF" onclick="yjReassign()">✅ 초도상담 완료 — 자동 이관</button>
       </div>
     </div>
-    <!-- 계약일 입력 (계약/관리고객 선택 시만 표시) -->
-    <div id="act-contract-date-wrap" style="display:none;margin-bottom:12px;padding:10px 14px;background:rgba(0,192,115,.06);border:1px solid rgba(0,192,115,.25);border-radius:var(--r-sm)">
-      <label style="font-size:12px;font-weight:700;color:var(--ok);display:block;margin-bottom:6px">🎉 계약일 지정</label>
-      <input type="date" id="act-contract-date" style="padding:8px 12px;background:#fff;border:1.5px solid rgba(0,192,115,.4);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--gray-900);width:180px">
-      <div style="font-size:11px;color:var(--gray-400);margin-top:4px">비워두면 오늘 날짜로 자동 저장됩니다</div>
+
+    <!-- ② 히스토리 탭 -->
+    <div id="act-tab-panel-history" style="display:none;flex:1;overflow-y:auto;padding:16px 24px">
+      <div id="act-modal-history-body" style="display:flex;flex-direction:column;gap:0"></div>
     </div>
-    <div class="fg" style="margin-bottom:10px"><label>상담 내용 *</label>
-      <textarea id="act-content" rows="4" placeholder="상담 내용을 입력하세요"></textarea>
+
+    <!-- 푸터 -->
+    <div style="flex-shrink:0;padding:12px 24px;border-top:1px solid var(--gray-100);display:flex;justify-content:flex-end;gap:8px" id="act-modal-footer">
+      <button class="btn btn-outline" onclick="closeM('modal-activity')">취소</button>
+      <button class="btn btn-primary" onclick="saveActivity()">저장</button>
     </div>
-    <div class="fg" style="margin-bottom:12px"><label>서류접수 여부</label>
-      <select id="act-doc-received" style="padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--gray-900)">
-        <option value="">변경 없음</option>
-        <option value="준비중">📂 준비중</option>
-        <option value="서류 접수">📥 서류 접수</option>
-        <option value="검토 완료">✅ 검토 완료</option>
-      </select>
-    </div>
-    <div class="fg" style="margin-bottom:12px"><label>제안부분 <span style="font-size:11px;font-weight:400;color:var(--gray-400)">(선택 — DB관리 제안부분 컬럼에 저장)</span></label>
-      <input type="text" id="act-proposal" placeholder="예: DX바우처, 스마트공장, ISO인증 등">
-    </div>
-    <div class="fg" style="margin-bottom:14px"><label>다음 액션 (선택)</label>
-      <input type="text" id="act-next" placeholder="예: 3/28 오후 2시 미팅 예정">
-    </div>
-    <!-- 유영준 재이관 섹션 -->
-    <div id="act-yj-reassign" style="display:none;margin-bottom:14px;padding:12px 14px;background:rgba(124,58,237,.06);border:1px solid rgba(124,58,237,.2);border-radius:var(--r-sm)">
-      <div style="font-size:12px;font-weight:700;color:#3684FF;margin-bottom:8px">👤 초도상담 완료 처리</div>
-      <div style="font-size:11px;color:var(--gray-500);margin-bottom:10px" id="yj-return-desc">활동기록을 유지한 채 배정 주체에게 자동 이관됩니다.</div>
-      <button class="btn btn-sm" style="width:100%;background:#3684FF;color:#fff;border-color:#3684FF" onclick="yjReassign()">✅ 초도상담 완료 — 자동 이관</button>
-    </div>
-    <div class="mf"><button class="btn btn-outline" onclick="closeM('modal-activity')">취소</button><button class="btn btn-primary" onclick="saveActivity()">저장</button></div>
   </div>
 </div>
 
@@ -4943,16 +4967,18 @@ async function openPanel(lead){
   // ── 활동 이력 로드 (Supabase 모드: 최신 직접 조회)
   let acts;
   if(!testMode){
-    try{
-      const rows = await sbGet(`activities?select=*&lead_id=eq.${lead.id}&order=created_at.desc&limit=200`);
-      acts = (rows||[]).filter(a=>a.type!=='assign');
+    const rows = await sbGet(`activities?select=*&lead_id=eq.${lead.id}&order=created_at.desc&limit=200`);
+    if(rows && rows.length >= 0){
+      // Supabase 조회 성공
+      acts = rows.filter(a=>a.type!=='assign');
       // 캐시 갱신
       if(Array.isArray(allActivities)){
         rows.forEach(r=>{ if(!allActivities.find(a=>a.id===r.id)) allActivities.unshift(r); });
       }
-    } catch(e){
-      acts = (allActivities?.length?allActivities:lg('activities'))
-             .filter(a=>a.lead_id===lead.id&&a.type!=='assign')
+    } else {
+      // sbGet 실패(null) → allActivities 캐시 fallback
+      acts = (allActivities?.length ? allActivities : lg('activities'))
+             .filter(a=>a.lead_id===lead.id && a.type!=='assign')
              .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
     }
   } else {
@@ -5259,6 +5285,51 @@ function openActM(lid,cname){
     }
   }
   openM('modal-activity'); closePanel();
+  // 활동 등록 탭 초기화
+  switchActModalTab('form', document.getElementById('act-tab-form'));
+  // 히스토리 렌더 (캐시 기반)
+  _renderActModalHistory(lid);
+}
+
+function switchActModalTab(tab, btn){
+  document.querySelectorAll('.act-modal-tab').forEach(b=>{
+    b.style.color='var(--gray-500)'; b.style.borderBottom='2px solid transparent'; b.style.fontWeight='500';
+  });
+  if(btn){ btn.style.color='var(--blue)'; btn.style.borderBottom='2px solid var(--blue)'; btn.style.fontWeight='700'; }
+  const form=document.getElementById('act-tab-panel-form');
+  const hist=document.getElementById('act-tab-panel-history');
+  const footer=document.getElementById('act-modal-footer');
+  if(form) form.style.display = tab==='form'?'':'none';
+  if(hist) hist.style.display = tab==='history'?'':'none';
+  // 히스토리 탭에서는 저장 버튼 숨김
+  if(footer){
+    const saveBtn=footer.querySelector('[onclick="saveActivity()"]');
+    if(saveBtn) saveBtn.style.display = tab==='form'?'':'none';
+  }
+}
+
+function _renderActModalHistory(leadId){
+  const el=document.getElementById('act-modal-history-body'); if(!el) return;
+  const acts=(allActivities?.length?allActivities:lg('activities'))
+    .filter(a=>a.lead_id===leadId&&!['assign','status_change'].includes(a.type))
+    .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  const ICON={call:'📞',meeting:'🤝',email:'📧',online:'💻',note:'📝',proposal:'📋',contract:'🎉',internal:'🏢',other:'📌'};
+  if(!acts.length){
+    el.innerHTML='<div style="text-align:center;padding:32px 16px;font-size:13px;color:var(--gray-300)">활동 기록이 없습니다</div>';
+    return;
+  }
+  el.innerHTML=acts.map(a=>`
+    <div style="display:flex;gap:10px;padding:11px 0;border-bottom:1px solid var(--gray-100)">
+      <span style="font-size:16px;flex-shrink:0;margin-top:1px">${ICON[a.type]||'📌'}</span>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+          <span style="font-size:12px;font-weight:700;color:var(--navy)">${esc(a.author||'-')}</span>
+          <span style="font-size:10px;color:var(--gray-400)">${(a.date||a.created_at||'').slice(0,10)}</span>
+        </div>
+        ${a.stage?`<span style="font-size:10px;padding:1px 6px;background:var(--blue-50);color:var(--blue);border-radius:8px;margin-bottom:4px;display:inline-block">${esc(a.stage)}</span>`:''}
+        <div style="font-size:12px;color:var(--gray-700);line-height:1.6;white-space:pre-wrap;word-break:break-all">${esc(a.content||'')}</div>
+      </div>
+    </div>`).join('');
 }
 // 유영준 초도상담 완료 → 관리자 신규배정 풀로 이동
 async function yjReassign(){
@@ -5945,6 +6016,15 @@ async function saveActivity(){
   }
   closeM('modal-activity'); showToast('활동 기록 저장','success');
   addN('act','활동 기록',`${allLeads.find(l=>l.id===lid)?.company_name||''} — ${type}`,'act:'+lid);
+  // 상세 모달이 열려있으면 히스토리 탭 즉시 갱신
+  if(document.getElementById('modal-lead-detail')?.classList.contains('open')){
+    const cachedActs = (allActivities?.length?allActivities:lg('activities'))
+      .filter(a=>a.lead_id===lid&&a.type!=='assign')
+      .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+    _renderLDetailHistory(cachedActs, lid);
+  }
+  // 활동 등록 모달 히스토리 갱신 (닫기 전 탭 전환 시 최신 반영)
+  _renderActModalHistory(lid);
   const scr=document.querySelector('.screen.active')?.id?.replace('screen-','');
   if(scr==='leads')loadLeads(); else if(scr==='my-leads')loadMyLeads();
 }
