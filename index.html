@@ -533,6 +533,7 @@ body.dark-mode .unrecorded-row{background:rgba(255,210,50,.05) !important}
 body.dark-mode .scroll-nav-btn{background:#1f2e42;color:var(--gray-700)}
 body.dark-mode #font-size-fab button{background:#1f2e42 !important;color:var(--gray-700) !important}
 body.dark-mode .toast{background:#1f2e42;color:var(--gray-900)}
+body.dark-mode #leads-sort-bar{background:#131e2e;border-color:#1f2e42;color:var(--gray-700)}
 body.dark-mode .badge{opacity:.9}
 body.dark-mode .tbl-wrap table,body.dark-mode .db-wrap table{background:#111d2e}
 body.dark-mode td,body.dark-mode th{border-color:#1f2e42 !important}
@@ -1127,6 +1128,31 @@ tbody tr.selected td{background:var(--blue-50)!important}
       <div id="col-toggle-bar" style="margin-bottom:10px;background:var(--gray-50);border:1px solid var(--gray-200);border-radius:var(--r-sm);overflow:hidden">
         <div id="col-group-rows"></div>
 
+      </div>
+      <!-- 정렬 컨트롤 바 -->
+      <div id="leads-sort-bar" style="display:flex;align-items:center;gap:10px;margin-bottom:10px;padding:8px 12px;background:var(--gray-50);border:1px solid var(--gray-200);border-radius:var(--r-sm);flex-wrap:wrap">
+        <span style="font-size:11px;font-weight:700;color:var(--gray-500);letter-spacing:.3px">정렬 기준</span>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;font-weight:600;color:var(--gray-700)">
+          <input type="radio" name="leads-sort-key" id="lsk-updated" value="updated_at" onchange="applyLeadSortBar()" checked style="accent-color:var(--navy)">
+          최신 업데이트순
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;font-weight:600;color:var(--gray-700)">
+          <input type="radio" name="leads-sort-key" id="lsk-applied" value="applied_at" onchange="applyLeadSortBar()" style="accent-color:var(--navy)">
+          신청일자순
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;font-weight:600;color:var(--gray-700)">
+          <input type="radio" name="leads-sort-key" id="lsk-created" value="created_at" onchange="applyLeadSortBar()" style="accent-color:var(--navy)">
+          등록일순
+        </label>
+        <div style="width:1px;height:18px;background:var(--gray-200);margin:0 2px"></div>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;font-weight:600;color:var(--gray-700)">
+          <input type="radio" name="leads-sort-dir" id="lsd-desc" value="desc" onchange="applyLeadSortBar()" checked style="accent-color:var(--blue)">
+          ↓ 최신→과거
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;font-weight:600;color:var(--gray-700)">
+          <input type="radio" name="leads-sort-dir" id="lsd-asc" value="asc" onchange="applyLeadSortBar()" style="accent-color:var(--blue)">
+          ↑ 과거→최신
+        </label>
       </div>
       <!-- 필터바 -->
       <div class="fbar">
@@ -4597,6 +4623,9 @@ async function loadLeads(){
   if(tabConsulting) tabConsulting.style.display = isTeam ? '' : 'none';
   if(tabContract)   tabContract.style.display   = isTeam ? '' : 'none';
   _stageFilter=''; _quickTab='all'; // 데이터 새로 불러올 때 필터 초기화
+  // 정렬 바 기본값: 최신업데이트 내림차순
+  if(!_sortKey){ _sortKey='updated_at'; _sortDir='desc'; }
+  syncLeadSortBarUI();
   // 빠른탭 UI도 전체로 리셋
   document.querySelectorAll('[id^="qtab-"]').forEach(b=>{b.style.background='';b.style.color='';b.style.borderColor='';});
   const _qtabAll=document.getElementById('qtab-all');
@@ -11047,9 +11076,30 @@ function setColWidth(k,w){const m=getColWidths();m[k]=w;localStorage.setItem(COL
 
 // ── 정렬 상태 ─────────────────────────────────────────────
 let _sortKey='', _sortDir='asc';
+
+// ── 정렬 바 제어 ──────────────────────────────────────────
+// DB관리 상단 정렬 라디오 → _sortKey/_sortDir 세팅 후 렌더
+function applyLeadSortBar(){
+  const keyEl = document.querySelector('input[name="leads-sort-key"]:checked');
+  const dirEl = document.querySelector('input[name="leads-sort-dir"]:checked');
+  _sortKey = keyEl ? keyEl.value : 'updated_at';
+  _sortDir = dirEl ? dirEl.value : 'desc';
+  curPage = 1;
+  renderLeadsTable();
+}
+
+// DB관리 진입 시 정렬 바 상태를 _sortKey/_sortDir 에 반영
+function syncLeadSortBarUI(){
+  const keyEl = document.querySelector(`input[name="leads-sort-key"][value="${_sortKey}"]`);
+  const dirEl = document.querySelector(`input[name="leads-sort-dir"][value="${_sortDir}"]`);
+  if(keyEl) keyEl.checked = true;
+  if(dirEl) dirEl.checked = true;
+}
+
 function sortBy(key){
   if(_sortKey===key) _sortDir=_sortDir==='asc'?'desc':'asc';
   else{_sortKey=key;_sortDir='asc';}
+  syncLeadSortBarUI();
   renderLeadsTable(); renderMyLeadsTable();
 }
 
@@ -11163,10 +11213,20 @@ function applyColFilters(data){
 // ── applySort ─────────────────────────────────────────────
 function applySort(data){
   if(!_sortKey) return data;
+  // 날짜 컬럼은 Date 비교, 나머지는 문자열
+  const DATE_COLS=['updated_at','created_at','applied_at','distributed_at','assigned_at','dropped_at'];
+  const isDate = DATE_COLS.includes(_sortKey);
   return [...data].sort((a,b)=>{
     let av=a[_sortKey]||'', bv=b[_sortKey]||'';
-    if(typeof av==='string') av=av.toLowerCase(), bv=bv.toLowerCase();
-    const cmp=av<bv?-1:av>bv?1:0;
+    let cmp;
+    if(isDate){
+      const da = av ? new Date(av).getTime() : 0;
+      const db = bv ? new Date(bv).getTime() : 0;
+      cmp = da < db ? -1 : da > db ? 1 : 0;
+    } else {
+      if(typeof av==='string') av=av.toLowerCase(), bv=bv.toLowerCase();
+      cmp = av<bv?-1:av>bv?1:0;
+    }
     return _sortDir==='asc'?cmp:-cmp;
   });
 }
