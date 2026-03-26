@@ -1342,6 +1342,15 @@ tbody tr.selected td{background:var(--blue-50)!important}
       </div>
       <!-- 고객사 탭 -->
       <div id="mc-panel-company" style="display:block">
+        <!-- 지점장 전용: 지점/개인 서브탭 -->
+        <div id="mc-branch-subtab-wrap" style="display:none;margin-bottom:16px">
+          <div style="display:flex;gap:0;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);overflow:hidden;width:fit-content">
+            <button id="mc-bst-branch" onclick="switchMcBranchTab('branch')"
+              style="padding:7px 20px;border:none;background:var(--navy);color:#fff;cursor:pointer;font-size:13px;font-weight:700;font-family:inherit">🏢 지점</button>
+            <button id="mc-bst-personal" onclick="switchMcBranchTab('personal')"
+              style="padding:7px 20px;border:none;background:#fff;color:var(--gray-500);cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">👤 개인</button>
+          </div>
+        </div>
         <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px" id="mc-stat-grid">
           <div class="stat-card green click" onclick="mcFilterSection('contract')"><div class="stat-label">계약 고객사</div><div class="stat-val" id="mc-cnt-contract">0</div></div>
           <div class="stat-card blue click" onclick="mcFilterSection('managed')"><div class="stat-label">관리 고객사</div><div class="stat-val" id="mc-cnt-managed">0</div></div>
@@ -1532,6 +1541,12 @@ tbody tr.selected td{background:var(--blue-50)!important}
           <div style="font-size:12px;color:var(--gray-400);margin-bottom:14px">최대 10개 · D-3일 전 자동 알림</div>
           <div id="mc-anniv-list"></div>
           <button class="btn btn-outline btn-sm" id="mc-anniv-add-btn" onclick="addMcAnniv()" style="margin-top:8px">+ 기념일 추가</button>
+        </div>
+
+        <!-- 하단 푸터 -->
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px;padding-top:14px;border-top:1px solid var(--gray-100)">
+          <button class="btn btn-primary btn-sm" id="mc-modal-act-btn" onclick="openMcModalAct()">💬 활동 기록</button>
+          <button class="btn btn-outline" onclick="closeM('modal-my-client')">닫기</button>
         </div>
       </div>
     </div>
@@ -2135,11 +2150,15 @@ tbody tr.selected td{background:var(--blue-50)!important}
       </div>
       <div class="fg" id="l-dist-date-wrap"><label>분배날짜</label><input type="date" id="l-dist-date"></div>
       <div class="fg" id="l-customer-type-wrap" style="display:none"><label>고객 구분</label>
-        <select id="l-customer-type" style="padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;width:100%">
+        <select id="l-customer-type" onchange="onCustomerTypeChange(this)" style="padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;width:100%">
           <option value="potential">잠재 고객</option>
           <option value="managed">관리 고객</option>
           <option value="contract">계약 고객</option>
         </select>
+      </div>
+      <!-- 계약일 (고객사 등록 시 계약/관리고객 선택 시 표시) -->
+      <div class="fg" id="l-contract-date-wrap" style="display:none"><label>계약일</label>
+        <input type="date" id="l-contract-date">
       </div>
       <div class="fg"><label>DB 구분</label>
         <select id="l-db-type" onchange="onDbTypeChange(this)" style="padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;width:100%">
@@ -2997,9 +3016,10 @@ function renderMcSections(potentials){
   if(cntCEl) cntCEl.textContent=allContract.length;
   if(cntMEl) cntMEl.textContent=allManaged.length;
   if(potEl) potEl.textContent=potPotential.length;
-  // 섞인 배열에 출처 플래그 추가
-  const allContractM=allContract.map(l=>({...l,_isPot:potContract.some(p=>p.id===l.id)}));
-  const allManagedM=allManaged.map(l=>({...l,_isPot:potManaged.some(p=>p.id===l.id)}));
+  // _mcAll에서 온 leads는 _isPot=false, potentials 전용 항목만 _isPot=true
+  const mcAllIds = new Set(_mcAll.map(l=>l.id));
+  const allContractM=allContract.map(l=>({...l,_isPot:!mcAllIds.has(l.id)}));
+  const allManagedM=allManaged.map(l=>({...l,_isPot:!mcAllIds.has(l.id)}));
   _renderMcGrid('mc-grid-contract',allContractM,'계약 고객이 없습니다',false);
   _renderMcGrid('mc-grid-managed',allManagedM,'관리 고객이 없습니다',false);
   _renderMcGrid('mc-grid-potential',potPotential,'고객 등록 버튼으로 잠재고객을 추가하세요',true);
@@ -3045,20 +3065,27 @@ function _renderMcGrid(gridId, items, emptyMsg, isPotential){
       .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
     const lastAct=leadActs[0];
     const actCnt=leadActs.length;
-    const stageClr=l.current_stage==='계약'?'var(--ok)':'var(--blue)';
+    // _isPot 항목은 customer_type 기반으로 색상 결정
+    const _effStage = l.current_stage || (l.customer_type==='contract'?'계약':l.customer_type==='managed'?'관리고객':'');
+    const stageClr=_effStage==='계약'?'var(--ok)':'var(--blue)';
+    const _effLabel=_effStage||l.customer_type||'-';
     const isFav=favs.includes(l.id);
 
-    // 계약일 경과 계산
+    // 계약일 경과 계산 (_isPot: contract_date는 l에 직접)
     const contractDate=l.contract_date||info.contract_date||'';
     let contractElapsedHtml='';
     if(contractDate){
-      const diffMs=new Date()-new Date(contractDate);
+      const diffMs=Math.max(0, new Date()-new Date(contractDate));
       const diffDays=Math.floor(diffMs/86400000);
       const diffMonths=Math.floor(diffDays/30);
       const remDays=diffDays-(diffMonths*30);
-      const urgClr=diffDays<=30?'var(--ok)':diffDays<=90?'var(--blue)':'var(--gray-500)';
-      contractElapsedHtml=`<div style="font-size:10px;font-weight:700;color:${urgClr};margin-top:4px;padding:3px 8px;background:${urgClr}14;border-radius:8px;display:inline-block">
-        📅 계약 ${contractDate} · <span style="font-size:11px">${diffDays}일 경과${diffMonths>0?' ('+diffMonths+'개월 '+remDays+'일)':''}</span>
+      // 범주 테마색: 계약=초록, 관리=파랑
+      const themeClr = l.current_stage==='계약' ? 'var(--ok)' : 'var(--blue)';
+      const elapsedTxt = diffMonths>0
+        ? `${diffDays}일 경과 (${diffMonths}개월 ${remDays}일)`
+        : `${diffDays}일 경과`;
+      contractElapsedHtml=`<div style="font-size:11px;font-weight:700;color:${themeClr};margin-top:6px;padding:4px 10px;background:${themeClr}14;border-radius:8px;display:inline-flex;align-items:center;gap:5px">
+        <span>📅</span><span>${contractDate}</span><span style="opacity:.5">·</span><span>${elapsedTxt}</span>
       </div>`;
     }
 
@@ -3072,13 +3099,24 @@ function _renderMcGrid(gridId, items, emptyMsg, isPotential){
       </div>
       <div style="font-size:14px;font-weight:800;color:var(--gray-900);margin-bottom:5px;padding-right:40px">${esc(l.company_name||'-')}</div>
       <div style="display:flex;align-items:center;gap:5px;margin-bottom:10px">
-        <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:${stageClr}18;color:${stageClr}">${l.current_stage||'-'}</span>
+        <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:${stageClr}18;color:${stageClr}">${_effLabel}</span>
         ${l.consult_type?`<span style="font-size:10px;color:var(--gray-400)">${esc(l.consult_type)}</span>`:''}
       </div>
       <div style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--gray-600);margin-bottom:10px">
         ${(info.ceo||l.contact_name)?`<div style="display:flex;gap:5px"><span style="color:var(--gray-400)">👤</span><span>${esc(info.ceo?info.ceo+(l.contact_name?' / '+l.contact_name:''):l.contact_name||'')}</span></div>`:''}
         ${(info.phone||l.phone)?`<div style="display:flex;gap:5px"><span style="color:var(--gray-400)">📞</span><span>${esc(info.phone||l.phone||'')}</span></div>`:''}
         ${l.industry?`<div style="display:flex;gap:5px"><span style="color:var(--gray-400)">🏭</span><span>${esc(l.industry)}</span></div>`:''}
+        ${(()=>{
+          // leads: team_name + branch_name / potentials: owner
+          const mgr = l._isPot ? (l.owner||'') : (l.team_name||'');
+          const branch = l._isPot ? '' : (l.branch_name||'');
+          if(!mgr&&!branch) return '';
+          return `<div style="display:flex;gap:5px;margin-top:3px;align-items:center">
+            <span style="color:var(--gray-400)">🤝</span>
+            <span style="font-size:11px;font-weight:700;color:${stageClr}">${esc(mgr)}</span>
+            ${branch?`<span style="font-size:10px;color:var(--gray-400)">· ${esc(branch)}</span>`:''}
+          </div>`;
+        })()}
       </div>
       <div style="border-top:1px solid var(--gray-100);padding-top:8px">
         <div style="font-size:10px;font-weight:700;color:var(--gray-400);margin-bottom:4px">활동 ${actCnt}건</div>
@@ -3257,6 +3295,11 @@ function openAddPotential(defaultType){
   const dtWrap=document.getElementById('l-dist-date-wrap');
   if(ctWrap) ctWrap.style.display='';
   if(dtWrap) dtWrap.style.display='none';
+  // 계약일 초기화
+  const cdWrap2=document.getElementById('l-contract-date-wrap');
+  const cdEl=document.getElementById('l-contract-date');
+  if(cdWrap2) cdWrap2.style.display='none';
+  if(cdEl) cdEl.value='';
   // 기본 구분 설정
   const ct=document.getElementById('l-customer-type');
   if(ct) ct.value=defaultType||'potential';
@@ -3979,7 +4022,7 @@ function doLogout(){
 const NAV_CFG = {
   admin:[{id:'admin',l:'📊 대시보드'},{id:'leads',l:'🗄️ DB관리'},{id:'activity',l:'📅 활동'},{id:'settings',l:'⚙️ 설정'}],
   dbmanager:[{id:'leads',l:'🗄️ DB관리'},{id:'activity',l:'📅 활동'}],
-  branch:[{id:'branch',l:'🏢 지점관리'},{id:'leads',l:'🗄️ DB관리'},{id:'activity',l:'📅 활동'}],
+  branch:[{id:'branch',l:'🏢 지점관리'},{id:'leads',l:'🗄️ DB관리'},{id:'my-clients',l:'🏆 고객관리'},{id:'activity',l:'📅 활동'}],
   team:[{id:'leads',l:'🗄️ DB관리'},{id:'my-clients',l:'🏆 고객관리'},{id:'activity',l:'📅 활동'}],
   tm:[{id:'tm-panel',l:'📞 이관 DB'}],
 };
@@ -4026,7 +4069,7 @@ function showScreen(id, btn){
   const ALLOWED = {
     admin:     ['admin','leads','activity','settings'],
     dbmanager: ['leads','activity'],
-    branch:    ['branch','leads','activity'],
+    branch:    ['branch','leads','my-clients','activity'],
     team:      ['leads','my-leads','my-clients','activity'],
     tm:        ['tm-panel'],
   };
@@ -5057,11 +5100,31 @@ function _renderLDetailInfo(lead){
 function _renderLDetailHistory(acts, leadId){
   const el = document.getElementById('ldetail-history-body'); if(!el) return;
   const ICON={call:'📞',meeting:'🤝',email:'📧',online:'💻',note:'📝',proposal:'📋',contract:'🎉',internal:'🏢',other:'📌',status_change:'🔄'};
+
+  // 팀장 역할일 때 날짜 배너 표시
+  let dateBanner = '';
+  if(curUser?.role === 'team'){
+    const lead = allLeads?.find(l=>l.id===leadId) || myLeads?.find(l=>l.id===leadId);
+    const applyDate  = lead?.applied_at || lead?.distributed_at || lead?.created_at || '';
+    const assignDate = lead?.assigned_at || '';
+    dateBanner = `
+      <div style="display:flex;gap:10px;margin-bottom:14px">
+        <div style="flex:1;padding:8px 12px;background:rgba(49,130,246,.07);border-radius:var(--r-sm);border-left:3px solid var(--blue)">
+          <div style="font-size:10px;font-weight:700;color:var(--gray-400);margin-bottom:2px">📅 최초 신청일자</div>
+          <div style="font-size:13px;font-weight:800;color:var(--navy)">${applyDate?applyDate.slice(0,10):'—'}</div>
+        </div>
+        <div style="flex:1;padding:8px 12px;background:rgba(0,192,115,.07);border-radius:var(--r-sm);border-left:3px solid var(--ok)">
+          <div style="font-size:10px;font-weight:700;color:var(--gray-400);margin-bottom:2px">📨 배정일자</div>
+          <div style="font-size:13px;font-weight:800;color:var(--ok)">${assignDate?assignDate.slice(0,10):'—'}</div>
+        </div>
+      </div>`;
+  }
+
   if(!acts.length){
-    el.innerHTML='<div style="text-align:center;padding:32px 16px;font-size:13px;color:var(--gray-300)">활동 기록이 없습니다</div>';
+    el.innerHTML = dateBanner + '<div style="text-align:center;padding:32px 16px;font-size:13px;color:var(--gray-300)">활동 기록이 없습니다</div>';
     return;
   }
-  el.innerHTML=acts.map(a=>`
+  el.innerHTML = dateBanner + acts.map(a=>`
     <div style="display:flex;gap:10px;padding:11px 0;border-bottom:1px solid var(--gray-100)">
       <span style="font-size:16px;flex-shrink:0;margin-top:1px">${ICON[a.type]||'📌'}</span>
       <div style="flex:1;min-width:0">
@@ -5435,6 +5498,52 @@ function renderTodayTodo(targetId){
 
   // 시스템 알림 아이템
   const sysItems=[];
+
+  // 🎂 오늘/D-3 이내 고객 기념일 (내 고객 + 잠재고객)
+  const _d3=new Date(Date.now()+3*86400000).toISOString().slice(0,10);
+  const annivItems=[];
+  // leads 기반 고객 (_mcAll 또는 myLeads)
+  const _myLeadsForAnniv=[...(_mcAll||[]),...(myLeads||[]),...(allLeads||[]).filter(l=>l.team_name===curUser?.name)];
+  const _seenIds=new Set();
+  _myLeadsForAnniv.forEach(l=>{
+    if(_seenIds.has(l.id)) return; _seenIds.add(l.id);
+    (getMcAnniv(l.id)||[]).forEach(a=>{
+      try{
+        const n=nextAnnivDate(a.date,a.repeat!==false);
+        if(n&&n>=today&&n<=_d3){
+          const dDiff=Math.ceil((new Date(n)-new Date(today))/86400000);
+          annivItems.push({company:l.company_name||'-',label:a.label,date:n,days:dDiff});
+        }
+      }catch(e){}
+    });
+  });
+  // 잠재고객
+  (getPotentials?.()??[]).filter(p=>p.owner===curUser?.name||!p.owner).forEach(p=>{
+    (getMcAnniv('potential:'+p.id)||[]).forEach(a=>{
+      try{
+        const n=nextAnnivDate(a.date,a.repeat!==false);
+        if(n&&n>=today&&n<=_d3){
+          const dDiff=Math.ceil((new Date(n)-new Date(today))/86400000);
+          annivItems.push({company:p.company_name||'-',label:a.label,date:n,days:dDiff});
+        }
+      }catch(e){}
+    });
+  });
+  annivItems.sort((a,b)=>a.days-b.days).forEach(item=>{
+    const isToday=item.days===0;
+    const clr=isToday?'var(--ok)':'rgba(251,146,60,1)';
+    const bg=isToday?'rgba(0,192,115,.07)':'rgba(251,146,60,.07)';
+    const label=isToday?'🎂 오늘 기념일':`🎂 D-${item.days}`;
+    sysItems.push(`
+    <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:${bg};border-radius:6px;border-left:3px solid ${clr}">
+      <span style="font-size:14px">🎂</span>
+      <div style="flex:1">
+        <div style="font-size:12px;font-weight:700;color:${clr}">${label} · ${esc(item.company)}</div>
+        <div style="font-size:11px;color:var(--gray-500)">${esc(item.label)} · ${item.date}</div>
+      </div>
+    </div>`);
+  });
+
   if(overdueNas.length>0) sysItems.push(`
     <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:rgba(239,68,68,.07);border-radius:6px;border-left:3px solid var(--err)">
       <span style="font-size:14px">🔴</span>
@@ -6989,6 +7098,10 @@ async function confirmMyUpload(){
   loadMyLeads();
 }
 
+function onCustomerTypeChange(sel){
+  const wrap = document.getElementById('l-contract-date-wrap');
+  if(wrap) wrap.style.display = (sel.value==='contract'||sel.value==='managed') ? '' : 'none';
+}
 function onDbTypeChange(sel){
   const wrap=document.getElementById('l-intro-wrap');
   if(wrap) wrap.style.display=sel.value==='intro'?'':'none';
@@ -7003,13 +7116,14 @@ async function saveLead(){
   // 고객관리에서 등록(potential 모드)인 경우
   if(window._potentialMode){
     const custType=document.getElementById('l-customer-type')?.value||'potential';
+    const contractDate=document.getElementById('l-contract-date')?.value||'';
     if(id){
       // 수정: leads DB 업데이트
-      await dbU('leads',id,{...data, customer_type:custType});
+      await dbU('leads',id,{...data, customer_type:custType, ...(contractDate?{contract_date:contractDate}:{})});
     } else {
       // 신규: potentials 저장소에 저장
       const pots=getPotentials();
-      pots.unshift({id:uuid(),created_at:new Date().toISOString(),...data,customer_type:custType,owner:curUser.name});
+      pots.unshift({id:uuid(),created_at:new Date().toISOString(),...data,customer_type:custType,contract_date:contractDate||'',owner:curUser.name});
       savePotentials(pots);
     }
     window._potentialMode=false;
@@ -7457,21 +7571,19 @@ function openMcModal(leadId){
   const badgeEl=document.getElementById('mc-modal-badge');
   if(badgeEl){
     let ctLabel='', bgClr='var(--gray-100)', txtClr='var(--gray-500)';
-    if(lead.current_stage==='계약'){
+    const stage = lead.current_stage||'';
+    const ctype = lead.customer_type||'';
+    if(stage==='계약'||ctype==='contract'){
       ctLabel='계약고객'; bgClr='#e8faf2'; txtClr='#00a060';
-    } else if(lead.current_stage==='관리고객'){
+    } else if(stage==='관리고객'||ctype==='managed'){
       ctLabel='관리고객'; bgClr='var(--blue-50)'; txtClr='var(--blue)';
-    } else if(lead.customer_type==='contract'){
-      ctLabel='계약고객'; bgClr='#e8faf2'; txtClr='#00a060';
-    } else if(lead.customer_type==='managed'){
-      ctLabel='관리고객'; bgClr='var(--blue-50)'; txtClr='var(--blue)';
-    } else if(lead.customer_type==='potential'){
-      ctLabel='잠재고객';
+    } else {
+      ctLabel='잠재고객'; bgClr='var(--gray-100)'; txtClr='var(--gray-500)';
     }
     badgeEl.textContent=ctLabel;
     badgeEl.style.background=bgClr;
     badgeEl.style.color=txtClr;
-    badgeEl.style.display=ctLabel?'':'none';
+    badgeEl.style.display='';
   }
 
   // 카드뷰 렌더
@@ -7485,7 +7597,22 @@ function openMcModal(leadId){
 
   renderMcAnniv(leadId);
   renderMcHistory(leadId);
+  // 활동기록 버튼 — 팀장/지점장/관리자만 표시, 잠재고객(potential:) 제외
+  const actBtn=document.getElementById('mc-modal-act-btn');
+  if(actBtn){
+    const canAct=['team','branch','admin'].includes(curUser?.role);
+    actBtn.style.display = (canAct) ? '' : 'none';
+  }
   openM('modal-my-client');
+}
+
+// 고객 상세 모달 → 활동 기록 열기
+function openMcModalAct(){
+  const leadId=document.getElementById('mc-lead-id')?.value||'';
+  if(!leadId||leadId.startsWith('potential:')){ showToast('DB관리에 등록된 고객만 활동기록이 가능합니다','error'); return; }
+  const lead=(_mcAll||[]).find(l=>l.id===leadId)||(allLeads?.length?allLeads:lg('leads')).find(l=>l.id===leadId);
+  closeM('modal-my-client');
+  openActM(leadId, lead?.company_name||'');
 }
 
 // 고객 정보 카드뷰 렌더
@@ -7555,23 +7682,18 @@ function _renderMcInfoCard(lead, info){
     const contractDate=g(lead.contract_date, info.contract_date);
     const isContractType=_ct==='contract'||_ct==='managed';
     if(isContractType && contractDate){
-      const diffMs=Date.now()-new Date(contractDate).getTime();
-      const diffDays=Math.max(0,Math.floor(diffMs/86400000));
-      const years=Math.floor(diffDays/365);
-      const months=Math.floor((diffDays%365)/30);
-      const days=diffDays%(30);
+      const diffMs=Math.max(0, Date.now()-new Date(contractDate).getTime());
+      const diffDays=Math.floor(diffMs/86400000);
+      const diffMonths=Math.floor(diffDays/30);
+      const remDays=diffDays-(diffMonths*30);
 
-      // 경과 텍스트
-      let elapsedTxt='';
-      if(years>0)  elapsedTxt+=`${years}년 `;
-      if(months>0) elapsedTxt+=`${months}개월 `;
-      elapsedTxt+=`${days}일 경과`;
+      // 범주 테마색: 계약=초록, 관리=파랑
+      const clr = _ct==='contract' ? 'var(--ok)' : 'var(--blue)';
 
-      // 색상: 30일 이내 초록, 6개월 이내 파랑, 1년 이내 주황, 1년 초과 빨강
-      const clr = diffDays<=30  ? 'var(--ok)'
-                : diffDays<=180 ? 'var(--blue)'
-                : diffDays<=365 ? 'var(--warn)'
-                : 'var(--err)';
+      // D일 경과 (M개월 D일) 형식
+      const elapsedTxt = diffMonths>0
+        ? `${diffDays}일 경과 (${diffMonths}개월 ${remDays}일)`
+        : `${diffDays}일 경과`;
 
       elapsedEl.style.display='';
       elapsedEl.innerHTML=`
@@ -7754,19 +7876,28 @@ function openPotentialDetail(potId){
 
   const badgeEl=document.getElementById('mc-modal-badge');
   if(badgeEl){
-    badgeEl.textContent='잠재고객';
-    badgeEl.style.background='var(--gray-100)';
-    badgeEl.style.color='var(--gray-500)';
+    const ctype = p.customer_type||'potential';
+    const ctLabel = ctype==='contract'?'계약고객' : ctype==='managed'?'관리고객' : '잠재고객';
+    const bgClr   = ctype==='contract'?'#e8faf2'  : ctype==='managed'?'var(--blue-50)' : 'var(--gray-100)';
+    const txtClr  = ctype==='contract'?'#00a060'  : ctype==='managed'?'var(--blue)'    : 'var(--gray-500)';
+    badgeEl.textContent=ctLabel;
+    badgeEl.style.background=bgClr;
+    badgeEl.style.color=txtClr;
     badgeEl.style.display='';
   }
 
-  // 카드뷰 렌더
+  // 카드뷰 렌더 — customer_type → current_stage 매핑으로 계약/관리 배너 정상 표시
+  const _stageFromType = p.customer_type==='contract'?'계약' : p.customer_type==='managed'?'관리고객' : '';
   _renderMcInfoCard({
     company_name:p.company_name, contact_name:p.contact_name,
     phone:p.phone, industry:p.industry, region:p.region,
     revenue:p.revenue, consult_type:p.consult_type,
-    customer_type:'potential'
-  }, {ceo:p.ceo, note:p.note});
+    inflow:p.inflow, tax_delinquent:p.tax_delinquent,
+    contract_date:p.contract_date||'',
+    customer_type:p.customer_type||'potential',
+    current_stage:_stageFromType,
+    ceo:p.ceo,
+  }, {ceo:p.ceo, note:p.note, contract_date:p.contract_date||''});
 
   switchMcInfoEdit(false);
   switchMcTab('info', document.getElementById('mc-tb-info'));
@@ -7776,43 +7907,98 @@ function openPotentialDetail(potId){
   renderMcAnniv('potential:'+potId);
   renderMcHistory('potential:'+potId);
 
+  // 잠재고객은 활동기록 버튼 숨김 (leads DB 연결 없음)
+  const actBtn=document.getElementById('mc-modal-act-btn');
+  if(actBtn) actBtn.style.display='none';
+
   openM('modal-my-client');
 }
 
 let _mcAll=[], _mcFiltered=[];
 
+let _mcBranchTab = 'branch'; // 'branch' | 'personal'
+
 async function loadMyClients(){
   const all = await dbQ('leads');
+  const isBranch = curUser.role==='branch';
+
+  // 전체 캐시 — 지점장은 지점 전체 수집
   _mcAll = all.filter(l=>{
     if(l.status==='deleted') return false;
     if(!['계약','관리고객'].includes(l.current_stage||'')) return false;
     if(curUser.role==='admin') return true;
-    if(curUser.role==='branch') return l.branch_name===curUser.name||l.registered_by===curUser.name;
+    if(isBranch) return l.branch_name===curUser.name; // 지점 전체
     return l.team_name===curUser.name;
   });
-  // stat은 renderMcSections에서 통합 처리
 
-  // _mcFiltered 초기화 후 직접 렌더
-  _mcFiltered = [..._mcAll];
-  const _pots = getPotentials().filter(p=>p.owner===curUser.name||!p.owner);
-  // 잠재고객 카운트 업데이트
-  const potEl2 = document.getElementById('mc-cnt-potential');
-  if(potEl2) potEl2.textContent = _pots.length;
-  // my-clients-sub 전체 카운트
+  // 지점장 전용: 서브탭 표시
+  const subWrap = document.getElementById('mc-branch-subtab-wrap');
+  if(subWrap) subWrap.style.display = isBranch ? '' : 'none';
+
+  // 서브탭에 따라 _mcFiltered 결정
+  if(isBranch && _mcBranchTab==='personal'){
+    // 개인: 지점장 본인이 담당/등록한 것만
+    _mcFiltered = _mcAll.filter(l=>l.team_name===curUser.name||l.registered_by===curUser.name);
+  } else {
+    _mcFiltered = [..._mcAll];
+  }
+
+  // 잠재고객: 지점탭=지점 전체, 개인탭=본인 것만
+  const allPots = getPotentials();
+  const _pots = isBranch && _mcBranchTab==='branch'
+    ? allPots // 지점탭은 지점장 본인 등록 잠재고객 (potentials는 개인 저장이므로 동일)
+    : allPots.filter(p=>p.owner===curUser.name||!p.owner);
+
+  // 잠재고객 섹션: 개인탭 또는 팀장만 표시
+  const potSection = document.getElementById('mc-section-potential');
+  if(potSection) potSection.style.display = (isBranch && _mcBranchTab==='branch') ? 'none' : '';
+
   (document.getElementById('my-clients-sub')||{}).textContent = (_mcAll.length+_pots.length)+'건';
   renderMcSections(_pots);
   renderGroupBar();
-  // 화면 진입 시 탭 상태 완전 동기화
   switchMcMainTab(_mcMainTab||'company');
+}
+
+function switchMcBranchTab(tab){
+  _mcBranchTab = tab;
+  const bBtn = document.getElementById('mc-bst-branch');
+  const pBtn = document.getElementById('mc-bst-personal');
+  if(bBtn){ bBtn.style.background=tab==='branch'?'var(--navy)':'#fff'; bBtn.style.color=tab==='branch'?'#fff':'var(--gray-500)'; }
+  if(pBtn){ pBtn.style.background=tab==='personal'?'var(--navy)':'#fff'; pBtn.style.color=tab==='personal'?'#fff':'var(--gray-500)'; }
+
+  const isBranch = curUser?.role==='branch';
+  const allPots = getPotentials();
+  const _pots = (isBranch && tab==='branch')
+    ? allPots
+    : allPots.filter(p=>p.owner===curUser.name||!p.owner);
+
+  if(tab==='personal'){
+    _mcFiltered = _mcAll.filter(l=>l.team_name===curUser.name||l.registered_by===curUser.name);
+  } else {
+    _mcFiltered = [..._mcAll];
+  }
+
+  // 잠재고객 섹션 가시성
+  const potSection = document.getElementById('mc-section-potential');
+  if(potSection) potSection.style.display = (isBranch && tab==='branch') ? 'none' : '';
+
+  renderMcSections(_pots);
 }
 
 function filterMyClients(){
   const q=(document.getElementById('mc-search')?.value||'').toLowerCase();
-  _mcFiltered=_mcAll.filter(l=>{
+  const isBranch = curUser?.role==='branch';
+  const baseFiltered = (isBranch && _mcBranchTab==='personal')
+    ? _mcAll.filter(l=>l.team_name===curUser.name||l.registered_by===curUser.name)
+    : [..._mcAll];
+  _mcFiltered=baseFiltered.filter(l=>{
     if(q&&!(l.company_name||'').toLowerCase().includes(q)) return false;
     return true;
   });
-  const potentials=getPotentials().filter(p=>p.owner===curUser.name||!p.owner);
+  const allPots=getPotentials();
+  const potentials=(isBranch && _mcBranchTab==='branch')
+    ? allPots
+    : allPots.filter(p=>p.owner===curUser.name||!p.owner);
   const filteredPots=q?potentials.filter(p=>(p.company_name||'').toLowerCase().includes(q)):potentials;
   renderMcSections(filteredPots);
 }
@@ -8489,8 +8675,23 @@ function openTmInput(lid,cname){
 function _renderTmCompanyHistory(lid, lead){
   const wrap=document.getElementById('tm-company-history');
   if(!wrap) return;
-  // 활동기록 — assign/status_change 제외, 현재 사용자 제외, 최근 3건
-  // 모든 활동기록 (assign/status_change 제외, 내용 있는 것)
+
+  // ── 날짜 배너 (최초신청일자 + 이관일자)
+  const applyDate = lead?.applied_at || lead?.distributed_at || lead?.created_at || '';
+  const assignDate = lead?.assigned_at || '';
+  const dateBanner = `
+    <div style="display:flex;gap:10px;margin-bottom:10px">
+      <div style="flex:1;padding:8px 12px;background:rgba(49,130,246,.07);border-radius:var(--r-sm);border-left:3px solid var(--blue)">
+        <div style="font-size:10px;font-weight:700;color:var(--gray-400);margin-bottom:2px">📅 최초 신청일자</div>
+        <div style="font-size:13px;font-weight:800;color:var(--navy)">${applyDate?applyDate.slice(0,10):'—'}</div>
+      </div>
+      <div style="flex:1;padding:8px 12px;background:rgba(0,192,115,.07);border-radius:var(--r-sm);border-left:3px solid var(--ok)">
+        <div style="font-size:10px;font-weight:700;color:var(--gray-400);margin-bottom:2px">📨 TM 이관일자</div>
+        <div style="font-size:13px;font-weight:800;color:var(--ok)">${assignDate?assignDate.slice(0,10):'—'}</div>
+      </div>
+    </div>`;
+
+  // 활동기록 — assign/status_change 제외, 최근 5건
   const allActs=(allActivities?.length?allActivities:lg('activities')).filter(a=>
     a.lead_id===lid &&
     !['assign','status_change'].includes(a.type) &&
@@ -8499,26 +8700,26 @@ function _renderTmCompanyHistory(lid, lead){
 
   const TYPE_ICON={call:'📞',meeting:'🤝',email:'📧',online:'💻',note:'📝',proposal:'📋',contract:'🎉'};
   wrap.style.display='block';
-  if(!allActs.length){
-    wrap.innerHTML='<div style="font-size:11px;color:var(--gray-400);padding:4px 0">이전 활동 기록이 없습니다</div>';
-    return;
-  }
-  wrap.innerHTML=`
-    <div style="font-size:12px;font-weight:700;color:var(--blue);margin-bottom:8px">
-      🏢 기업 활동 히스토리 <span style="font-size:10px;font-weight:400;color:var(--gray-400)">(최근 ${allActs.length}건)</span>
-    </div>
-    ${allActs.map(a=>`
-      <div style="display:flex;gap:8px;padding:7px 10px;background:var(--gray-50);border-radius:var(--r-sm);margin-bottom:5px;border-left:3px solid var(--blue)">
-        <span style="font-size:13px;flex-shrink:0">${TYPE_ICON[a.type]||'📌'}</span>
-        <div style="flex:1;min-width:0">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
-            <span style="font-size:11px;font-weight:700;color:var(--navy)">${esc(a.author||'-')}</span>
-            <span style="font-size:10px;color:var(--gray-400)">${(a.created_at||'').slice(0,10)}</span>
+
+  const histHtml = allActs.length
+    ? `<div style="font-size:12px;font-weight:700;color:var(--blue);margin-bottom:8px">
+        🏢 기업 활동 히스토리 <span style="font-size:10px;font-weight:400;color:var(--gray-400)">(최근 ${allActs.length}건)</span>
+      </div>
+      ${allActs.map(a=>`
+        <div style="display:flex;gap:8px;padding:7px 10px;background:var(--gray-50);border-radius:var(--r-sm);margin-bottom:5px;border-left:3px solid var(--blue)">
+          <span style="font-size:13px;flex-shrink:0">${TYPE_ICON[a.type]||'📌'}</span>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+              <span style="font-size:11px;font-weight:700;color:var(--navy)">${esc(a.author||'-')}</span>
+              <span style="font-size:10px;color:var(--gray-400)">${(a.created_at||'').slice(0,10)}</span>
+            </div>
+            <div style="font-size:12px;color:var(--gray-700);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc((a.content||'').slice(0,60))}</div>
+            ${a.stage?`<span style="font-size:10px;color:var(--blue);margin-top:1px;display:inline-block">${esc(a.stage)}</span>`:''}
           </div>
-          <div style="font-size:12px;color:var(--gray-700);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc((a.content||'').slice(0,60))}</div>
-          ${a.stage?`<span style="font-size:10px;color:var(--blue);margin-top:1px;display:inline-block">${esc(a.stage)}</span>`:''}
-        </div>
-      </div>`).join('')}`;
+        </div>`).join('')}`
+    : `<div style="font-size:11px;color:var(--gray-400);padding:4px 0">이전 활동 기록이 없습니다</div>`;
+
+  wrap.innerHTML = dateBanner + histHtml;
 }
 
 // openLeadDetailModal — lead 객체를 받아 패널 오픈 (openPanel 래퍼)
