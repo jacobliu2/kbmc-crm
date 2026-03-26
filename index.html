@@ -3429,11 +3429,14 @@ function initSupabaseClient(){
   }catch(e){ console.error('Supabase 클라이언트 초기화 실패:', e); }
 }
 
+let _rtReconnectTimer = null;
+let _rtReconnectCount = 0;
+
 function subscribeRealtime(){
   if(testMode || !_sbClient) return;
   // 기존 채널 있으면 제거
   if(_realtimeChannel){
-    _sbClient.removeChannel(_realtimeChannel);
+    try{ _sbClient.removeChannel(_realtimeChannel); }catch(e){}
     _realtimeChannel = null;
   }
 
@@ -3460,19 +3463,23 @@ function subscribeRealtime(){
       (payload) => handleRealtimeChange('notices', payload)
     )
     .subscribe((status) => {
-      console.log('Realtime 상태:', status);
       const st = document.getElementById('sb-status');
       if(status === 'SUBSCRIBED'){
+        _rtReconnectCount = 0; // 성공 시 카운터 리셋
         if(st){ st.textContent='✅ Supabase 연결됨 + 실시간 동기화 활성'; st.style.color='var(--ok)'; }
-        // 재연결 시에만 토스트 (첫 연결은 조용히)
         if(window._rtWasDisconnected){ showToast('🔄 실시간 동기화 재연결됨', 'success'); window._rtWasDisconnected=false; }
-      } else if(status === 'CHANNEL_ERROR'){
+      } else if(status === 'CHANNEL_ERROR' || status === 'TIMED_OUT'){
         window._rtWasDisconnected=true;
         if(st){ st.textContent='⚠️ 실시간 동기화 오류 — 재연결 시도 중'; st.style.color='var(--warn)'; }
-        // 30초 후 재시도
-        setTimeout(subscribeRealtime, 30000);
-      } else if(status === 'TIMED_OUT'){
-        setTimeout(subscribeRealtime, 10000);
+        // 중복 타이머 방지 + 지수 백오프 (최대 5회: 5s→10s→20s→40s→60s)
+        if(_rtReconnectTimer) clearTimeout(_rtReconnectTimer);
+        if(_rtReconnectCount < 5){
+          const delay = Math.min(5000 * Math.pow(2, _rtReconnectCount), 60000);
+          _rtReconnectCount++;
+          _rtReconnectTimer = setTimeout(()=>{ _rtReconnectTimer=null; subscribeRealtime(); }, delay);
+        } else {
+          if(st){ st.textContent='⛔ 실시간 동기화 중단 (새로고침 필요)'; st.style.color='var(--err)'; }
+        }
       }
     });
 }
@@ -3577,37 +3584,51 @@ function _trackLocalId(id){
 
 // ── Supabase REST ─────────────────────────────────────────
 function sbH(){ return {'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Prefer':'return=representation'}; }
-async function sbGet(path){
+async function sbGet(path, _retry=0){
   if(testMode) return [];
   try{
-    // AbortController.signal을 fetch에 직접 넘기면 postMessage 경유 시
-    // DataCloneError 발생 → Promise.race 타임아웃으로 대체
     const fetchPromise = fetch(SB_URL+'/rest/v1/'+path, {headers:sbH()});
     const timeoutPromise = new Promise((_,rej) =>
-      setTimeout(()=>rej(new Error('sbGet_timeout')), 8000)
+      setTimeout(()=>rej(new Error('sbGet_timeout')), 10000)
     );
     const r = await Promise.race([fetchPromise, timeoutPromise]);
-    if(!r.ok){ console.warn('sbGet err:',r.status); return null; }
+    if(!r.ok){ console.warn('sbGet err:',r.status, path); return null; }
     const t=await r.text(); return t?JSON.parse(t):[];
   }catch(e){
-    if(e.message==='sbGet_timeout') console.warn('sbGet 타임아웃:', path);
-    else console.warn('sbGet 연결 실패:', e);
+    if(e.message==='sbGet_timeout'){
+      console.warn('sbGet 타임아웃:', path);
+    } else {
+      // Failed to fetch — 네트워크 일시 단절: 최대 3회 지수 백오프 재시도
+      if(_retry < 3){
+        const delay = 1000 * Math.pow(2, _retry); // 1s → 2s → 4s
+        console.warn(`sbGet 재시도 ${_retry+1}/3 (${delay}ms 후):`, path);
+        await new Promise(res=>setTimeout(res, delay));
+        return sbGet(path, _retry+1);
+      }
+      console.warn('sbGet 연결 실패 (재시도 소진):', e.message);
+    }
     return null;
   }
 }
 async function sbPost(table,data){
   if(testMode) return null;
   try{
-    const r=await fetch(SB_URL+'/rest/v1/'+table,{method:'POST',headers:sbH(),body:JSON.stringify(data)});
+    // activities/next_actions 는 return=minimal (반환값 불필요, 400 방지)
+    const prefer = ['activities','next_actions'].includes(table)
+      ? 'return=minimal'
+      : 'return=representation';
+    const h = {...sbH(), 'Prefer': prefer};
+    const r=await fetch(SB_URL+'/rest/v1/'+table,{method:'POST',headers:h,body:JSON.stringify(data)});
     if(!r.ok){
       const errText=await r.text().catch(()=>'');
-      console.error('sbPost err:',r.status, errText);
+      console.error('sbPost err:',r.status, table, errText);
       return null;
     }
+    if(prefer==='return=minimal') return data; // 입력값 그대로 반환
     const t=await r.text(); const d=t?JSON.parse(t):null; return Array.isArray(d)?d[0]:d;
   }catch(e){
     console.error('sbPost exception:',e);
-    return null; // testMode 전환 제거 — 네트워크 일시 오류로 전체 모드 바꾸지 않음
+    return null;
   }
 }
 
@@ -3633,19 +3654,31 @@ async function sbPostBatch(table, rows, BATCH_SIZE=50){
   }
   return {ok, fail};
 }
-async function sbPatch(table,id,data){
+async function sbPatch(table,id,data,_retry=0){
   try{
     const r=await fetch(SB_URL+'/rest/v1/'+table+'?id=eq.'+id,{method:'PATCH',headers:sbH(),body:JSON.stringify(data)});
     if(!r.ok){ console.error('sbPatch err:',r.status); return false; }
     return true;
-  }catch(e){ console.error('sbPatch exception:',e); return false; }
+  }catch(e){
+    if(_retry<2){
+      await new Promise(res=>setTimeout(res,1000*(1+_retry)));
+      return sbPatch(table,id,data,_retry+1);
+    }
+    console.error('sbPatch 실패 (재시도 소진):',e.message); return false;
+  }
 }
-async function sbDel(table,id){
+async function sbDel(table,id,_retry=0){
   try{
     const r=await fetch(SB_URL+'/rest/v1/'+table+'?id=eq.'+id,{method:'DELETE',headers:sbH()});
     if(!r.ok){ console.error('sbDel err:',r.status); return false; }
     return true;
-  }catch(e){ console.error('sbDel exception:',e); return false; }
+  }catch(e){
+    if(_retry<2){
+      await new Promise(res=>setTimeout(res,1000*(1+_retry)));
+      return sbDel(table,id,_retry+1);
+    }
+    console.error('sbDel 실패 (재시도 소진):',e.message); return false;
+  }
 }
 
 // ── UUID ──────────────────────────────────────────────────
