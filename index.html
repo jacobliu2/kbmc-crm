@@ -6557,6 +6557,7 @@ async function importExcel(event){
   const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
   if(rows.length<2){showToast('데이터가 없습니다.','error');return;}
   const hdrs=rows[0].map(h=>h?String(h).trim().replace(/\n/g,''):'');
+
   const ALIAS={company_name:['회사명','기업명','업체명'],contact_name:['신청자','담당자','대표자'],phone:['연락처','전화번호'],email:['이메일'],region:['소재지','지역'],industry:['업종'],revenue:['매출','매출액'],consult_type:['상담유형','유형'],inflow:['유입경로'],tax_delinquent:['체납여부'],note:['비고'],branch_name:['지점장','배정지점장'],team_name:['팀장','배정팀장'],distributed_at:['분배날짜'],applied_at:['상담신청시간','신청시간','신청일시'],};
   const hm={};Object.entries(ALIAS).forEach(([key,al])=>al.forEach(a=>hm[a.toLowerCase()]=key));
   const toD=v=>{if(!v)return null;if(v instanceof Date)return v.toISOString().slice(0,10);const s=String(v);if(/^\d{4}-\d{2}-\d{2}/.test(s))return s.slice(0,10);return null;};
@@ -6589,7 +6590,12 @@ async function importExcel(event){
       if(!s) return null;
       // 이미 ISO/날짜 형식이면 그대로
       if(/^\d{4}-\d{2}-\d{2}/.test(s)) return s;
-      // 영문 Date 문자열 등 → Date.parse 시도
+      // 한국어 오전/오후 datetime: '2026. 3. 23 오후 5:58:'
+      if(s.includes('오전')||s.includes('오후')){ const kt=_parseKorDt(s); if(!isNaN(kt)) return new Date(kt).toISOString(); }
+      // 한국 점 표기 날짜만: '2026. 3. 23'
+      const km=s.match(/^(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})/);
+      if(km){ const t=Date.UTC(+km[1],+km[2]-1,+km[3]); if(!isNaN(t)) return new Date(t).toISOString(); }
+      // 기타 → Date.parse 시도
       const t=Date.parse(s);
       return isNaN(t)?s:new Date(t).toISOString();
     }()),assigned_at:_assignedAt2,status:_autoStatus2,registered_by:curUser?.name||'',created_at:new Date().toISOString(),updated_at:new Date().toISOString()});
@@ -11378,11 +11384,22 @@ function applyColFilters(data){
 
 // ── applySort ─────────────────────────────────────────────
 // 날짜 파싱: ISO(2026-03-02), 한국점표기(2026. 3. 2 / 2025. 12.), 기타 모두 처리
+function _parseKorDt(s){
+  // '2026. 3. 23 오후 5:58:' 형식 → UTC timestamp
+  const m=s.match(/^(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\s*(오전|오후)?\s*(\d{1,2}):(\d{1,2})/);
+  if(!m) return NaN;
+  let [,y,mo,d,ap,h,min]=[...m].map((v,i)=>i===4?v:+v||0);
+  if(ap==='오후'&&h<12) h+=12;
+  if(ap==='오전'&&h===12) h=0;
+  return Date.UTC(y,mo-1,d,h,min);
+}
 function _toTs(raw){
   if(!raw) return 0;
   const s=String(raw).trim();
   if(!s) return 0;
   if(/^\d{4}-\d{2}/.test(s)){ const t=Date.parse(s); return isNaN(t)?0:t; }
+  // 한국어 오전/오후 datetime: '2026. 3. 23 오후 5:58:'
+  if(s.includes('오전')||s.includes('오후')){ const t=_parseKorDt(s); return isNaN(t)?0:t; }
   const km=s.match(/^(\d{4})\.\s*(\d{1,2})\.?\s*(\d{0,2})/);
   if(km){ const y=+km[1],m=+km[2],d=+(km[3]||1)||1; const t=Date.UTC(y,m-1,d); return isNaN(t)?0:t; }
   const t=Date.parse(s); return isNaN(t)?0:t;
