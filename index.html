@@ -4122,7 +4122,16 @@ function showScreen(id, btn){
 
 // ── 유틸 ─────────────────────────────────────────────────
 function esc(s){const d=document.createElement('div');d.textContent=String(s||'');return d.innerHTML;}
-function fmtD(v){if(!v)return'-';return String(v).slice(0,10).replace(/-/g,'.');}
+function fmtD(v){
+  if(!v)return'-';
+  const s=String(v).trim();
+  // ISO 계열: 2026-03-25 또는 2026-03-25T...
+  if(/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10).replace(/-/g,'.');
+  // 영문 Date 문자열(Mon Mar 02 2026...) → Date.parse 후 재포맷
+  const t=Date.parse(s);
+  if(!isNaN(t)) return new Date(t).toISOString().slice(0,10).replace(/-/g,'.');
+  return s.slice(0,10);
+}
 function fmtM(v){const n=parseInt(v)||0;if(!n)return'-';if(n>=100000000)return(n/100000000).toFixed(1)+'억';if(n>=10000)return Math.round(n/10000).toLocaleString()+'만';return n.toLocaleString()+'원';}
 const SL={pending:'배정',assigned:'배정',contacted:'접촉',no_answer:'부재중',drop:'드랍',deleted:'삭제'};
 const SC={pending:'badge-blue',assigned:'badge-blue',contacted:'badge-contacted',consulting:'badge-consulting',done:'badge-done',contract:'badge-contract',no_answer:'badge-no_answer',drop:'badge-drop'};
@@ -6571,7 +6580,19 @@ async function importExcel(event){
     const _bname = curUser?.role==='branch' ? curUser.name : _branch;
     const _autoStatus2 = _bname ? 'assigned' : 'pending';
     const _assignedAt2 = _bname ? (toD(map.distributed_at)||new Date().toISOString()) : null;
-    _pending.push({id:uuid(),company_name:co,contact_name:String(map.contact_name||'').trim(),phone:formatPhone(String(map.phone||'')).trim(),email:String(map.email||'').trim(),region:String(map.region||'').trim(),industry:String(map.industry||'').trim(),revenue:String(map.revenue||'').trim(),consult_type:String(map.consult_type||'').trim(),inflow:String(map.inflow||'').trim(),tax_delinquent:String(map.tax_delinquent||'').trim(),note:String(map.note||'').trim(),branch_name:_bname,team_name:_team,team_names:_team?JSON.stringify([_team]):null,distributed_at:toD(map.distributed_at),applied_at:map.applied_at?String(map.applied_at).trim():null,assigned_at:_assignedAt2,status:_autoStatus2,registered_by:curUser?.name||'',created_at:new Date().toISOString(),updated_at:new Date().toISOString()});
+    _pending.push({id:uuid(),company_name:co,contact_name:String(map.contact_name||'').trim(),phone:formatPhone(String(map.phone||'')).trim(),email:String(map.email||'').trim(),region:String(map.region||'').trim(),industry:String(map.industry||'').trim(),revenue:String(map.revenue||'').trim(),consult_type:String(map.consult_type||'').trim(),inflow:String(map.inflow||'').trim(),tax_delinquent:String(map.tax_delinquent||'').trim(),note:String(map.note||'').trim(),branch_name:_bname,team_name:_team,team_names:_team?JSON.stringify([_team]):null,distributed_at:toD(map.distributed_at),applied_at:(function(){
+      const v=map.applied_at;
+      if(!v) return null;
+      // Date 객체 → ISO 문자열 전체 보존 (시분초 포함)
+      if(v instanceof Date) return v.toISOString();
+      const s=String(v).trim();
+      if(!s) return null;
+      // 이미 ISO/날짜 형식이면 그대로
+      if(/^\d{4}-\d{2}-\d{2}/.test(s)) return s;
+      // 영문 Date 문자열 등 → Date.parse 시도
+      const t=Date.parse(s);
+      return isNaN(t)?s:new Date(t).toISOString();
+    }()),assigned_at:_assignedAt2,status:_autoStatus2,registered_by:curUser?.name||'',created_at:new Date().toISOString(),updated_at:new Date().toISOString()});
   }
   const _autoAssigned=_pending.filter(r=>r.status==='assigned').length;
   const _noPending=_pending.filter(r=>r.status==='pending').length;
