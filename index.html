@@ -2034,12 +2034,18 @@ tbody tr.selected td{background:var(--blue-50)!important}
     <!-- 지점 배정 섹션 -->
     <div id="dist-section-branch">
       <div style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">배정 지점장</div>
-      <div class="mgr-grid" id="dist-branch-cards"></div>
+      <div id="dist-branch-wrap" style="display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap">
+        <div class="mgr-grid" id="dist-branch-cards" style="flex:1"></div>
+        <div id="dist-tm-collab-card" class="mgr-card" onclick="toggleTmCollab(this)" style="min-width:76px;cursor:pointer;border-color:var(--blue);flex-shrink:0">
+          <div class="mgr-name" style="font-size:12px;color:var(--blue);font-weight:700">📞 대전TM</div>
+          <div class="mgr-sub" style="color:var(--blue)">동반배정</div>
+        </div>
+      </div>
       
       <div id="dist-team-wrap" style="display:none;margin-top:12px">
         <div style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">담당 팀장 <span style="font-weight:400;opacity:.7">(복수 선택 가능)</span></div>
-        <div class="mgr-grid" id="dist-team-cards"></div>
-        <div id="dist-team-note" style="font-size:12px;color:var(--blue);margin-top:4px;font-weight:600"></div>
+        <div id="dist-team-cards"></div>
+        <div id="dist-team-note" style="font-size:12px;color:var(--blue);margin-top:8px;font-weight:600"></div>
         <button class="btn btn-outline btn-xs" style="margin-top:6px" onclick="clearTeamCard()">팀장 미지정으로 배정</button>
       </div>
     </div>
@@ -4670,7 +4676,10 @@ async function loadLeads(){
       try{ return JSON.parse(l.team_names||'[]').includes(curUser.name); }catch(e){ return false; }
     });
   }
-  if(curUser.role==='tm')     allLeads=allLeads.filter(l=>l.tm_transferred);
+  if(curUser.role==='tm')     allLeads=allLeads.filter(l=>{
+    if(l.tm_transferred===true||l.tm_transferred==='true') return true;
+    try{ const cb=JSON.parse(l.collab_branches||'[]'); return cb.includes('대전TM'); }catch(e){ return false; }
+  });
   // ── 역할별 필터 UI 제어 ──
   const branchEl = document.getElementById('leads-branch');
   const teamEl   = document.getElementById('leads-team');
@@ -5283,13 +5292,18 @@ function _renderLDetailHistory(acts, leadId){
     el.innerHTML = dateBanner + '<div style="text-align:center;padding:32px 16px;font-size:13px;color:var(--gray-300)">활동 기록이 없습니다</div>';
     return;
   }
+  const isAdminDH=curUser?.role==='admin';
   el.innerHTML = dateBanner + acts.map(a=>`
     <div style="display:flex;gap:10px;padding:11px 0;border-bottom:1px solid var(--gray-100)">
       <span style="font-size:16px;flex-shrink:0;margin-top:1px">${ICON[a.type]||'📌'}</span>
       <div style="flex:1;min-width:0">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
           <span style="font-size:12px;font-weight:700;color:var(--navy)">${esc(a.author||'-')}</span>
-          <span style="font-size:10px;color:var(--gray-400)">${(a.date||a.created_at||'').slice(0,10)}</span>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:10px;color:var(--gray-400)">${(a.date||a.created_at||'').slice(0,10)}</span>
+            ${isAdminDH?`<button onclick="event.stopPropagation();openEditActivity('${a.id}')" style="padding:1px 7px;font-size:10px;font-weight:700;color:var(--blue);background:rgba(49,130,246,.08);border:1px solid rgba(49,130,246,.2);border-radius:4px;cursor:pointer;line-height:1.6">수정</button>
+            <button onclick="event.stopPropagation();deleteActivity('${a.id}','${leadId}')" style="padding:1px 7px;font-size:10px;font-weight:700;color:var(--err);background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15);border-radius:4px;cursor:pointer;line-height:1.6">삭제</button>`:''}
+          </div>
         </div>
         ${a.stage?`<span style="font-size:10px;padding:1px 6px;background:var(--blue-50);color:var(--blue);border-radius:8px;margin-bottom:4px;display:inline-block">${esc(a.stage)}</span>`:''}
         <div style="font-size:12px;color:var(--gray-700);line-height:1.6;white-space:pre-wrap;word-break:break-all">${esc(a.content||'')}</div>
@@ -5582,23 +5596,128 @@ function _renderActModalHistory(leadId){
     .filter(a=>a.lead_id===leadId&&!['assign','status_change'].includes(a.type))
     .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
   const ICON={call:'📞',meeting:'🤝',email:'📧',online:'💻',note:'📝',proposal:'📋',contract:'🎉',internal:'🏢',other:'📌'};
+  const isAdmin=curUser?.role==='admin';
   if(!acts.length){
-    el.innerHTML='<div style="text-align:center;padding:32px 16px;font-size:13px;color:var(--gray-300)">활동 기록이 없습니다</div>';
+    el.innerHTML=`<div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+      <button onclick="switchActModalTab('form',document.getElementById('act-tab-form'))"
+        style="padding:5px 13px;font-size:12px;font-weight:700;color:#fff;background:var(--navy);border:none;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px">
+        ✚ 활동 추가
+      </button>
+    </div>
+    <div style="text-align:center;padding:24px 16px;font-size:13px;color:var(--gray-300)">활동 기록이 없습니다</div>`;
     return;
   }
-  el.innerHTML=acts.map(a=>`
+  // 상단 추가 버튼 (항상 표시)
+  const addBtnHtml=`<div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+    <button onclick="switchActModalTab('form',document.getElementById('act-tab-form'))" 
+      style="padding:5px 13px;font-size:12px;font-weight:700;color:#fff;background:var(--navy);border:none;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px">
+      ✚ 활동 추가
+    </button>
+  </div>`;
+  el.innerHTML=addBtnHtml+acts.map(a=>`
     <div style="display:flex;gap:10px;padding:11px 0;border-bottom:1px solid var(--gray-100)">
       <span style="font-size:16px;flex-shrink:0;margin-top:1px">${ICON[a.type]||'📌'}</span>
       <div style="flex:1;min-width:0">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
           <span style="font-size:12px;font-weight:700;color:var(--navy)">${esc(a.author||'-')}</span>
-          <span style="font-size:10px;color:var(--gray-400)">${(a.date||a.created_at||'').slice(0,10)}</span>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:10px;color:var(--gray-400)">${(a.date||a.created_at||'').slice(0,10)}</span>
+            ${isAdmin?`<button onclick="event.stopPropagation();openEditActivity('${a.id}')" style="padding:1px 7px;font-size:10px;font-weight:700;color:var(--blue);background:rgba(49,130,246,.08);border:1px solid rgba(49,130,246,.2);border-radius:4px;cursor:pointer;line-height:1.6">수정</button>
+            <button onclick="event.stopPropagation();deleteActivity('${a.id}','${leadId}')" style="padding:1px 7px;font-size:10px;font-weight:700;color:var(--err);background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15);border-radius:4px;cursor:pointer;line-height:1.6">삭제</button>`:''}
+          </div>
         </div>
         ${a.stage?`<span style="font-size:10px;padding:1px 6px;background:var(--blue-50);color:var(--blue);border-radius:8px;margin-bottom:4px;display:inline-block">${esc(a.stage)}</span>`:''}
         <div style="font-size:12px;color:var(--gray-700);line-height:1.6;white-space:pre-wrap;word-break:break-all">${esc(a.content||'')}</div>
       </div>
     </div>`).join('');
 }
+// ── 관리자 활동기록 수정/삭제 ────────────────────────────
+function openEditActivity(actId){
+  if(curUser?.role!=='admin'){showToast('관리자 전용 기능입니다.','error');return;}
+  const acts=allActivities?.length?allActivities:lg('activities');
+  const a=acts.find(x=>x.id===actId);
+  if(!a){showToast('활동기록을 찾을 수 없습니다.','error');return;}
+
+  let ov=document.getElementById('ov-edit-activity');
+  if(!ov){ov=document.createElement('div');ov.id='ov-edit-activity';ov.className='ov-bg';document.body.appendChild(ov);}
+  ov.innerHTML=`<div class="ov-box" style="width:460px;max-width:96vw">
+    <div style="font-size:16px;font-weight:800;color:var(--navy);margin-bottom:4px">✏️ 활동기록 수정</div>
+    <div style="font-size:12px;color:var(--gray-400);margin-bottom:16px">${esc(a.author||'')} · ${(a.date||a.created_at||'').slice(0,10)}</div>
+    <div class="fg" style="margin-bottom:12px">
+      <label style="font-size:12px;font-weight:700;color:var(--gray-600);margin-bottom:6px;display:block">유형</label>
+      <select id="edit-act-type" style="width:100%;padding:9px 12px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;background:#fff">
+        <option value="call"${a.type==='call'?' selected':''}>📞 전화</option>
+        <option value="meeting"${a.type==='meeting'?' selected':''}>🤝 미팅</option>
+        <option value="online"${a.type==='online'?' selected':''}>💻 화상</option>
+        <option value="proposal"${a.type==='proposal'?' selected':''}>📋 제안서</option>
+        <option value="contract"${a.type==='contract'?' selected':''}>🎉 계약</option>
+        <option value="internal"${a.type==='internal'?' selected':''}>🏢 내부미팅</option>
+        <option value="note"${a.type==='note'?' selected':''}>📝 메모</option>
+        <option value="other"${a.type==='other'?' selected':''}>📌 기타</option>
+      </select>
+    </div>
+    <div class="fg" style="margin-bottom:12px">
+      <label style="font-size:12px;font-weight:700;color:var(--gray-600);margin-bottom:6px;display:block">날짜</label>
+      <input type="date" id="edit-act-date" value="${(a.date||a.created_at||'').slice(0,10)}"
+        style="width:100%;padding:9px 12px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;box-sizing:border-box">
+    </div>
+    <div class="fg" style="margin-bottom:16px">
+      <label style="font-size:12px;font-weight:700;color:var(--gray-600);margin-bottom:6px;display:block">내용 *</label>
+      <textarea id="edit-act-content" rows="4" style="width:100%;padding:9px 12px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box">${esc(a.content||'')}</textarea>
+    </div>
+    <input type="hidden" id="edit-act-id" value="${a.id}">
+    <input type="hidden" id="edit-act-lead-id" value="${a.lead_id}">
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-outline" onclick="closeOv('ov-edit-activity')">취소</button>
+      <button class="btn btn-primary" onclick="confirmEditActivity()">수정 저장</button>
+    </div>
+  </div>`;
+  ov.classList.add('open');
+}
+
+async function confirmEditActivity(){
+  const actId=document.getElementById('edit-act-id')?.value;
+  const leadId=document.getElementById('edit-act-lead-id')?.value;
+  const type=document.getElementById('edit-act-type')?.value||'call';
+  const date=document.getElementById('edit-act-date')?.value||new Date().toISOString().slice(0,10);
+  const content=document.getElementById('edit-act-content')?.value.trim();
+  if(!content){showToast('내용을 입력하세요.','error');return;}
+
+  const upd={type, date, content, updated_at:new Date().toISOString()};
+  await dbU('activities', actId, upd);
+
+  // 캐시 갱신
+  if(allActivities){const i=allActivities.findIndex(a=>a.id===actId);if(i>=0)allActivities[i]={...allActivities[i],...upd};}
+
+  closeOv('ov-edit-activity');
+  showToast('활동기록 수정 완료','success');
+  _renderActModalHistory(leadId);
+  // 상세 모달이 열려있으면 갱신
+  const cachedActs=(allActivities?.length?allActivities:lg('activities'))
+    .filter(a=>a.lead_id===leadId&&a.type!=='assign')
+    .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  _renderLDetailHistory(cachedActs, leadId);
+}
+
+async function deleteActivity(actId, leadId){
+  if(curUser?.role!=='admin'){showToast('관리자 전용 기능입니다.','error');return;}
+  if(!confirm('이 활동기록을 삭제하시겠습니까?'))return;
+
+  if(!testMode){
+    const ok=await sbDel('activities', actId);
+    if(!ok){showToast('삭제 실패','error');return;}
+  }
+  // 캐시에서 제거
+  if(allActivities){const i=allActivities.findIndex(a=>a.id===actId);if(i>=0)allActivities.splice(i,1);}
+
+  showToast('활동기록 삭제 완료','success');
+  _renderActModalHistory(leadId);
+  const cachedActs=(allActivities?.length?allActivities:lg('activities'))
+    .filter(a=>a.lead_id===leadId&&a.type!=='assign')
+    .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  _renderLDetailHistory(cachedActs, leadId);
+}
+
 // 유영준 초도상담 완료 → 관리자 신규배정 풀로 이동
 async function yjReassign(){
   const lid=document.getElementById('act-lead-id').value;
@@ -6321,7 +6440,10 @@ async function saveActivity(){
     const myNames=prevNames.filter(t=>myTeamSet.has(t)||t===curUser.name);
     const merged=[...new Set([...myNames,...newTeamNames])];
     const collabOnly=merged.filter(t=>!myTeamSet.has(t)&&t!==curUser.name);
-    const collabBranches=[...new Set(collabOnly.map(t=>Object.entries(TEAM_MAP).find(([,v])=>v.includes(t))?.[0]).filter(Boolean))];
+    const collabBranches=[...new Set(collabOnly.map(t=>{
+      if(t==='대전TM'||t==='대전센터') return '대전TM';
+      return Object.entries(TEAM_MAP).find(([,v])=>v.includes(t))?.[0]||null;
+    }).filter(Boolean))];
     const upd={
       team_names:JSON.stringify(merged),
       team_name:merged.join(', '),
@@ -8738,7 +8860,13 @@ async function loadTmPanel(){
   const all=await dbQ('leads');
   const today=new Date().toISOString().slice(0,10);
   const todayStart=today+'T00:00:00';
-  tmLeads=all.filter(l=>(l.tm_transferred===true||l.tm_transferred==='true')&&l.status!=='deleted');
+  tmLeads=all.filter(l=>{
+    if(l.status==='deleted') return false;
+    if(l.tm_transferred===true||l.tm_transferred==='true') return true;
+    // 협업 추적: collab_branches에 '대전TM' 포함된 건
+    try{ const cb=JSON.parse(l.collab_branches||'[]'); if(cb.includes('대전TM')) return true; }catch(e){}
+    return false;
+  });
   const acts=allActivities?.length?allActivities:lg('activities');
   const now=Date.now();
 
@@ -8844,10 +8972,11 @@ function _filterForTab(tab,s,br){
     if(br&&l.branch_name!==br)return false;
     if(tab==='all') return true;
     if(tab==='new'){
-      // 금일 배정 (신규 이관일 오늘) + assigned/pending 상태
+      // 신규배정: assigned/pending 상태이며 활동기록 없는 건 (날짜 무관)
       if(l.status!=='assigned'&&l.status!=='pending') return false;
-      const d=(l.assigned_at||l.created_at||'').slice(0,10);
-      return d===today;
+      const acts2=(allActivities?.length?allActivities:lg('activities'));
+      const hasAct=acts2.some(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type));
+      return !hasAct;
     }
     if(tab==='scheduled') return nas.some(a=>a.lead_id===l.id);
     if(tab==='contacted') return l.status==='contacted';
@@ -8882,6 +9011,7 @@ function hcCardHtml(l){
 function _buildTmCard(l,acts){
   const S_CLR={pending:'#3182f6',assigned:'#3182f6',contacted:'#00c073',no_answer:'#f97316',drop:'#ef4444'};
   const S_LBL={pending:'배정',assigned:'배정',contacted:'통화완료',no_answer:'부재중',drop:'드랍'};
+  const isCollabTrack=(function(){try{const cb=JSON.parse(l.collab_branches||'[]');return cb.includes('대전TM')&&!(l.tm_transferred===true||l.tm_transferred==='true');}catch(e){return false;}})();
   const leadActs=acts.filter(a=>a.lead_id===l.id&&a.type!=='assign')
     .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
   const lastAct=leadActs[0];
@@ -8895,8 +9025,8 @@ function _buildTmCard(l,acts){
   const sc=S_CLR[l.status]||'#94a3b8';
   const sl=S_LBL[l.status]||l.status;
 
-  const borderClr=isOverdue48?'#ef4444':isOverdue30?'#f97316':isHC?'#00c073':isNew?'#3182f6':sc;
-  const bgClr=isOverdue48?'#fff5f5':isOverdue30?'#fff8f0':'#ffffff';
+  const borderClr=isOverdue48?'#ef4444':isOverdue30?'#f97316':isHC?'#00c073':isCollabTrack?'#60a5fa':isNew?'#3182f6':sc;
+  const bgClr=isOverdue48?'#fff5f5':isOverdue30?'#fff8f0':isCollabTrack?'#f0f9ff':'#ffffff';
 
   const warnTag=isOverdue48
     ?`<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:#ef4444;background:#fee2e2;padding:2px 7px;border-radius:20px;white-space:nowrap">⛔ ${hoursAgo}h</span>`
@@ -8915,7 +9045,8 @@ function _buildTmCard(l,acts){
     `<div style="height:8px"></div>`;
 
   const metaRow=`<div style="font-size:11px;color:#94a3b8;margin-bottom:10px">
-    ${l.branch_name?`<span>${esc(l.branch_name)}</span><span style="margin:0 4px">·</span>`:''}
+    ${l.branch_name?`<span style="font-weight:600;color:#1e3a5f">${esc(l.branch_name)}</span><span style="margin:0 4px">·</span>`:''}
+    ${l.team_name&&isCollabTrack?`<span style="color:#3182f6;font-weight:600">${esc(l.team_name)}</span><span style="margin:0 4px">·</span>`:''}
     <span>이관 ${fmtD(l.assigned_at||l.created_at)}</span>
     ${actCount?`<span style="color:#3182f6;margin-left:4px">· ${actCount}회 기록</span>`:''}
   </div>`;
@@ -8944,7 +9075,8 @@ function _buildTmCard(l,acts){
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:9px;min-width:0">
       <div style="font-size:14px;font-weight:800;color:#1e3a5f;overflow:visible;white-space:nowrap;flex:1;min-width:0">${esc(l.company_name||'-')}</div>
       <div style="display:flex;gap:4px;flex-shrink:0">
-        ${warnTag}${statusTag}
+        ${isCollabTrack?'<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:#3182f6;background:#e0f2fe;padding:2px 7px;border-radius:20px;white-space:nowrap">🔍 추적</span>':''}
+      ${warnTag}${statusTag}
       </div>
     </div>
 
@@ -8996,15 +9128,20 @@ function renderTmTable(){
   const acts=allActivities?.length?allActivities:lg('activities');
   tbody.innerHTML=tmFiltered.map(l=>{
     const lastAct=acts.filter(a=>a.lead_id===l.id&&a.type!=='assign').sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];
-    return`<tr>
-      <td style="font-weight:700;color:var(--navy);cursor:pointer" onclick="openTmInput('${l.id}','${esc(l.company_name||'')}')">${esc(l.company_name||'-')}</td>
+    const isCollabTrack=(function(){try{const cb=JSON.parse(l.collab_branches||'[]');return cb.includes('대전TM')&&!l.tm_transferred;}catch(e){return false;}})();
+    return`<tr${isCollabTrack?' style="background:rgba(49,130,246,.03)"':''}>
+      <td style="font-weight:700;color:var(--navy);cursor:pointer" onclick="openTmInput('${l.id}','${esc(l.company_name||'')}')">
+        ${esc(l.company_name||'-')}
+        ${isCollabTrack?'<span class="badge" style="font-size:9px;background:rgba(49,130,246,.1);color:var(--blue);margin-left:4px">🔍추적</span>':''}
+      </td>
       <td>${esc(l.contact_name||'-')}</td>
       <td style="font-size:12px">${esc(l.phone||'-')}</td>
       <td style="font-size:11px">${esc((l.consult_type||'-').slice(0,18))}</td>
       <td>${sBadge(l.status)}</td>
+      <td style="font-size:11px;color:var(--gray-400)">${l.branch_name?'<span class="badge badge-navy" style="font-size:9px">'+esc(l.branch_name)+'</span> ':''}${l.team_name?'<span class="badge badge-blue" style="font-size:9px">'+esc(l.team_name)+'</span>':''}</td>
       <td style="font-size:11px;color:var(--gray-400)">${fmtD(l.assigned_at||l.created_at)}</td>
-      <td style="font-size:11px;color:var(--gray-500);max-width:160px;overflow:visible">${esc(lastAct?.content?.slice(0,40)||'-')}</td>
-      <td style="white-space:nowrap"><button class="btn btn-primary btn-xs" onclick="event.stopPropagation();openTmInput('${l.id}','${esc(l.company_name||'')}')">기록</button></td>
+      <td style="font-size:11px;color:var(--gray-500);overflow:visible">${esc(lastAct?.content?.slice(0,40)||'-')}</td>
+      <td><button class="btn btn-primary btn-xs" onclick="event.stopPropagation();openTmInput('${l.id}','${esc(l.company_name||'')}')">기록</button></td>
     </tr>`;
   }).join('');
 }
@@ -9548,6 +9685,9 @@ function openDistribute(){
   // 초기화
   _selBranch=''; _selTeam=''; _recallType='team_only'; _distMode='branch';
   if(typeof _selTeams!=='undefined') _selTeams.clear();
+  _tmCollabSelected=false;
+  const _tmCard=document.getElementById('dist-tm-collab-card');
+  if(_tmCard){_tmCard.classList.remove('selected');_tmCard.style.background='';}
   const tw=document.getElementById('dist-team-wrap'); if(tw)tw.style.display='none';
   const tn=document.getElementById('dist-team-note'); if(tn)tn.textContent='';
   if(document.getElementById('dist-note'))(document.getElementById('dist-note')||{}).value='';
@@ -9577,17 +9717,25 @@ function openDistribute(){
           </div>`;
         // 타 지점 협업 섹션
         const otherBranches=BRANCHES.filter(b=>b!==curUser.name);
+        let _oci=0;
         const collabSection=otherBranches.map(b=>{
           const bLeaders=TEAM_MAP[b]||[];
           if(!bLeaders.length) return '';
-          return `<div style="font-size:10px;font-weight:700;color:var(--blue);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px;margin-top:4px">
-              🤝 ${esc(b)} 지점 <span style="font-weight:400;color:var(--gray-400)">(협업)</span></div>
-            <div class="mgr-grid" style="margin-bottom:10px">
-              ${bLeaders.map(t=>`<div class="mgr-card" onclick="toggleTeamCard(this,'${t}')" data-team="${t}" style="border-color:var(--blue);opacity:.85">
-                <div class="mgr-name" style="font-size:12px">${esc(t)}</div>
-                <div class="mgr-sub" style="color:var(--blue)">협업팀장</div>
-              </div>`).join('')}
-            </div>`;
+          const uid='od-collab-'+(_oci++);
+          return `<div style="margin-bottom:6px">
+            <div onclick="toggleCollabSection('${uid}')" style="font-size:11px;font-weight:700;color:var(--blue);cursor:pointer;display:flex;align-items:center;gap:6px;padding:5px 8px;background:rgba(49,130,246,.05);border-radius:6px;border:1px solid rgba(49,130,246,.15);user-select:none">
+              <span id="${uid}-arrow" style="font-size:10px;transition:transform .2s">▶</span>
+              🤝 ${esc(b)} 지점 <span style="font-weight:400;color:var(--gray-400);font-size:10px">(협업)</span>
+            </div>
+            <div id="${uid}" style="display:none;margin-top:6px">
+              <div class="mgr-grid" style="margin-bottom:8px">
+                ${bLeaders.map(t=>`<div class="mgr-card" onclick="toggleTeamCard(this,'${t}')" data-team="${t}" style="border-color:var(--blue);opacity:.85">
+                  <div class="mgr-name" style="font-size:12px">${esc(t)}</div>
+                  <div class="mgr-sub" style="color:var(--blue)">협업팀장</div>
+                </div>`).join('')}
+              </div>
+            </div>
+          </div>`;
         }).join('');
         tgrid.innerHTML=mySection+collabSection;
       }
@@ -9638,8 +9786,8 @@ async function loadBranchScreen(){
     if(l.branch_name===curUser.name) return true;
     try{const arr=JSON.parse(l.team_names||'[]');if(arr.length&&arr.some(t=>myTeams.has(t)))return true;}catch(e){}
     if(l.team_name){const names=l.team_name.split(', ').map(s=>s.trim());if(names.some(n=>myTeams.has(n)))return true;}
-    // 협업 건: collab_branches에 내 이름이 포함된 경우
-    try{const cb=JSON.parse(l.collab_branches||'[]');if(cb.includes(curUser.name))return true;}catch(e){}
+    // 협업 건: team_names에 내 지점 소속 아닌 팀장이 포함된 건
+    try{const mySet=new Set([curUser.name,...(TEAM_MAP[curUser.name]||[])]);const arr=JSON.parse(l.team_names||'[]');if(arr.length&&arr.some(t=>!mySet.has(t)))return true;}catch(e){}
     return false;
   });
   const mine=brAllLeads;
@@ -9699,10 +9847,15 @@ async function loadBranchScreen(){
       </div>`;
     });
 
-    // 협업 건 카드: collab_branches에 내 이름이 있는 건 (타 지점 건)
+    // 협업 건 카드: team_names에 내 지점 소속이 아닌 타 지점 팀장이 포함된 건
+    const myTeamSetForCollab=new Set([curUser.name,...(TEAM_MAP[curUser.name]||[])]);
     const collabLeads=mine.filter(l=>{
       if(l.status==='drop') return false;
-      try{const cb=JSON.parse(l.collab_branches||'[]');return cb.includes(curUser.name)&&l.branch_name!==curUser.name;}catch(e){return false;}
+      try{
+        const arr=JSON.parse(l.team_names||'[]');
+        // team_names에 내 지점이 아닌 팀장이 1명이라도 있으면 협업 건
+        return arr.some(t=>!myTeamSetForCollab.has(t));
+      }catch(e){return false;}
     });
     const collabCard=collabLeads.length?`<div class="mgr-card" onclick="selectBrLeaderCard(this,'__collab__')" data-team="__collab__" style="min-width:80px;border-color:var(--blue)">
       <div class="mgr-name" style="font-size:12px;font-weight:800;color:var(--blue)">🤝 협업</div>
@@ -9754,10 +9907,14 @@ function selectBrLeaderCard(el, team){
       return true;
     });
   } else if(team==='__collab__'){
-    // 협업 건: collab_branches에 내 이름이 있고 타 지점 건
+    // 협업 건: team_names에 내 지점 소속이 아닌 타 지점 팀장이 포함된 건
+    const myTeamSetCollab=new Set([curUser.name,...(TEAM_MAP[curUser.name]||[])]);
     brFiltered=brAllLeads.filter(l=>{
       if(l.status==='drop') return false;
-      try{const cb=JSON.parse(l.collab_branches||'[]');return cb.includes(curUser.name)&&l.branch_name!==curUser.name;}catch(e){return false;}
+      try{
+        const arr=JSON.parse(l.team_names||'[]');
+        return arr.some(t=>!myTeamSetCollab.has(t));
+      }catch(e){return false;}
     });
   } else {
     brFiltered=brAllLeads.filter(l=>l.status!=='drop'&&(
@@ -9804,7 +9961,7 @@ function renderBrTable(){
     <td style="font-size:11px">${esc((l.consult_type||'').slice(0,18))}</td>
     <td>${sBadge(l.status)}</td>
     <td>${(function(){
-      const isCollab=(function(){try{const cb=JSON.parse(l.collab_branches||'[]');return cb.includes(curUser.name)&&l.branch_name!==curUser.name;}catch(e){return false;}})();
+      const isCollab=(function(){try{const mySet=new Set([curUser.name,...(TEAM_MAP[curUser.name]||[])]);const arr=JSON.parse(l.team_names||'[]');return arr.some(t=>!mySet.has(t));}catch(e){return false;}})();
       if(!l.team_name) return '<span class="badge badge-no_answer" style="font-size:10px">미배정</span>';
       const badge='<span class="badge badge-blue" style="font-size:10px">'+esc(l.team_name)+'</span>';
       const collabBadge=isCollab?'<span class="badge" style="font-size:9px;background:rgba(49,130,246,.1);color:var(--blue);margin-left:3px">🤝협업</span>':'';
@@ -9881,17 +10038,32 @@ function openBrAssignPopup(){
           <div class="mgr-sub">팀장</div>
         </div>`).join('')}
       </div>
-      ${BRANCHES.filter(b=>b!==curUser.name).map(b=>{
+      ${(function(){let ci=0;return BRANCHES.filter(b=>b!==curUser.name).map(b=>{
         const bLeaders=TEAM_MAP[b]||[];
         if(!bLeaders.length) return '';
-        return `<div style="font-size:10px;font-weight:700;color:var(--blue);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px;margin-top:4px">🤝 ${esc(b)} 지점 <span style="font-weight:400;color:#94a3b8">(협업)</span></div>
-          <div class="mgr-grid" style="margin-bottom:10px">
-            ${bLeaders.map(t=>`<div class="mgr-card" onclick="toggleBrAssignTeam(this,'${t}')" data-team="${t}" style="border-color:var(--blue);opacity:.85">
-              <div class="mgr-name" style="font-size:13px">${esc(t)}</div>
-              <div class="mgr-sub" style="color:var(--blue)">협업팀장</div>
-            </div>`).join('')}
-          </div>`;
-      }).join('')}
+        const uid='bra-collab-'+(ci++);
+        return `<div style="margin-bottom:6px">
+          <div onclick="toggleCollabSection('${uid}')" style="font-size:11px;font-weight:700;color:var(--blue);cursor:pointer;display:flex;align-items:center;gap:6px;padding:5px 8px;background:rgba(49,130,246,.05);border-radius:6px;border:1px solid rgba(49,130,246,.15);user-select:none">
+            <span id="${uid}-arrow" style="font-size:10px;transition:transform .2s">▶</span>
+            🤝 ${esc(b)} 지점 <span style="font-weight:400;color:#94a3b8;font-size:10px">(협업)</span>
+          </div>
+          <div id="${uid}" style="display:none;margin-top:6px">
+            <div class="mgr-grid" style="margin-bottom:8px">
+              ${bLeaders.map(t=>`<div class="mgr-card" onclick="toggleBrAssignTeam(this,'${t}')" data-team="${t}" style="border-color:var(--blue);opacity:.85">
+                <div class="mgr-name" style="font-size:13px">${esc(t)}</div>
+                <div class="mgr-sub" style="color:var(--blue)">협업팀장</div>
+              </div>`).join('')}
+            </div>
+          </div>
+        </div>`;
+      }).join('');})()}
+      <div style="font-size:10px;font-weight:700;color:var(--blue);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px;margin-top:4px">📞 대전TM <span style="font-weight:400;color:#94a3b8">(협업 추적)</span></div>
+      <div class="mgr-grid" style="margin-bottom:10px">
+        <div class="mgr-card" onclick="toggleBrAssignTeam(this,'대전TM')" data-team="대전TM" style="border-color:var(--blue);opacity:.85">
+          <div class="mgr-name" style="font-size:13px;color:var(--blue)">대전TM센터</div>
+          <div class="mgr-sub" style="color:var(--blue)">협업추적</div>
+        </div>
+      </div>
     </div>
     <div id="br-assign-sel-label" style="font-size:12px;color:var(--blue);font-weight:600;margin:8px 0 14px;min-height:18px"></div>
     <div class="fg" style="margin-bottom:16px">
@@ -9929,7 +10101,10 @@ async function confirmBrAssignPopup(){
   const myTeamSet=new Set(TEAM_MAP[curUser.name]||[]);
   const collabTeams=teamOnly.filter(t=>!myTeamSet.has(t));
   const isCollab=collabTeams.length>0;
-  const collabBranches=[...new Set(collabTeams.map(t=>Object.entries(TEAM_MAP).find(([,v])=>v.includes(t))?.[0]).filter(Boolean))];
+  const collabBranches=[...new Set(collabTeams.map(t=>{
+    if(t==='대전TM'||t==='대전센터') return '대전TM';
+    return Object.entries(TEAM_MAP).find(([,v])=>v.includes(t))?.[0]||null;
+  }).filter(Boolean))];
 
   // 복수 표시명
   const teamDisplay=teams.length===1?teams[0]:teams.join(', ');
@@ -9940,6 +10115,7 @@ async function confirmBrAssignPopup(){
       team_names:JSON.stringify(teamOnly),
       assigned_at:new Date().toISOString(),
       status:'assigned',
+      yj_transferred:false,yj_from_role:'',yj_from_branch:'',
       collab_branches:isCollab?JSON.stringify(collabBranches):null
     };
     if(selfIncluded && !teamOnly.length){
@@ -9965,7 +10141,7 @@ async function confirmBrRecall(){
   if(!brSelIds.size){showToast('DB를 선택하세요.','error');return;}
   if(!confirm(brSelIds.size+'건 팀장 배정을 회수하시겠습니까?'))return;
   const ids=[...brSelIds];
-  const recallData={team_name:'',team_names:JSON.stringify([])};
+  const recallData={team_name:'',team_names:JSON.stringify([]),yj_transferred:false,yj_from_role:'',yj_from_branch:''};
   for(const id of ids){
     await dbU('leads',id,recallData);
     await logActivity(id,'assign','팀장 회수 ('+curUser.name+')','','');
@@ -10421,13 +10597,27 @@ function selectBranchCard(el, branch){
   document.querySelectorAll('#dist-branch-cards .mgr-card').forEach(c=>c.classList.remove('selected'));
   el.classList.add('selected');
   _selBranch=branch; _selTeams.clear();
-  const leaders=TEAM_MAP[branch]||[];
   const wrap=document.getElementById('dist-team-wrap');
   const grid=document.getElementById('dist-team-cards');
+
+  // 대전TM 선택: 팀장 카드 없이 안내만 표시
+  if(branch==='대전TM'){
+    if(grid) grid.innerHTML=`<div style="padding:10px 4px;font-size:12px;color:var(--blue);font-weight:600">
+      📞 대전TM센터로 직접 배정됩니다.<br>
+      <span style="font-size:11px;font-weight:400;color:var(--gray-400)">팀장 미지정 상태로 대전TM이 전담합니다.</span></div>`;
+    if(wrap) wrap.style.display='';
+    // 대전TM은 tm_transferred 처리
+    _selTeams.clear();
+    updateDistTeamLabel();
+    return;
+  }
+
+  const leaders=TEAM_MAP[branch]||[];
   if(grid){
     // 선택 지점 팀장 섹션
-    const mySection=`<div style="font-size:10px;font-weight:700;color:var(--gray-400);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px;margin-top:2px">
-        🏢 ${esc(branch)} 지점</div>
+    const mySection=`<div style="font-size:10px;font-weight:700;color:var(--gray-400);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px;margin-top:2px;display:flex;align-items:center;gap:8px">
+        <span>🏢 ${esc(branch)} 지점</span>
+      </div>
       <div class="mgr-grid" style="margin-bottom:12px">
         <div class="mgr-card" onclick="toggleTeamCard(this,'${branch}')" data-team="${branch}" style="min-width:76px">
           <div class="mgr-name" style="font-size:12px;font-weight:800;color:var(--navy)">${esc(branch)}</div>
@@ -10437,26 +10627,60 @@ function selectBranchCard(el, branch){
           <div class="mgr-name" style="font-size:12px">${esc(t)}</div>
           <div class="mgr-sub">팀장</div>
         </div>`).join('')}
+
       </div>`;
-    // 타 지점 섹션 (협업)
+    // 타 지점 섹션 (협업) — 기본 접기, 클릭 시 펼침
     const otherBranches=BRANCHES.filter(b=>b!==branch);
+    let collabIdx=0;
     const collabSection=otherBranches.map(b=>{
       const bLeaders=TEAM_MAP[b]||[];
       if(!bLeaders.length) return '';
-      return `<div style="font-size:10px;font-weight:700;color:var(--blue);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px;margin-top:4px">
-          🤝 ${esc(b)} 지점 <span style="font-weight:400;color:var(--gray-400)">(협업)</span></div>
-        <div class="mgr-grid" style="margin-bottom:10px">
-          ${bLeaders.map(t=>`<div class="mgr-card" onclick="toggleTeamCard(this,'${t}')" data-team="${t}" style="min-width:76px;border-color:var(--blue);opacity:.85">
-            <div class="mgr-name" style="font-size:12px">${esc(t)}</div>
-            <div class="mgr-sub" style="color:var(--blue)">협업팀장</div>
-          </div>`).join('')}
-        </div>`;
+      const uid='collab-'+collabIdx++;
+      return `<div style="margin-bottom:6px">
+        <div onclick="toggleCollabSection('${uid}')" style="font-size:11px;font-weight:700;color:var(--blue);cursor:pointer;display:flex;align-items:center;gap:6px;padding:5px 8px;background:rgba(49,130,246,.05);border-radius:6px;border:1px solid rgba(49,130,246,.15);user-select:none">
+          <span id="${uid}-arrow" style="font-size:10px;transition:transform .2s">▶</span>
+          🤝 ${esc(b)} 지점 <span style="font-weight:400;color:var(--gray-400);font-size:10px">(협업 — 클릭해서 펼치기)</span>
+        </div>
+        <div id="${uid}" style="display:none;margin-top:6px">
+          <div class="mgr-grid" style="margin-bottom:8px">
+            ${bLeaders.map(t=>`<div class="mgr-card" onclick="toggleTeamCard(this,'${t}')" data-team="${t}" style="min-width:76px;border-color:var(--blue);opacity:.85">
+              <div class="mgr-name" style="font-size:12px">${esc(t)}</div>
+              <div class="mgr-sub" style="color:var(--blue)">협업팀장</div>
+            </div>`).join('')}
+          </div>
+        </div>
+      </div>`;
     }).join('');
     grid.innerHTML=mySection+collabSection;
   }
   if(wrap) wrap.style.display='';
   updateDistTeamLabel();
 }
+// 대전TM 협업 토글
+let _tmCollabSelected=false;
+function toggleCollabSection(uid){
+  const panel=document.getElementById(uid);
+  const arrow=document.getElementById(uid+'-arrow');
+  if(!panel) return;
+  const isOpen=panel.style.display!=='none';
+  panel.style.display=isOpen?'none':'';
+  if(arrow) arrow.style.transform=isOpen?'':'rotate(90deg)';
+}
+
+function toggleTmCollab(el){
+  _tmCollabSelected=!_tmCollabSelected;
+  if(_tmCollabSelected){
+    el.classList.add('selected');
+    el.style.borderColor='var(--blue)';
+    el.style.background='rgba(49,130,246,.08)';
+  } else {
+    el.classList.remove('selected');
+    el.style.borderColor='';
+    el.style.background='';
+  }
+  updateDistTeamLabel();
+}
+
 function toggleTeamCard(el, team){
   if(_selTeams.has(team)){_selTeams.delete(team);el.classList.remove('selected');}
   else{_selTeams.add(team);el.classList.add('selected');}
@@ -10464,8 +10688,9 @@ function toggleTeamCard(el, team){
 }
 function updateDistTeamLabel(){
   const sel=[..._selTeams];
+  const tmSuffix=_tmCollabSelected?' + 대전TM 협업':'';
   const label=sel.length===0?'팀장 미지정':sel.length===1?sel[0]:sel[0]+' 외 '+(sel.length-1)+'명';
-  (document.getElementById('dist-team-note')||{}).textContent=sel.length?'✓ 선택: '+label:'';
+  (document.getElementById('dist-team-note')||{}).textContent=(sel.length?'✓ 선택: '+label:'')+(tmSuffix&&sel.length?tmSuffix:tmSuffix?'✓ 대전TM 동반배정':'');
 }
 // confirmDistribute에서 복수 팀장 처리
 // confirmDistribute — 복수팀장 + recall/daejeon 통합 처리
@@ -10517,11 +10742,11 @@ async function confirmDistribute(){
     showToast(`${ids.length}건 회수 처리 중...`,'success');
     await Promise.all(ids.flatMap(id=>{
       if(_recallType==='team_only'){
-        const u={team_name:'',team_names:'',status:'assigned'};
+        const u={team_name:'',team_names:'',status:'assigned',yj_transferred:false,yj_from_role:'',yj_from_branch:''};
         if(allLeads){const i=allLeads.findIndex(r=>r.id===id);if(i>=0)allLeads[i]={...allLeads[i],...u};}
         return [dbU('leads',id,u), logActivity(id,'assign','팀장 회수'+(note?' ('+note+')':''),'assigned','')];
       } else if(_recallType==='all'){
-        const u={branch_name:'',team_name:'',team_names:'',assigned_at:'',status:'assigned'};
+        const u={branch_name:'',team_name:'',team_names:'',assigned_at:'',status:'assigned',yj_transferred:false,yj_from_role:'',yj_from_branch:''};
         if(allLeads){const i=allLeads.findIndex(r=>r.id===id);if(i>=0)allLeads[i]={...allLeads[i],...u};}
         return [dbU('leads',id,u), logActivity(id,'assign','지점장+팀장 전체 회수'+(note?' ('+note+')':''),'assigned','')];
       } else if(_recallType==='daejeon'){
@@ -10570,6 +10795,20 @@ async function confirmDistribute(){
     showToast(`${ids.length}건 해피콜 이관 (예정일 ${hcDateStr})`,'success'); loadLeads(); return;
   }
 
+  // ── 대전TM 단독 배정 (관리자가 지점카드에서 대전TM 선택) ──
+  if(_selBranch==='대전TM'){
+    const tmData={branch_name:'대전',team_name:'대전센터',tm_transferred:true,assigned_at:new Date().toISOString(),status:'assigned',yj_transferred:false};
+    closeOv('ov-distribute'); clearSel();
+    showToast(`${ids.length}건 대전TM 배정 중...`,'success');
+    await Promise.all(ids.flatMap(id=>[
+      dbU('leads',id,tmData),
+      logActivity(id,'assign','대전TM 직배정'+(note?' ('+note+')':''),'assigned','')
+    ]));
+    if(allLeads) ids.forEach(id=>{const i=allLeads.findIndex(r=>r.id===id);if(i>=0)allLeads[i]={...allLeads[i],...tmData};});
+    showToast(`${ids.length}건 대전TM 배정 완료`,'success');
+    filterLeads(); updateLeadsSubTabCounts(); return;
+  }
+
   // ── 지점 배정 ────────────────────────────────────
   if(!_selBranch){showToast('지점장을 선택하세요.','error');return;}
   const teams=typeof _selTeams!=='undefined'?[..._selTeams]:[];
@@ -10581,24 +10820,32 @@ async function confirmDistribute(){
   const collabTeams=teamOnly.filter(t=>!myTeamSet.has(t)); // 타 지점 팀장
   const mainTeams=teamOnly.filter(t=>myTeamSet.has(t));    // 내 지점 팀장
   const isCollab=collabTeams.length>0;
-  // 협업 지점장 목록 계산
-  const collabBranches=[...new Set(collabTeams.map(t=>Object.entries(TEAM_MAP).find(([,v])=>v.includes(t))?.[0]).filter(Boolean))];
+  // 협업 지점장 목록 계산 (대전TM 포함)
+  const collabBranches=[...new Set(collabTeams.map(t=>{
+    if(t==='대전TM'||t==='대전센터') return '대전TM';
+    return Object.entries(TEAM_MAP).find(([,v])=>v.includes(t))?.[0]||null;
+  }).filter(Boolean))];
 
   const teamDisplay=teamOnly.length===0?'':teamOnly.length===1?teamOnly[0]:teamOnly[0]+' 외 '+(teamOnly.length-1)+'명';
-  const assignData={branch_name:_selBranch,assigned_at:new Date().toISOString(),status:'assigned'};
+  const assignData={branch_name:_selBranch,assigned_at:new Date().toISOString(),status:'assigned',yj_transferred:false,yj_from_role:'',yj_from_branch:''};
   if(teamOnly.length>0){
     assignData.team_name=teamDisplay;
     assignData.team_names=JSON.stringify(teamOnly);
   } else {
     assignData.team_name='';assignData.team_names=null;
   }
-  // 협업 지점장 저장
-  if(isCollab) assignData.collab_branches=JSON.stringify(collabBranches);
+  // 대전TM 동반배정: tm_transferred + collab_branches
+  const finalCollabBranches=[...collabBranches];
+  if(_tmCollabSelected&&!finalCollabBranches.includes('대전TM')) finalCollabBranches.push('대전TM');
+  const hasTmCollab=_tmCollabSelected;
+  if(finalCollabBranches.length>0) assignData.collab_branches=JSON.stringify(finalCollabBranches);
   else assignData.collab_branches=null;
+  if(hasTmCollab) assignData.tm_transferred=true; // 대전TM 화면에서 바로 보임
 
   const selfNote=selfSelected&&!teamOnly.length?' (지점장 직배정)':selfSelected?' + 지점장 직배정':'';
+  const tmNote=hasTmCollab?' + 대전TM 동반배정':'';
   const collabNote=isCollab?` [협업: ${collabTeams.join(', ')}]`:'';
-  const msg=`${_selBranch} 지점${teamDisplay?' → '+teamDisplay+' 배정':''}${selfNote}${collabNote}`+(note?' ('+note+')':'');
+  const msg=`${_selBranch} 지점${teamDisplay?' → '+teamDisplay+' 배정':''}${selfNote}${collabNote}${tmNote}`+(note?' ('+note+')':'');
   closeOv('ov-distribute'); clearSel();
   showToast(`${ids.length}건 배정 처리 중...`,'success');
   await Promise.all(ids.flatMap(id=>[
