@@ -9226,11 +9226,16 @@ function openDistribute(){
       _selBranch=curUser.name;
       const leaders=TEAM_MAP[curUser.name]||[];
       const tgrid=document.getElementById('dist-team-cards');
-      if(tgrid) tgrid.innerHTML=leaders.map(t=>`
+      if(tgrid) tgrid.innerHTML=
+        `<div class="mgr-card" onclick="toggleTeamCard(this,'${curUser.name}')" data-team="${curUser.name}">
+          <div class="mgr-name" style="font-size:12px;font-weight:800;color:var(--navy)">${esc(curUser.name)}</div>
+          <div class="mgr-sub" style="color:var(--navy);font-weight:700">지점장 (본인)</div>
+        </div>`+
+        leaders.map(t=>`
         <div class="mgr-card" onclick="toggleTeamCard(this,'${t}')" data-team="${t}">
           <div class="mgr-name" style="font-size:12px">${esc(t)}</div>
           <div class="mgr-sub">팀장</div></div>`).join('');
-      if(tw) tw.style.display=leaders.length?'':'none';
+      if(tw) tw.style.display='';
     } else {
       // 관리자: 전체 지점장 표시
       grid.innerHTML=BRANCHES.map(b=>`
@@ -9289,6 +9294,14 @@ async function loadBranchScreen(){
   const leaders=TEAM_MAP[curUser.name]||[];
   const grid=document.getElementById('br-leader-cards');
   if(grid){
+    // 지점장 본인 직배정 카드 (team_name 없이 branch_name만 본인인 건)
+    const selfCnt=mine.filter(l=>l.branch_name===curUser.name&&(!l.team_name||l.team_name==='')).length;
+    const selfCard=`<div class="mgr-card" onclick="selectBrLeaderCard(this,'__self__')" data-team="__self__" style="min-width:80px">
+      <div class="mgr-name" style="font-size:13px;font-weight:800;color:var(--navy)">${esc(curUser.name)}</div>
+      <div style="font-size:16px;font-weight:800;color:var(--navy);margin-top:3px">${selfCnt}</div>
+      <div class="mgr-sub" style="color:var(--navy)">직배정</div>
+    </div>`;
+
     // 단일 팀장 카드
     const singleCards=leaders.map(t=>{
       const cnt=mine.filter(l=>l.team_name===t||
@@ -9315,14 +9328,15 @@ async function loadBranchScreen(){
     });
     const multiCards=Object.values(multiMap).map(({teams,cnt})=>{
       const label=teams.join(', ');
-      return`<div class="mgr-card" style="min-width:120px;border-color:var(--blue);background:rgba(37,99,235,.04)">
+      const key=teams.slice().sort().join(',');
+      return`<div class="mgr-card" onclick="selectBrMultiCard(this,'${key.replace(/'/g,'')}')" data-multi="${key}" style="min-width:120px;border-color:var(--blue);background:rgba(37,99,235,.04);cursor:pointer">
         <div class="mgr-name" style="font-size:11px;color:var(--blue)">${esc(label)}</div>
         <div style="font-size:14px;font-weight:800;color:var(--blue);margin-top:3px">${cnt}</div>
         <div class="mgr-sub">복수배정</div>
       </div>`;
     });
 
-    grid.innerHTML=[...singleCards,...multiCards].join('');
+    grid.innerHTML=[selfCard,...singleCards,...multiCards].join('');
   }
   brSelIds.clear(); brPage=1;
   filterBrLeads();
@@ -9330,6 +9344,25 @@ async function loadBranchScreen(){
 }
 
 let _selBrLeader='';
+function selectBrMultiCard(el, key){
+  if(el.classList.contains('selected')){
+    el.classList.remove('selected'); _selBrLeader='';
+    filterBrLeads('all'); return;
+  }
+  document.querySelectorAll('#br-leader-cards .mgr-card').forEach(c=>c.classList.remove('selected'));
+  el.classList.add('selected'); _selBrLeader='__multi__:'+key;
+  const keyTeams=new Set(key.split(','));
+  brFiltered=brAllLeads.filter(l=>{
+    if(l.status==='drop') return false;
+    try{
+      const arr=JSON.parse(l.team_names||'[]');
+      if(arr.length<2) return false;
+      const rowKey=arr.slice().sort().join(',');
+      return rowKey===key;
+    }catch(e){return false;}
+  });
+  brPage=1; renderBrTable();
+}
 function selectBrLeaderCard(el, team){
   if(el.classList.contains('selected')){
     // 재클릭 시 해제 → 전체 보기
@@ -9338,11 +9371,15 @@ function selectBrLeaderCard(el, team){
   }
   document.querySelectorAll('#br-leader-cards .mgr-card').forEach(c=>c.classList.remove('selected'));
   el.classList.add('selected'); _selBrLeader=team;
-  // 해당 팀장 DB만 필터링
-  brFiltered=brAllLeads.filter(l=>l.status!=='drop'&&(
-    l.team_name===team||
-    (function(){try{return JSON.parse(l.team_names||'[]').includes(team);}catch(e){return false;}}())
-  ));
+  // 해당 팀장 DB만 필터링 (__self__: 지점장 직배정 건)
+  if(team==='__self__'){
+    brFiltered=brAllLeads.filter(l=>l.status!=='drop'&&l.branch_name===curUser.name&&(!l.team_name||l.team_name===''));
+  } else {
+    brFiltered=brAllLeads.filter(l=>l.status!=='drop'&&(
+      l.team_name===team||
+      (function(){try{return JSON.parse(l.team_names||'[]').includes(team);}catch(e){return false;}}())
+    ));
+  }
   brPage=1; renderBrTable();
 }
 
@@ -9442,6 +9479,11 @@ function openBrAssignPopup(){
       배정할 팀장 선택 <span style="font-weight:400">(복수 선택 가능)</span>
     </div>
     <div class="mgr-grid" id="br-assign-team-cards">
+      <div class="mgr-card" onclick="toggleBrAssignTeam(this,'${curUser.name}')" data-team="${curUser.name}"
+        >
+        <div class="mgr-name" style="font-size:13px;font-weight:800;color:var(--navy)">${esc(curUser.name)}</div>
+        <div class="mgr-sub" style="color:var(--navy);font-weight:700">지점장 (본인)</div>
+      </div>
       ${leaders.map(t=>`<div class="mgr-card" onclick="toggleBrAssignTeam(this,'${t}')" data-team="${t}">
         <div class="mgr-name" style="font-size:13px">${esc(t)}</div>
         <div class="mgr-sub">팀장</div>
@@ -9471,22 +9513,39 @@ function toggleBrAssignTeam(el, team){
 
 async function confirmBrAssignPopup(){
   const teams=[..._brAssignSelTeams];
-  if(!teams.length){showToast('팀장을 선택하세요.','error');return;}
+  if(!teams.length){showToast('배정할 대상을 선택하세요.','error');return;}
   const note=document.getElementById('br-assign-note')?.value.trim()||'';
   const ids=[...brSelIds];
 
-  // 복수 팀장 표시명
+  // 지점장 본인 포함 여부
+  const selfIncluded=teams.includes(curUser.name);
+  // 팀장만 (본인 제외)
+  const teamOnly=teams.filter(t=>t!==curUser.name);
+
+  // 복수 표시명
   const teamDisplay=teams.length===1?teams[0]:teams.join(', ');
-  const teamNames=JSON.stringify(teams);
+  const teamNames=JSON.stringify(teamOnly.length?teamOnly:teams);
 
   for(const id of ids){
-    await dbU('leads',id,{
-      team_name:teamDisplay,
-      team_names:teamNames,
+    const updateData={
+      team_name:teamOnly.length?teamOnly.join(', '):'',
+      team_names:JSON.stringify(teamOnly),
       assigned_at:new Date().toISOString(),
       status:'assigned'
-    });
-    const msg=`${curUser.name} → ${teamDisplay} 배정`+(note?' ('+note+')':'');
+    };
+    // 지점장 본인에게 직접 배정하는 경우 branch_name 명시 유지
+    if(selfIncluded && !teamOnly.length){
+      // 본인만 선택: 팀장 없이 지점장 직배정
+      updateData.team_name='';
+      updateData.team_names=JSON.stringify([]);
+    } else if(selfIncluded){
+      // 본인+팀장 혼합: 팀장 목록에 포함
+      updateData.team_name=teamOnly.join(', ');
+      updateData.team_names=JSON.stringify(teamOnly);
+    }
+    await dbU('leads',id,updateData);
+    const target=selfIncluded&&!teamOnly.length?curUser.name+' (지점장 직배정)':teamDisplay;
+    const msg=`${curUser.name} → ${target} 배정`+(note?' ('+note+')':'');
     await logActivity(id,'assign',msg,'assigned','초기접촉');
   }
   closeOv('ov-br-assign');
@@ -9938,12 +9997,18 @@ function selectBranchCard(el, branch){
   const leaders=TEAM_MAP[branch]||[];
   const wrap=document.getElementById('dist-team-wrap');
   const grid=document.getElementById('dist-team-cards');
-  if(grid) grid.innerHTML=leaders.map(t=>`
+  if(grid) grid.innerHTML=
+    // 지점장 본인 카드 강조 표시
+    `<div class="mgr-card" onclick="toggleTeamCard(this,'${branch}')" data-team="${branch}" style="min-width:76px">
+      <div class="mgr-name" style="font-size:12px;font-weight:800;color:var(--navy)">${esc(branch)}</div>
+      <div class="mgr-sub" style="color:var(--navy);font-weight:700">지점장</div>
+    </div>`+
+    leaders.map(t=>`
     <div class="mgr-card" onclick="toggleTeamCard(this,'${t}')" data-team="${t}" style="min-width:76px">
       <div class="mgr-name" style="font-size:12px">${esc(t)}</div>
       <div class="mgr-sub">팀장</div>
     </div>`).join('');
-  if(wrap) wrap.style.display=leaders.length?'':'none';
+  if(wrap) wrap.style.display=''; // 지점장 카드 항상 있으므로 표시
   updateDistTeamLabel();
 }
 function toggleTeamCard(el, team){
@@ -10062,11 +10127,15 @@ async function confirmDistribute(){
   // ── 지점 배정 ────────────────────────────────────
   if(!_selBranch){showToast('지점장을 선택하세요.','error');return;}
   const teams=typeof _selTeams!=='undefined'?[..._selTeams]:[];
-  const teamDisplay=teams.length===0?'':teams.length===1?teams[0]:teams[0]+' 외 '+(teams.length-1)+'명';
+  // 지점장 본인이 팀장 목록에 포함된 경우 → team_name에서 제외 (지점장 직배정)
+  const selfSelected=teams.includes(_selBranch);
+  const teamOnly=teams.filter(t=>t!==_selBranch);
+  const teamDisplay=teamOnly.length===0?'':teamOnly.length===1?teamOnly[0]:teamOnly[0]+' 외 '+(teamOnly.length-1)+'명';
   const assignData={branch_name:_selBranch,assigned_at:new Date().toISOString(),status:'assigned'};
-  if(teams.length>0){assignData.team_name=teamDisplay;assignData.team_names=JSON.stringify(teams);}
+  if(teamOnly.length>0){assignData.team_name=teamDisplay;assignData.team_names=JSON.stringify(teamOnly);}
   else{assignData.team_name='';assignData.team_names=null;}
-  const msg=`${_selBranch} 지점${teamDisplay?' → '+teamDisplay+' 배정':''}`+(note?' ('+note+')':'');
+  const selfNote=selfSelected&&!teamOnly.length?' (지점장 직배정)':selfSelected?' + 지점장 직배정':'';
+  const msg=`${_selBranch} 지점${teamDisplay?' → '+teamDisplay+' 배정':''}${selfNote}`+(note?' ('+note+')':'');
   closeOv('ov-distribute'); clearSel();
   showToast(`${ids.length}건 배정 처리 중...`,'success');
   await Promise.all(ids.flatMap(id=>[
