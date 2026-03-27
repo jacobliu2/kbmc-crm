@@ -1858,6 +1858,7 @@ tbody tr.selected td{background:var(--blue-50)!important}
             <button class="btn btn-outline btn-sm" onclick="testSbConnection()">연결 테스트</button>
             <button class="btn btn-blue btn-sm" onclick="syncAccountsToSB()" title="DB관리 계정 정보를 Supabase에 전체 업로드">☁️ 계정 Supabase 동기화</button>
             <button class="btn btn-outline btn-sm" onclick="migrateAppliedAt()" title="신청시간 한국어 형식을 ISO 형식으로 일괄 변환" style="color:var(--warn);border-color:var(--warn)">🔧 신청시간 형식 마이그레이션</button>
+            <button class="btn btn-outline btn-sm" onclick="addCollabColumn()" title="협업 기능 컬럼 추가 (최초 1회)" style="color:var(--blue);border-color:var(--blue)">🤝 협업 컬럼 추가</button>
             <span id="sb-status" style="font-size:12px;color:var(--gray-400)"></span>
           </div>
         </div>
@@ -2272,6 +2273,12 @@ tbody tr.selected td{background:var(--blue-50)!important}
       </div>
       <div class="fg" style="margin-bottom:14px"><label>다음 액션 (선택)</label>
         <input type="text" id="act-next" placeholder="예: 3/28 오후 2시 미팅 예정">
+      </div>
+      <!-- 협업 요청 (팀장 전용) -->
+      <div id="act-collab-wrap" style="display:none;margin-bottom:14px;padding:12px 14px;background:rgba(49,130,246,.04);border:1px solid rgba(49,130,246,.2);border-radius:var(--r-sm)">
+        <div style="font-size:12px;font-weight:700;color:var(--blue);margin-bottom:8px">🤝 협업 팀장 지정 <span style="font-size:11px;font-weight:400;color:var(--gray-400)">(선택 — 해당 팀장 DB관리에 이 건이 표시됩니다)</span></div>
+        <div class="mgr-grid" id="act-collab-cards" style="gap:6px"></div>
+        <div id="act-collab-sel-label" style="font-size:11px;color:var(--blue);font-weight:600;margin-top:8px;min-height:16px"></div>
       </div>
       <div id="act-yj-reassign" style="display:none;margin-bottom:14px;padding:12px 14px;background:rgba(124,58,237,.06);border:1px solid rgba(124,58,237,.2);border-radius:var(--r-sm)">
         <div style="font-size:12px;font-weight:700;color:#3684FF;margin-bottom:8px">👤 초도상담 완료 처리</div>
@@ -4655,7 +4662,13 @@ async function loadLeads(){
       !l.yj_transferred
     );
   }
-  if(curUser.role==='team')   allLeads=allLeads.filter(l=>l.team_name===curUser.name);
+  if(curUser.role==='team'){
+    allLeads=allLeads.filter(l=>{
+      if(l.team_name===curUser.name) return true;
+      // 협업 건: team_names에 내 이름이 포함된 경우
+      try{ return JSON.parse(l.team_names||'[]').includes(curUser.name); }catch(e){ return false; }
+    });
+  }
   if(curUser.role==='tm')     allLeads=allLeads.filter(l=>l.tm_transferred);
   // ── 역할별 필터 UI 제어 ──
   const branchEl = document.getElementById('leads-branch');
@@ -5493,11 +5506,56 @@ function openActM(lid,cname){
     }
     }
   }
+  // 협업 요청 영역 (팀장 전용)
+  const collabWrap=document.getElementById('act-collab-wrap');
+  const collabCards=document.getElementById('act-collab-cards');
+  const collabLabel=document.getElementById('act-collab-sel-label');
+  if(collabWrap&&collabCards){
+    if(curUser?.role==='team'){
+      collabWrap.style.display='';
+      // 현재 이 건의 team_names에서 나 제외한 협업 팀장 + 전체 팀장 목록
+      const lead3=allLeads?.find(l=>l.id===lid)||myLeads?.find(l=>l.id===lid);
+      let existCollab=[];
+      try{ existCollab=JSON.parse(lead3?.team_names||'[]').filter(t=>t!==curUser.name); }catch(e){}
+      window._actCollabSel=new Set(existCollab);
+      // 타 지점 팀장 전체 (내 팀 제외)
+      const allOtherTeams=Object.entries(TEAM_MAP).flatMap(([br,teams])=>
+        teams.filter(t=>t!==curUser.name).map(t=>({name:t,branch:br}))
+      );
+      collabCards.innerHTML=allOtherTeams.map(({name,branch})=>{
+        const isSel=window._actCollabSel.has(name);
+        return `<div class="mgr-card${isSel?' selected':''}" onclick="toggleActCollab(this,'${name}')"
+          data-team="${name}" style="min-width:70px;padding:7px 8px;${isSel?'border-color:var(--blue);':''}">
+          <div style="font-size:10px;color:var(--gray-400);margin-bottom:2px">${esc(branch)}</div>
+          <div class="mgr-name" style="font-size:11px">${esc(name)}</div>
+        </div>`;
+      }).join('');
+      if(collabLabel) collabLabel.textContent=existCollab.length?'✓ 현재 협업: '+existCollab.join(', '):'';
+    } else {
+      collabWrap.style.display='none';
+    }
+  }
   openM('modal-activity'); closePanel();
   // 활동 등록 탭 초기화
   switchActModalTab('form', document.getElementById('act-tab-form'));
   // 히스토리 렌더 (캐시 기반)
   _renderActModalHistory(lid);
+}
+
+function toggleActCollab(el, team){
+  if(!window._actCollabSel) window._actCollabSel=new Set();
+  if(window._actCollabSel.has(team)){
+    window._actCollabSel.delete(team);
+    el.classList.remove('selected');
+    el.style.borderColor='';
+  } else {
+    window._actCollabSel.add(team);
+    el.classList.add('selected');
+    el.style.borderColor='var(--blue)';
+  }
+  const sel=[...window._actCollabSel];
+  const lbl=document.getElementById('act-collab-sel-label');
+  if(lbl) lbl.textContent=sel.length?'✓ 협업 지정: '+sel.join(', '):'';
 }
 
 function switchActModalTab(tab, btn){
@@ -6248,6 +6306,32 @@ async function saveActivity(){
     if(result===false){ return; } // 강제 로직에서 차단됨
   }
   await logActivity(lid,type,content,curActStatus||null,stage||null,actDate);
+
+  // 협업 팀장 저장 (팀장 전용)
+  if(curUser?.role==='team'&&window._actCollabSel){
+    const lead4=allLeads?.find(l=>l.id===lid)||myLeads?.find(l=>l.id===lid);
+    // 내 이름은 항상 포함, 협업 팀장 추가
+    const newTeamNames=[curUser.name,...window._actCollabSel].filter(Boolean);
+    // 현재 team_names에서 타 지점 팀장 제거 후 새 협업 팀장으로 교체
+    const prevNames=[];
+    try{ const arr=JSON.parse(lead4?.team_names||'[]'); arr.forEach(t=>prevNames.push(t)); }catch(e){}
+    // 내 지점 팀장 유지 + 새 협업 목록
+    const myTeamSet=new Set(TEAM_MAP[curUser.branch||lead4?.branch_name||'']||[]);
+    const myNames=prevNames.filter(t=>myTeamSet.has(t)||t===curUser.name);
+    const merged=[...new Set([...myNames,...newTeamNames])];
+    const collabOnly=merged.filter(t=>!myTeamSet.has(t)&&t!==curUser.name);
+    const collabBranches=[...new Set(collabOnly.map(t=>Object.entries(TEAM_MAP).find(([,v])=>v.includes(t))?.[0]).filter(Boolean))];
+    const upd={
+      team_names:JSON.stringify(merged),
+      team_name:merged.join(', '),
+      collab_branches:collabBranches.length?JSON.stringify(collabBranches):null
+    };
+    await dbU('leads',lid,upd);
+    // 캐시 갱신
+    if(allLeads){const i=allLeads.findIndex(r=>r.id===lid);if(i>=0)allLeads[i]={...allLeads[i],...upd};}
+    if(myLeads){const i=myLeads.findIndex(r=>r.id===lid);if(i>=0)myLeads[i]={...myLeads[i],...upd};}
+  }
+
   // 서류접수 상태 저장
   const docReceived=document.getElementById('act-doc-received')?.value||'';
   if(docReceived){
@@ -7166,6 +7250,28 @@ function _applyAtToIso(s){
   // 기타
   const t=Date.parse(s);
   return isNaN(t)?null:new Date(t).toISOString();
+}
+
+// ── collab_branches 컬럼 추가 (최초 1회) ──────────────────
+async function addCollabColumn(){
+  if(testMode){showToast('Supabase 연결 후 사용 가능합니다','error');return;}
+  if(!confirm('leads 테이블에 collab_branches 컬럼을 추가합니다.\n이미 있으면 무시됩니다. 계속하시겠습니까?'))return;
+
+  const {SB_URL, SB_KEY} = getSbConfig?.()??{SB_URL:localStorage.getItem('kbmc_sb_url'),SB_KEY:localStorage.getItem('kbmc_sb_key')};
+  // Supabase REST API로 직접 컬럼 추가는 불가 — SQL 힌트 제공
+  const sql = `ALTER TABLE leads ADD COLUMN IF NOT EXISTS collab_branches TEXT;`;
+
+  // 대신 테스트 PATCH로 컬럼 존재 여부 확인
+  const testRow = await sbGet('leads?select=collab_branches&limit=1');
+  if(testRow !== null){
+    showToast('✅ collab_branches 컬럼이 이미 존재합니다','success');
+    return;
+  }
+
+  // 컬럼이 없으면 SQL 안내
+  const msg = `Supabase SQL Editor에서 아래 SQL을 실행하세요:\n\n${sql}\n\nSupabase → SQL Editor → New Query → 붙여넣기 → Run`;
+  alert(msg);
+  navigator.clipboard?.writeText(sql).then(()=>showToast('SQL이 클립보드에 복사됐습니다','success'));
 }
 
 async function deleteUser(uid){
@@ -9455,15 +9561,35 @@ function openDistribute(){
       _selBranch=curUser.name;
       const leaders=TEAM_MAP[curUser.name]||[];
       const tgrid=document.getElementById('dist-team-cards');
-      if(tgrid) tgrid.innerHTML=
-        `<div class="mgr-card" onclick="toggleTeamCard(this,'${curUser.name}')" data-team="${curUser.name}">
-          <div class="mgr-name" style="font-size:12px;font-weight:800;color:var(--navy)">${esc(curUser.name)}</div>
-          <div class="mgr-sub" style="color:var(--navy);font-weight:700">지점장 (본인)</div>
-        </div>`+
-        leaders.map(t=>`
-        <div class="mgr-card" onclick="toggleTeamCard(this,'${t}')" data-team="${t}">
-          <div class="mgr-name" style="font-size:12px">${esc(t)}</div>
-          <div class="mgr-sub">팀장</div></div>`).join('');
+      if(tgrid){
+        // 내 지점 섹션
+        const mySection=`<div style="font-size:10px;font-weight:700;color:var(--gray-400);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px">
+            🏢 내 지점</div>
+          <div class="mgr-grid" style="margin-bottom:12px">
+            <div class="mgr-card" onclick="toggleTeamCard(this,'${curUser.name}')" data-team="${curUser.name}">
+              <div class="mgr-name" style="font-size:12px;font-weight:800;color:var(--navy)">${esc(curUser.name)}</div>
+              <div class="mgr-sub" style="color:var(--navy);font-weight:700">지점장 (본인)</div>
+            </div>
+            ${leaders.map(t=>`<div class="mgr-card" onclick="toggleTeamCard(this,'${t}')" data-team="${t}">
+              <div class="mgr-name" style="font-size:12px">${esc(t)}</div>
+              <div class="mgr-sub">팀장</div></div>`).join('')}
+          </div>`;
+        // 타 지점 협업 섹션
+        const otherBranches=BRANCHES.filter(b=>b!==curUser.name);
+        const collabSection=otherBranches.map(b=>{
+          const bLeaders=TEAM_MAP[b]||[];
+          if(!bLeaders.length) return '';
+          return `<div style="font-size:10px;font-weight:700;color:var(--blue);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px;margin-top:4px">
+              🤝 ${esc(b)} 지점 <span style="font-weight:400;color:var(--gray-400)">(협업)</span></div>
+            <div class="mgr-grid" style="margin-bottom:10px">
+              ${bLeaders.map(t=>`<div class="mgr-card" onclick="toggleTeamCard(this,'${t}')" data-team="${t}" style="border-color:var(--blue);opacity:.85">
+                <div class="mgr-name" style="font-size:12px">${esc(t)}</div>
+                <div class="mgr-sub" style="color:var(--blue)">협업팀장</div>
+              </div>`).join('')}
+            </div>`;
+        }).join('');
+        tgrid.innerHTML=mySection+collabSection;
+      }
       if(tw) tw.style.display='';
     } else {
       // 관리자: 전체 지점장 표시
@@ -9511,6 +9637,8 @@ async function loadBranchScreen(){
     if(l.branch_name===curUser.name) return true;
     try{const arr=JSON.parse(l.team_names||'[]');if(arr.length&&arr.some(t=>myTeams.has(t)))return true;}catch(e){}
     if(l.team_name){const names=l.team_name.split(', ').map(s=>s.trim());if(names.some(n=>myTeams.has(n)))return true;}
+    // 협업 건: collab_branches에 내 이름이 포함된 경우
+    try{const cb=JSON.parse(l.collab_branches||'[]');if(cb.includes(curUser.name))return true;}catch(e){}
     return false;
   });
   const mine=brAllLeads;
@@ -9570,7 +9698,18 @@ async function loadBranchScreen(){
       </div>`;
     });
 
-    grid.innerHTML=[selfCard,...singleCards,...multiCards].join('');
+    // 협업 건 카드: collab_branches에 내 이름이 있는 건 (타 지점 건)
+    const collabLeads=mine.filter(l=>{
+      if(l.status==='drop') return false;
+      try{const cb=JSON.parse(l.collab_branches||'[]');return cb.includes(curUser.name)&&l.branch_name!==curUser.name;}catch(e){return false;}
+    });
+    const collabCard=collabLeads.length?`<div class="mgr-card" onclick="selectBrLeaderCard(this,'__collab__')" data-team="__collab__" style="min-width:80px;border-color:var(--blue)">
+      <div class="mgr-name" style="font-size:12px;font-weight:800;color:var(--blue)">🤝 협업</div>
+      <div style="font-size:16px;font-weight:800;color:var(--blue);margin-top:3px">${collabLeads.length}</div>
+      <div class="mgr-sub" style="color:var(--blue)">건</div>
+    </div>`:'';
+
+    grid.innerHTML=[selfCard,...singleCards,...multiCards,collabCard].join('');
   }
   brSelIds.clear(); brPage=1;
   filterBrLeads();
@@ -9612,6 +9751,12 @@ function selectBrLeaderCard(el, team){
       if(l.team_name&&l.team_name.trim()!=='') return false;
       try{const arr=JSON.parse(l.team_names||'[]');if(arr.length>0) return false;}catch(e){}
       return true;
+    });
+  } else if(team==='__collab__'){
+    // 협업 건: collab_branches에 내 이름이 있고 타 지점 건
+    brFiltered=brAllLeads.filter(l=>{
+      if(l.status==='drop') return false;
+      try{const cb=JSON.parse(l.collab_branches||'[]');return cb.includes(curUser.name)&&l.branch_name!==curUser.name;}catch(e){return false;}
     });
   } else {
     brFiltered=brAllLeads.filter(l=>l.status!=='drop'&&(
@@ -9657,7 +9802,13 @@ function renderBrTable(){
     <td style="font-size:12px">${esc(l.phone||'-')}</td>
     <td style="font-size:11px">${esc((l.consult_type||'').slice(0,18))}</td>
     <td>${sBadge(l.status)}</td>
-    <td>${l.team_name?`<span class="badge badge-blue" style="font-size:10px">${esc(l.team_name)}</span>`:'<span class="badge badge-no_answer" style="font-size:10px">미배정</span>'}</td>
+    <td>${(function(){
+      const isCollab=(function(){try{const cb=JSON.parse(l.collab_branches||'[]');return cb.includes(curUser.name)&&l.branch_name!==curUser.name;}catch(e){return false;}})();
+      if(!l.team_name) return '<span class="badge badge-no_answer" style="font-size:10px">미배정</span>';
+      const badge='<span class="badge badge-blue" style="font-size:10px">'+esc(l.team_name)+'</span>';
+      const collabBadge=isCollab?'<span class="badge" style="font-size:9px;background:rgba(49,130,246,.1);color:var(--blue);margin-left:3px">🤝협업</span>':'';
+      return badge+collabBadge;
+    })()}</td>
     <td style="font-size:11px;color:var(--gray-400)">${fmtD(l.distributed_at||l.created_at)}</td>
     <td><button class="btn btn-primary btn-xs" onclick="event.stopPropagation();quickBrAssign('${l.id}')">배정</button></td>
   </tr>`).join('');
@@ -9717,16 +9868,29 @@ function openBrAssignPopup(){
     <div style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">
       배정할 팀장 선택 <span style="font-weight:400">(복수 선택 가능)</span>
     </div>
-    <div class="mgr-grid" id="br-assign-team-cards">
-      <div class="mgr-card" onclick="toggleBrAssignTeam(this,'${curUser.name}')" data-team="${curUser.name}"
-        >
-        <div class="mgr-name" style="font-size:13px;font-weight:800;color:var(--navy)">${esc(curUser.name)}</div>
-        <div class="mgr-sub" style="color:var(--navy);font-weight:700">지점장 (본인)</div>
+    <div id="br-assign-team-cards">
+      <div style="font-size:10px;font-weight:700;color:var(--gray-400);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px">🏢 내 지점</div>
+      <div class="mgr-grid" style="margin-bottom:12px">
+        <div class="mgr-card" onclick="toggleBrAssignTeam(this,'${curUser.name}')" data-team="${curUser.name}">
+          <div class="mgr-name" style="font-size:13px;font-weight:800;color:var(--navy)">${esc(curUser.name)}</div>
+          <div class="mgr-sub" style="color:var(--navy);font-weight:700">지점장 (본인)</div>
+        </div>
+        ${leaders.map(t=>`<div class="mgr-card" onclick="toggleBrAssignTeam(this,'${t}')" data-team="${t}">
+          <div class="mgr-name" style="font-size:13px">${esc(t)}</div>
+          <div class="mgr-sub">팀장</div>
+        </div>`).join('')}
       </div>
-      ${leaders.map(t=>`<div class="mgr-card" onclick="toggleBrAssignTeam(this,'${t}')" data-team="${t}">
-        <div class="mgr-name" style="font-size:13px">${esc(t)}</div>
-        <div class="mgr-sub">팀장</div>
-      </div>`).join('')}
+      ${BRANCHES.filter(b=>b!==curUser.name).map(b=>{
+        const bLeaders=TEAM_MAP[b]||[];
+        if(!bLeaders.length) return '';
+        return `<div style="font-size:10px;font-weight:700;color:var(--blue);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px;margin-top:4px">🤝 ${esc(b)} 지점 <span style="font-weight:400;color:#94a3b8">(협업)</span></div>
+          <div class="mgr-grid" style="margin-bottom:10px">
+            ${bLeaders.map(t=>`<div class="mgr-card" onclick="toggleBrAssignTeam(this,'${t}')" data-team="${t}" style="border-color:var(--blue);opacity:.85">
+              <div class="mgr-name" style="font-size:13px">${esc(t)}</div>
+              <div class="mgr-sub" style="color:var(--blue)">협업팀장</div>
+            </div>`).join('')}
+          </div>`;
+      }).join('')}
     </div>
     <div id="br-assign-sel-label" style="font-size:12px;color:var(--blue);font-weight:600;margin:8px 0 14px;min-height:18px"></div>
     <div class="fg" style="margin-bottom:16px">
@@ -9760,31 +9924,34 @@ async function confirmBrAssignPopup(){
   const selfIncluded=teams.includes(curUser.name);
   // 팀장만 (본인 제외)
   const teamOnly=teams.filter(t=>t!==curUser.name);
+  // 타 지점 협업 팀장 분류
+  const myTeamSet=new Set(TEAM_MAP[curUser.name]||[]);
+  const collabTeams=teamOnly.filter(t=>!myTeamSet.has(t));
+  const isCollab=collabTeams.length>0;
+  const collabBranches=[...new Set(collabTeams.map(t=>Object.entries(TEAM_MAP).find(([,v])=>v.includes(t))?.[0]).filter(Boolean))];
 
   // 복수 표시명
   const teamDisplay=teams.length===1?teams[0]:teams.join(', ');
-  const teamNames=JSON.stringify(teamOnly.length?teamOnly:teams);
 
   for(const id of ids){
     const updateData={
       team_name:teamOnly.length?teamOnly.join(', '):'',
       team_names:JSON.stringify(teamOnly),
       assigned_at:new Date().toISOString(),
-      status:'assigned'
+      status:'assigned',
+      collab_branches:isCollab?JSON.stringify(collabBranches):null
     };
-    // 지점장 본인에게 직접 배정하는 경우 branch_name 명시 유지
     if(selfIncluded && !teamOnly.length){
-      // 본인만 선택: 팀장 없이 지점장 직배정
       updateData.team_name='';
       updateData.team_names=JSON.stringify([]);
     } else if(selfIncluded){
-      // 본인+팀장 혼합: 팀장 목록에 포함
       updateData.team_name=teamOnly.join(', ');
       updateData.team_names=JSON.stringify(teamOnly);
     }
     await dbU('leads',id,updateData);
     const target=selfIncluded&&!teamOnly.length?curUser.name+' (지점장 직배정)':teamDisplay;
-    const msg=`${curUser.name} → ${target} 배정`+(note?' ('+note+')':'');
+    const collabNote=isCollab?` [협업: ${collabTeams.join(', ')}]`:'';
+    const msg=`${curUser.name} → ${target} 배정${collabNote}`+(note?' ('+note+')':'');
     await logActivity(id,'assign',msg,'assigned','초기접촉');
   }
   closeOv('ov-br-assign');
@@ -10256,18 +10423,37 @@ function selectBranchCard(el, branch){
   const leaders=TEAM_MAP[branch]||[];
   const wrap=document.getElementById('dist-team-wrap');
   const grid=document.getElementById('dist-team-cards');
-  if(grid) grid.innerHTML=
-    // 지점장 본인 카드 강조 표시
-    `<div class="mgr-card" onclick="toggleTeamCard(this,'${branch}')" data-team="${branch}" style="min-width:76px">
-      <div class="mgr-name" style="font-size:12px;font-weight:800;color:var(--navy)">${esc(branch)}</div>
-      <div class="mgr-sub" style="color:var(--navy);font-weight:700">지점장</div>
-    </div>`+
-    leaders.map(t=>`
-    <div class="mgr-card" onclick="toggleTeamCard(this,'${t}')" data-team="${t}" style="min-width:76px">
-      <div class="mgr-name" style="font-size:12px">${esc(t)}</div>
-      <div class="mgr-sub">팀장</div>
-    </div>`).join('');
-  if(wrap) wrap.style.display=''; // 지점장 카드 항상 있으므로 표시
+  if(grid){
+    // 선택 지점 팀장 섹션
+    const mySection=`<div style="font-size:10px;font-weight:700;color:var(--gray-400);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px;margin-top:2px">
+        🏢 ${esc(branch)} 지점</div>
+      <div class="mgr-grid" style="margin-bottom:12px">
+        <div class="mgr-card" onclick="toggleTeamCard(this,'${branch}')" data-team="${branch}" style="min-width:76px">
+          <div class="mgr-name" style="font-size:12px;font-weight:800;color:var(--navy)">${esc(branch)}</div>
+          <div class="mgr-sub" style="color:var(--navy);font-weight:700">지점장</div>
+        </div>
+        ${leaders.map(t=>`<div class="mgr-card" onclick="toggleTeamCard(this,'${t}')" data-team="${t}" style="min-width:76px">
+          <div class="mgr-name" style="font-size:12px">${esc(t)}</div>
+          <div class="mgr-sub">팀장</div>
+        </div>`).join('')}
+      </div>`;
+    // 타 지점 섹션 (협업)
+    const otherBranches=BRANCHES.filter(b=>b!==branch);
+    const collabSection=otherBranches.map(b=>{
+      const bLeaders=TEAM_MAP[b]||[];
+      if(!bLeaders.length) return '';
+      return `<div style="font-size:10px;font-weight:700;color:var(--blue);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px;margin-top:4px">
+          🤝 ${esc(b)} 지점 <span style="font-weight:400;color:var(--gray-400)">(협업)</span></div>
+        <div class="mgr-grid" style="margin-bottom:10px">
+          ${bLeaders.map(t=>`<div class="mgr-card" onclick="toggleTeamCard(this,'${t}')" data-team="${t}" style="min-width:76px;border-color:var(--blue);opacity:.85">
+            <div class="mgr-name" style="font-size:12px">${esc(t)}</div>
+            <div class="mgr-sub" style="color:var(--blue)">협업팀장</div>
+          </div>`).join('')}
+        </div>`;
+    }).join('');
+    grid.innerHTML=mySection+collabSection;
+  }
+  if(wrap) wrap.style.display='';
   updateDistTeamLabel();
 }
 function toggleTeamCard(el, team){
@@ -10389,12 +10575,29 @@ async function confirmDistribute(){
   // 지점장 본인이 팀장 목록에 포함된 경우 → team_name에서 제외 (지점장 직배정)
   const selfSelected=teams.includes(_selBranch);
   const teamOnly=teams.filter(t=>t!==_selBranch);
+  // 타 지점 협업 팀장 분류
+  const myTeamSet=new Set(TEAM_MAP[_selBranch]||[]);
+  const collabTeams=teamOnly.filter(t=>!myTeamSet.has(t)); // 타 지점 팀장
+  const mainTeams=teamOnly.filter(t=>myTeamSet.has(t));    // 내 지점 팀장
+  const isCollab=collabTeams.length>0;
+  // 협업 지점장 목록 계산
+  const collabBranches=[...new Set(collabTeams.map(t=>Object.entries(TEAM_MAP).find(([,v])=>v.includes(t))?.[0]).filter(Boolean))];
+
   const teamDisplay=teamOnly.length===0?'':teamOnly.length===1?teamOnly[0]:teamOnly[0]+' 외 '+(teamOnly.length-1)+'명';
   const assignData={branch_name:_selBranch,assigned_at:new Date().toISOString(),status:'assigned'};
-  if(teamOnly.length>0){assignData.team_name=teamDisplay;assignData.team_names=JSON.stringify(teamOnly);}
-  else{assignData.team_name='';assignData.team_names=null;}
+  if(teamOnly.length>0){
+    assignData.team_name=teamDisplay;
+    assignData.team_names=JSON.stringify(teamOnly);
+  } else {
+    assignData.team_name='';assignData.team_names=null;
+  }
+  // 협업 지점장 저장
+  if(isCollab) assignData.collab_branches=JSON.stringify(collabBranches);
+  else assignData.collab_branches=null;
+
   const selfNote=selfSelected&&!teamOnly.length?' (지점장 직배정)':selfSelected?' + 지점장 직배정':'';
-  const msg=`${_selBranch} 지점${teamDisplay?' → '+teamDisplay+' 배정':''}${selfNote}`+(note?' ('+note+')':'');
+  const collabNote=isCollab?` [협업: ${collabTeams.join(', ')}]`:'';
+  const msg=`${_selBranch} 지점${teamDisplay?' → '+teamDisplay+' 배정':''}${selfNote}${collabNote}`+(note?' ('+note+')':'');
   closeOv('ov-distribute'); clearSel();
   showToast(`${ids.length}건 배정 처리 중...`,'success');
   await Promise.all(ids.flatMap(id=>[
