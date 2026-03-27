@@ -9573,21 +9573,26 @@ async function confirmBrRecall(){
     await dbU('leads',id,recallData);
     await logActivity(id,'assign','팀장 회수 ('+curUser.name+')','','');
   }
-  // brAllLeads 캐시 즉시 갱신 → loadBranchScreen 전에 반영
-  if(typeof brAllLeads!=='undefined'&&brAllLeads){
+  // brAllLeads / allLeads 캐시 즉시 갱신
+  [brAllLeads, allLeads].forEach(cache=>{
+    if(!cache) return;
     ids.forEach(id=>{
-      const l=brAllLeads.find(r=>r.id===id);
+      const l=cache.find(r=>r.id===id);
+      if(l){l.team_name='';l.team_names=JSON.stringify([]);}
+    });
+  });
+  // brFiltered도 즉시 동기화 (현재 보이는 목록 갱신)
+  if(typeof brFiltered!=='undefined'&&brFiltered){
+    ids.forEach(id=>{
+      const l=brFiltered.find(r=>r.id===id);
       if(l){l.team_name='';l.team_names=JSON.stringify([]);}
     });
   }
-  // allLeads 캐시도 동기화
-  if(typeof allLeads!=='undefined'&&allLeads){
-    ids.forEach(id=>{
-      const l=allLeads.find(r=>r.id===id);
-      if(l){l.team_name='';l.team_names=JSON.stringify([]);}
-    });
-  }
-  clearBrSel(); showToast(`${ids.length}건 회수 완료`,'success'); loadBranchScreen();
+  clearBrSel();
+  showToast(`${ids.length}건 회수 완료`,'success');
+  // 카드 카운트 + 테이블 즉시 반영 후 전체 재로드
+  renderBrTable();
+  loadBranchScreen();
 }
 function confirmBrDrop(){
   if(!brSelIds.size){showToast('DB를 선택하세요.','error');return;}
