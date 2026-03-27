@@ -6637,6 +6637,15 @@ function downloadRptPdf(rptId){
 
 // ── _pending (엑셀 업로드 임시) ───────────────────────────
 let _pending=[];
+function _parseKorDt(s){
+  // '2026. 3. 23 오후 5:58:' 형식 → UTC timestamp
+  const m=s.match(/^(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\s*(오전|오후)?\s*(\d{1,2}):(\d{1,2})/);
+  if(!m) return NaN;
+  let [,y,mo,d,ap,h,min]=[...m].map((v,i)=>i===4?v:+v||0);
+  if(ap==='오후'&&h<12) h+=12;
+  if(ap==='오전'&&h===12) h=0;
+  return Date.UTC(y,mo-1,d,h,min);
+}
 async function importExcel(event){
   const file=event.target.files[0];if(!file)return;event.target.value='';
   if(!window.XLSX){await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
@@ -11528,15 +11537,6 @@ function applyColFilters(data){
 
 // ── applySort ─────────────────────────────────────────────
 // 날짜 파싱: ISO(2026-03-02), 한국점표기(2026. 3. 2 / 2025. 12.), 기타 모두 처리
-function _parseKorDt(s){
-  // '2026. 3. 23 오후 5:58:' 형식 → UTC timestamp
-  const m=s.match(/^(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\s*(오전|오후)?\s*(\d{1,2}):(\d{1,2})/);
-  if(!m) return NaN;
-  let [,y,mo,d,ap,h,min]=[...m].map((v,i)=>i===4?v:+v||0);
-  if(ap==='오후'&&h<12) h+=12;
-  if(ap==='오전'&&h===12) h=0;
-  return Date.UTC(y,mo-1,d,h,min);
-}
 function _toTs(raw){
   if(!raw) return 0;
   const s=String(raw).trim();
