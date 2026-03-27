@@ -319,21 +319,21 @@ select option{background:#fff;color:var(--gray-900)}
   border:1px solid var(--gray-100);
   -webkit-overflow-scrolling:touch;
 }
-.tbl-wrap table{width:max-content;min-width:100%;table-layout:auto;white-space:nowrap}
-.db-wrap table{width:max-content;min-width:100%;table-layout:auto;white-space:nowrap}
+.tbl-wrap table{width:max-content;min-width:100%;table-layout:auto;}
+.db-wrap table{width:max-content;min-width:100%;table-layout:auto;}
 table{border-collapse:collapse}
 thead{background:var(--gray-50);position:sticky;top:0;z-index:1}
 th{
   padding:10px 14px;text-align:left;
   font-size:11px;font-weight:600;
   color:var(--gray-500);letter-spacing:.2px;
-  white-space:nowrap;border-bottom:1px solid var(--gray-200);
+  border-bottom:1px solid var(--gray-200);
 }
 td{
   padding:10px 14px;
   border-bottom:1px solid var(--gray-100);
   font-size:13px;color:var(--gray-700);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  overflow:visible;
   background:var(--white);
 }
 tbody tr{cursor:pointer;transition:background .1s}
@@ -627,19 +627,20 @@ input[type=date],input[type=time]{color-scheme:light}
   border-radius:var(--r-sm);border:1px solid var(--gray-100);
   -webkit-overflow-scrolling:touch;
 }
-.db-table{border-collapse:collapse;width:max-content;min-width:100%;table-layout:auto;white-space:nowrap}
+.db-table{border-collapse:collapse;width:max-content;min-width:100%;table-layout:auto;}
+.db-table td,.db-table th{min-width:0;box-sizing:border-box}
 .db-table th{
   position:sticky;top:0;z-index:10;
   background:var(--gray-50);color:var(--gray-500);
   padding:0;font-size:11px;font-weight:600;
   letter-spacing:.2px;border-right:1px solid var(--gray-100);
   border-bottom:1px solid var(--gray-200);
-  user-select:none;white-space:nowrap;
+  user-select:none;overflow:hidden;
 }
 .db-table th .th-inner{display:flex;flex-direction:column;min-width:0}
 .db-table th .th-label{
   display:flex;align-items:center;gap:5px;
-  padding:10px 14px;cursor:pointer;height:38px;box-sizing:border-box;
+  padding:6px 4px;cursor:pointer;height:38px;box-sizing:border-box;
 }
 .db-table th .th-label:hover{background:var(--gray-100)}
 .db-table th .th-filter{display:none!important}
@@ -657,7 +658,7 @@ input[type=date],input[type=time]{color-scheme:light}
 .db-table td{
   padding:10px 14px;font-size:13px;
   border-bottom:1px solid var(--gray-100);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  overflow:visible;
   vertical-align:middle;color:var(--gray-700);background:var(--white);
 }
 .db-table tr:hover td{background:var(--gray-50)}
@@ -4838,7 +4839,7 @@ let _visCols=getVisibleCols();
 
 function colVal(l, key, acts){
   switch(key){
-    case 'company_name': return`<td style="font-weight:700;color:var(--navy);min-width:120px">${esc(l.company_name||'-')}</td>`;
+    case 'company_name': return`<td style="font-weight:700;color:var(--navy)">${esc(l.company_name||'-')}</td>`;
     case 'contact_name': return`<td>${esc(l.contact_name||'-')}</td>`;
     case 'phone':        return`<td style="font-size:12px">${esc(l.phone||'-')}</td>`;
     case 'distributed_at': return`<td style="font-size:11px;color:var(--gray-400)">${fmtD(l.distributed_at||l.created_at)}</td>`;
@@ -4849,7 +4850,7 @@ function colVal(l, key, acts){
     case 'region':       return`<td style="font-size:11px">${esc((l.region||'-').slice(0,14))}</td>`;
     case 'tax_delinquent':return`<td style="font-size:11px">${l.tax_delinquent&&l.tax_delinquent!=='없음'?`<span style="color:var(--err);font-weight:700">${esc(l.tax_delinquent)}</span>`:esc(l.tax_delinquent||'-')}</td>`;
     case 'email':        return`<td style="font-size:11px">${esc(l.email||'-')}</td>`;
-    case 'note':         return`<td style="font-size:11px;color:var(--gray-400);max-width:100px;overflow:hidden;text-overflow:ellipsis">${esc(l.note||'-')}</td>`;
+    case 'note':         return`<td style="font-size:11px;color:var(--gray-400)">${esc(l.note||'-')}</td>`;
     case 'branch_name':  return`<td>${l.yj_transferred?`<span class="badge" style="font-size:10px;background:rgba(124,58,237,.1);color:#7c3aed">초도이관</span>`:(l.branch_name?`<span class="badge badge-navy" style="font-size:10px">${esc(l.branch_name)}</span>`:'-')}</td>`;
     case 'team_name':    return`<td>${l.team_name?`<span class="badge badge-blue" style="font-size:10px">${esc(l.team_name.slice(0,8))}</span>`:'-'}</td>`;
     case 'status':       return`<td>${sBadge(l.status)}</td>`;
@@ -4857,8 +4858,8 @@ function colVal(l, key, acts){
     case 'tm_result':    return`<td style="font-size:11px">${esc(l.tm_result||'-')}</td>`;
     case 'tm_date':      return`<td style="font-size:11px;color:var(--gray-400)">${fmtD(l.tm_date)}</td>`;
     case 'tm_meeting':   return`<td style="font-size:11px;color:var(--blue)">${fmtD(l.tm_meeting_date)}</td>`;
-    case 'tm_content':   return`<td style="font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis">${esc((l.tm_content||'-').slice(0,50))}</td>`;
-    case 'tm_happycall': return`<td style="font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis">${esc((l.tm_happycall||'-').slice(0,50))}</td>`;
+    case 'tm_content':   return`<td style="font-size:11px;max-width:160px;overflow:visible">${esc((l.tm_content||'-').slice(0,50))}</td>`;
+    case 'tm_happycall': return`<td style="font-size:11px;max-width:160px;overflow:visible">${esc((l.tm_happycall||'-').slice(0,50))}</td>`;
     // 진행내용
     case 'consult_yn': {
       // 1순위: 실제 활동 기록 존재 여부 (전화/미팅/이메일 등 어떤 접촉이든)
@@ -4872,7 +4873,7 @@ function colVal(l, key, acts){
     }
     case 'current_stage':return`<td>${l.current_stage?`<span class="badge badge-blue" style="font-size:10px">${esc(l.current_stage)}</span>`:'-'}</td>`;
     case 'doc_received': return`<td style="font-size:11px;text-align:center">${l.doc_received?`<span style="font-size:10px;padding:2px 7px;border-radius:10px;background:${l.doc_received==='검토 완료'?'rgba(0,192,115,.12)':l.doc_received==='서류 접수'?'rgba(49,130,246,.12)':'rgba(139,149,161,.1)'};color:${l.doc_received==='검토 완료'?'var(--ok)':l.doc_received==='서류 접수'?'var(--blue)':'var(--gray-500)'};font-weight:700">${l.doc_received}</span>`:'<span style="color:var(--gray-200)">-</span>'}</td>`;
-    case 'proposal':     return`<td style="font-size:11px;max-width:120px;overflow:hidden;text-overflow:ellipsis">${esc((l.proposal||'-').slice(0,30))}</td>`;
+    case 'proposal':     return`<td style="font-size:11px;">${esc((l.proposal||'-').slice(0,30))}</td>`;
     case 'last_activity':{
       const la=acts?.[l.id];
       const latest=la?.latest;
@@ -4880,7 +4881,7 @@ function colVal(l, key, acts){
       if(!latest) return`<td style="font-size:11px;color:var(--gray-300)">-</td>`;
       const preview=esc((latest.content||'').slice(0,40));
       const extra=cnt>1?` <span style="font-size:10px;color:var(--gray-400);white-space:nowrap">외 ${cnt-1}건</span>`:'';
-      return`<td style="font-size:11px;max-width:220px;color:var(--gray-700);overflow:hidden;text-overflow:ellipsis">${preview}${extra}</td>`;
+      return`<td style="font-size:11px;max-width:220px;color:var(--gray-700);overflow:visible">${preview}${extra}</td>`;
     }
     default: return`<td>-</td>`;
   }
@@ -8941,7 +8942,7 @@ function _buildTmCard(l,acts){
 
     <!-- 헤더 -->
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:9px;min-width:0">
-      <div style="font-size:14px;font-weight:800;color:#1e3a5f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">${esc(l.company_name||'-')}</div>
+      <div style="font-size:14px;font-weight:800;color:#1e3a5f;overflow:visible;white-space:nowrap;flex:1;min-width:0">${esc(l.company_name||'-')}</div>
       <div style="display:flex;gap:4px;flex-shrink:0">
         ${warnTag}${statusTag}
       </div>
@@ -9002,7 +9003,7 @@ function renderTmTable(){
       <td style="font-size:11px">${esc((l.consult_type||'-').slice(0,18))}</td>
       <td>${sBadge(l.status)}</td>
       <td style="font-size:11px;color:var(--gray-400)">${fmtD(l.assigned_at||l.created_at)}</td>
-      <td style="font-size:11px;color:var(--gray-500);max-width:160px;overflow:hidden;text-overflow:ellipsis">${esc(lastAct?.content?.slice(0,40)||'-')}</td>
+      <td style="font-size:11px;color:var(--gray-500);max-width:160px;overflow:visible">${esc(lastAct?.content?.slice(0,40)||'-')}</td>
       <td style="white-space:nowrap"><button class="btn btn-primary btn-xs" onclick="event.stopPropagation();openTmInput('${l.id}','${esc(l.company_name||'')}')">기록</button></td>
     </tr>`;
   }).join('');
@@ -9084,7 +9085,7 @@ function _renderTmCompanyHistory(lid, lead){
               <span style="font-size:11px;font-weight:700;color:var(--navy)">${esc(a.author||'-')}</span>
               <span style="font-size:10px;color:var(--gray-400)">${(a.created_at||'').slice(0,10)}</span>
             </div>
-            <div style="font-size:12px;color:var(--gray-700);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc((a.content||'').slice(0,60))}</div>
+            <div style="font-size:12px;color:var(--gray-700);overflow:visible;white-space:nowrap">${esc((a.content||'').slice(0,60))}</div>
             ${a.stage?`<span style="font-size:10px;color:var(--blue);margin-top:1px;display:inline-block">${esc(a.stage)}</span>`:''}
           </div>
         </div>`).join('')}`
@@ -9160,7 +9161,7 @@ function openTmDetail(lid){
               <span style="font-size:11px;font-weight:700;color:var(--navy)">${esc(a.author||'-')}</span>
               <span style="font-size:10px;color:var(--gray-400)">${(a.created_at||'').slice(0,10)}</span>
             </div>
-            <div style="font-size:12px;color:var(--gray-700);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc((a.content||'').slice(0,80))}</div>
+            <div style="font-size:12px;color:var(--gray-700);overflow:visible;white-space:nowrap">${esc((a.content||'').slice(0,80))}</div>
           </div>
         </div>`).join('')}
     </div>`:'<div style="font-size:12px;color:var(--gray-400);margin-bottom:14px;padding:8px 0">활동 기록 없음</div>'}
@@ -10763,7 +10764,7 @@ function renderActCal(){
         style="margin-bottom:2px;padding:2px 5px;border-radius:4px;background:${clr}14;
           border-left:3px solid ${clr};cursor:pointer;
           font-size:10px;font-weight:500;color:var(--gray-800);
-          white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+          overflow:visible;
           line-height:1.6;transition:opacity .12s"
         onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'">
         ${esc(line)}${hasComp?`<span style="color:${clr};font-size:9px;margin-left:3px">👥</span>`:''}
@@ -10802,7 +10803,7 @@ function renderActList(){
     <td><span class="badge badge-blue" style="font-size:10px">${ACT_TYPE_LABEL[a.type]||a.type}</span></td>
     <td style="font-size:12px">${esc(a.company||'-')}</td>
     <td><span style="font-size:11px;font-weight:700;color:${getColor(a.author)}">${esc(a.author||'-')}</span></td>
-    <td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis">${esc((a.content||'').slice(0,60))}</td>
+    <td style="font-size:11px;max-width:200px;overflow:visible">${esc((a.content||'').slice(0,60))}</td>
     <td style="font-size:11px">${a.companions?.length?a.companions.map(c=>`<span style="display:inline-block;background:var(--blue-l);color:var(--blue);border-radius:10px;padding:1px 7px;font-size:10px;font-weight:600;margin:1px">${esc(c)}</span>`).join(''):'<span style="color:var(--gray-300)">-</span>'}</td>
     <td><div style="display:flex;gap:3px">
       <button class="btn btn-outline btn-xs" onclick="editActEntry('${a.id}')">수정</button>
@@ -11199,7 +11200,7 @@ function renderCompCal(){
     const ds=compCalYear+'-'+String(compCalMonth+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
     const isToday=ds===today;
     const dayItems=byDate[ds]||[];
-    const items=dayItems.slice(0,2).map(c=>`<div style="font-size:9px;background:var(--blue-l);color:var(--blue);border-radius:3px;padding:1px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:1px">${esc(c.title)}</div>`).join('');
+    const items=dayItems.slice(0,2).map(c=>`<div style="font-size:9px;background:var(--blue-l);color:var(--blue);border-radius:3px;padding:1px 4px;white-space:nowrap;overflow:visible;margin-bottom:1px">${esc(c.title)}</div>`).join('');
     const extra=dayItems.length>2?`<div style="font-size:8px;color:var(--gray-400)">+${dayItems.length-2}</div>`:'';
     cells.push(`<div onclick="openCompCalModal('${ds}')" style="min-height:44px;border:1px solid ${isToday?'var(--navy)':'var(--gray-100)'};border-radius:4px;padding:3px;cursor:pointer;background:${isToday?'rgba(27,47,78,.04)':'#fff'}" onmouseover="this.style.background='var(--blue-l)'" onmouseout="this.style.background='${isToday?'rgba(27,47,78,.04)':'#fff'}'">
       <div style="font-size:10px;font-weight:${isToday?700:500};color:${isToday?'var(--navy)':'var(--gray-600)'};margin-bottom:1px">${d}</div>
@@ -11700,8 +11701,9 @@ function initResizers(tableId){
       document.body.style.cursor='col-resize';
       document.body.style.userSelect='none';
       const onMove=e=>{
-        const w=Math.max(50, startW+(e.clientX-startX));
+        const w=Math.max(0, startW+(e.clientX-startX));
         th.style.width=w+'px';
+        th.style.minWidth='0';
         const key=th.dataset.col;
         if(key) setColWidth(key,w);
       };
@@ -11724,7 +11726,7 @@ function buildDbHeader(trEl, cols, opts={}){
 
   let html='';
   if(opts.checkAll!==false){
-    html+=`<th style="width:32px;min-width:32px;background:var(--navy)">
+    html+=`<th style="width:32px;min-width:0;background:var(--navy)">
       <div class="th-inner"><div class="th-label" style="padding:8px 6px;justify-content:center">
         <input type="checkbox" id="${opts.tableId||'chk'}-all" onchange="${opts.toggleAll||'toggleAll'}(this.checked)"
           style="accent-color:#fff;width:14px;height:14px">
@@ -11743,7 +11745,7 @@ function buildDbHeader(trEl, cols, opts={}){
     const filterHtml=''; // 인라인 필터 비활성화
 
     html+=`<th data-col="${c.k}" class="${sortCls}"
-      style="width:${w}px;min-width:${w}px;border-bottom:2px solid ${gclr};${stickyStyle}">
+      style="width:${w}px;min-width:0;border-bottom:2px solid ${gclr};${stickyStyle}">
       <div class="th-inner">
         <div class="th-label" onclick="${c.noSort?'':('sortBy(\''+c.k+'\')')}">
           ${c.l}
