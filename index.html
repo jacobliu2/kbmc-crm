@@ -4980,6 +4980,7 @@ function openAdminStatusChange(){
         <div style="font-size:11px;font-weight:700;color:var(--gray-500);margin-bottom:6px">진행단계</div>
         <select id="admin-stage-sel" style="width:100%;padding:9px 12px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;background:#fff">
           <option value="">변경 안 함</option>
+          <option value="__reset__" style="color:var(--err)">↺ 초기화 (단계 삭제)</option>
           <option value="초기접촉">초기접촉</option>
           <option value="상담">상담</option>
           <option value="미팅">미팅</option>
@@ -4993,6 +4994,7 @@ function openAdminStatusChange(){
         <div style="font-size:11px;font-weight:700;color:var(--gray-500);margin-bottom:6px">상태</div>
         <select id="admin-status-sel" style="width:100%;padding:9px 12px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;background:#fff">
           <option value="">변경 안 함</option>
+          <option value="__reset__" style="color:var(--err)">↺ 초기화 (미배정)</option>
           <option value="assigned">배정</option>
           <option value="contacted">접촉</option>
           <option value="no_answer">부재중</option>
@@ -5020,19 +5022,28 @@ async function confirmAdminStatusChange(){
   const status=document.getElementById('admin-status-sel')?.value||'';
   const note=document.getElementById('admin-status-note')?.value.trim()||'';
   if(!stage&&!status){showToast('단계 또는 상태를 선택하세요.','error');return;}
+  // __reset__ 처리
+  const stageReset = stage==='__reset__';
+  const statusReset = status==='__reset__';
+  const realStage = stageReset ? '' : stage;
+  const realStatus = statusReset ? 'pending' : status;
+
   // 계약/관리 상태 선택 시 current_stage 자동 연동
-  let autoStage=stage;
-  if(status==='contract' && !autoStage) autoStage='계약';
-  if(status==='managed'  && !autoStage) autoStage='관리고객';
+  let autoStage = realStage;
+  if(realStatus==='contract' && !autoStage) autoStage='계약';
+  if(realStatus==='managed'  && !autoStage) autoStage='관리고객';
 
   const ids=[...selIds];
   closeOv('ov-admin-status');
   showToast(`${ids.length}건 변경 중...`,'success');
   let ok=0;
   for(const id of ids){
-    const params={note, force:true}; // 관리자: force=true로 모든 제한 우회
-    if(autoStage) params.stage=autoStage;
-    if(status) params.status=status;
+    const params={note, force:true};
+    // 단계 초기화: current_stage를 빈값으로
+    if(stageReset) params.stage='';
+    else if(autoStage) params.stage=autoStage;
+    // 상태 초기화: pending(미배정)으로
+    if(statusReset || realStatus) params.status=realStatus||'pending';
     const res=await changeLeadStatus(id, params);
     if(res!==false) ok++;
   }
