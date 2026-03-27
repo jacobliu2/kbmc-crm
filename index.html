@@ -9294,8 +9294,13 @@ async function loadBranchScreen(){
   const leaders=TEAM_MAP[curUser.name]||[];
   const grid=document.getElementById('br-leader-cards');
   if(grid){
-    // 지점장 본인 직배정 카드 (team_name 없이 branch_name만 본인인 건)
-    const selfCnt=mine.filter(l=>l.branch_name===curUser.name&&(!l.team_name||l.team_name==='')).length;
+    // 지점장 본인 직배정 카드: 팀장 미배정(team_name 없음, team_names 빈배열) + 드랍 아닌 건만
+    const selfCnt=mine.filter(l=>{
+      if(l.status==='drop') return false;
+      if(l.team_name&&l.team_name.trim()!=='') return false;
+      try{const arr=JSON.parse(l.team_names||'[]');if(arr.length>0) return false;}catch(e){}
+      return true;
+    }).length;
     const selfCard=`<div class="mgr-card" onclick="selectBrLeaderCard(this,'__self__')" data-team="__self__" style="min-width:80px">
       <div class="mgr-name" style="font-size:13px;font-weight:800;color:var(--navy)">${esc(curUser.name)}</div>
       <div style="font-size:16px;font-weight:800;color:var(--navy);margin-top:3px">${selfCnt}</div>
@@ -9373,7 +9378,12 @@ function selectBrLeaderCard(el, team){
   el.classList.add('selected'); _selBrLeader=team;
   // 해당 팀장 DB만 필터링 (__self__: 지점장 직배정 건)
   if(team==='__self__'){
-    brFiltered=brAllLeads.filter(l=>l.status!=='drop'&&l.branch_name===curUser.name&&(!l.team_name||l.team_name===''));
+    brFiltered=brAllLeads.filter(l=>{
+      if(l.status==='drop') return false;
+      if(l.team_name&&l.team_name.trim()!=='') return false;
+      try{const arr=JSON.parse(l.team_names||'[]');if(arr.length>0) return false;}catch(e){}
+      return true;
+    });
   } else {
     brFiltered=brAllLeads.filter(l=>l.status!=='drop'&&(
       l.team_name===team||
@@ -9558,9 +9568,24 @@ async function confirmBrRecall(){
   if(!brSelIds.size){showToast('DB를 선택하세요.','error');return;}
   if(!confirm(brSelIds.size+'건 팀장 배정을 회수하시겠습니까?'))return;
   const ids=[...brSelIds];
+  const recallData={team_name:'',team_names:JSON.stringify([])};
   for(const id of ids){
-    await dbU('leads',id,{team_name:''});
+    await dbU('leads',id,recallData);
     await logActivity(id,'assign','팀장 회수 ('+curUser.name+')','','');
+  }
+  // brAllLeads 캐시 즉시 갱신 → loadBranchScreen 전에 반영
+  if(typeof brAllLeads!=='undefined'&&brAllLeads){
+    ids.forEach(id=>{
+      const l=brAllLeads.find(r=>r.id===id);
+      if(l){l.team_name='';l.team_names=JSON.stringify([]);}
+    });
+  }
+  // allLeads 캐시도 동기화
+  if(typeof allLeads!=='undefined'&&allLeads){
+    ids.forEach(id=>{
+      const l=allLeads.find(r=>r.id===id);
+      if(l){l.team_name='';l.team_names=JSON.stringify([]);}
+    });
   }
   clearBrSel(); showToast(`${ids.length}건 회수 완료`,'success'); loadBranchScreen();
 }
