@@ -1190,6 +1190,7 @@ tbody tr.selected td{background:var(--blue-50)!important}
         <button class="abar-btn blue" onclick="openDistribute()">📨 배정</button>
         <button class="abar-btn warn" onclick="openDrop()">🚫 드랍</button>
         <button class="abar-btn err" onclick="openDelete()">🗑 삭제</button>
+        <button class="abar-btn" id="abar-admin-status" onclick="openAdminStatusChange()" style="display:none;background:#7c3aed;color:#fff;border:none">⚡ 상태변경</button>
         <button class="abar-btn cancel" onclick="clearSel()">✕</button>
       </div>
       <!-- 테이블 -->
@@ -1856,6 +1857,7 @@ tbody tr.selected td{background:var(--blue-50)!important}
             <button class="btn btn-primary btn-sm" onclick="applySbConfig()">저장 및 적용</button>
             <button class="btn btn-outline btn-sm" onclick="testSbConnection()">연결 테스트</button>
             <button class="btn btn-blue btn-sm" onclick="syncAccountsToSB()" title="DB관리 계정 정보를 Supabase에 전체 업로드">☁️ 계정 Supabase 동기화</button>
+            <button class="btn btn-outline btn-sm" onclick="migrateAppliedAt()" title="신청시간 한국어 형식을 ISO 형식으로 일괄 변환" style="color:var(--warn);border-color:var(--warn)">🔧 신청시간 형식 마이그레이션</button>
             <span id="sb-status" style="font-size:12px;color:var(--gray-400)"></span>
           </div>
         </div>
@@ -3877,8 +3879,9 @@ async function changeLeadStatus(leadId, {status, stage, note='', autoLog=true, a
   const prevStatus = prev.status||'';
   const prevStage  = prev.current_stage||'';
 
-  // ── 강제 로직: 기록 없으면 차단 ──────────────────────────
-  if(!force && stage && stage!==prevStage){
+  // ── 강제 로직: 기록 없으면 차단 (관리자는 전면 우회) ────
+  const _isAdmin = curUser?.role==='admin';
+  if(!force && !_isAdmin && stage && stage!==prevStage){
     const LOCKED_STAGES=['제안','협의','계약','관리고객'];
     if(LOCKED_STAGES.includes(stage)){
       const _actCache = typeof allActivities!=='undefined'&&allActivities?.length ? allActivities : lg('activities');
@@ -3914,7 +3917,7 @@ async function changeLeadStatus(leadId, {status, stage, note='', autoLog=true, a
   await dbU('leads', leadId, upd);
 
   if(autoLog){
-    const SL={pending:'배정',assigned:'배정',contacted:'접촉',no_answer:'부재중',drop:'드랍',deleted:'삭제'};
+    const SL={pending:'배정',assigned:'배정',contacted:'접촉',no_answer:'부재중',consulting:'상담중',done:'상담완료',contract:'계약',managed:'관리',drop:'드랍',deleted:'삭제'};
     const parts=[];
     if(status !== undefined && status !== prevStatus)
       parts.push(`상태: ${SL[prevStatus]||prevStatus||'?'} → ${SL[status]||status}`);
@@ -4133,8 +4136,8 @@ function fmtD(v){
   return s.slice(0,10);
 }
 function fmtM(v){const n=parseInt(v)||0;if(!n)return'-';if(n>=100000000)return(n/100000000).toFixed(1)+'억';if(n>=10000)return Math.round(n/10000).toLocaleString()+'만';return n.toLocaleString()+'원';}
-const SL={pending:'배정',assigned:'배정',contacted:'접촉',no_answer:'부재중',drop:'드랍',deleted:'삭제'};
-const SC={pending:'badge-blue',assigned:'badge-blue',contacted:'badge-contacted',consulting:'badge-consulting',done:'badge-done',contract:'badge-contract',no_answer:'badge-no_answer',drop:'badge-drop'};
+const SL={pending:'배정',assigned:'배정',contacted:'접촉',no_answer:'부재중',consulting:'상담중',done:'상담완료',contract:'계약',managed:'관리',drop:'드랍',deleted:'삭제'};
+const SC={pending:'badge-blue',assigned:'badge-blue',contacted:'badge-contacted',consulting:'badge-consulting',done:'badge-done',contract:'badge-contract',managed:'badge-contract',no_answer:'badge-no_answer',drop:'badge-drop'};
 function sBadge(s){return `<span class="badge ${SC[s]||'badge-pending'}">${SL[s]||s||'미접촉'}</span>`;}
 
 // ── Toast ─────────────────────────────────────────────────
@@ -4949,9 +4952,95 @@ function rowClick(e,id){
 
 function toggleAll(on){filtered.slice((curPage-1)*PG,curPage*PG).forEach(l=>{if(on)selIds.add(l.id);else selIds.delete(l.id);}); renderLeadsTable();}
 function clearSel(){selIds.clear();_lastSelId=null;renderLeadsTable();}
-function updateAbar(){const bar=document.getElementById('leads-abar'),cnt=document.getElementById('leads-sel-count');if(selIds.size>0){bar?.classList.add('on');if(cnt)cnt.textContent=selIds.size+'건 선택';}else{bar?.classList.remove('on');}}
+function updateAbar(){
+  const bar=document.getElementById('leads-abar'),cnt=document.getElementById('leads-sel-count');
+  if(selIds.size>0){
+    bar?.classList.add('on');
+    if(cnt) cnt.textContent=selIds.size+'건 선택';
+  } else {
+    bar?.classList.remove('on');
+  }
+  // 관리자 전용 상태변경 버튼 표시
+  const adminBtn=document.getElementById('abar-admin-status');
+  if(adminBtn) adminBtn.style.display=(curUser?.role==='admin'&&selIds.size>0)?'':'none';
+}
 function fByStage(stage){_stageFilter=stage;showScreen('leads',document.querySelector('.nb[data-s="leads"]'));setTimeout(()=>filterLeads(),120);}
 function filterByStatus(s){_stageFilter='';showScreen('leads',document.querySelector('.nb[data-s="leads"]'));setTimeout(()=>{document.getElementById('leads-status').value=s;filterLeads();},120);}
+// ── 관리자 전용 일괄 상태변경 ─────────────────────────────
+function openAdminStatusChange(){
+  if(curUser?.role!=='admin'){showToast('관리자 전용 기능입니다.','error');return;}
+  if(!selIds.size){showToast('변경할 DB를 선택하세요.','error');return;}
+  let ov=document.getElementById('ov-admin-status');
+  if(!ov){ov=document.createElement('div');ov.id='ov-admin-status';ov.className='ov-bg';document.body.appendChild(ov);}
+  ov.innerHTML=`<div class="ov-box" style="width:420px;max-width:96vw">
+    <div style="font-size:17px;font-weight:800;color:var(--navy);margin-bottom:4px">⚡ 상태 일괄 변경</div>
+    <div style="font-size:13px;color:var(--gray-400);margin-bottom:18px">선택 ${selIds.size}건 · 관리자 권한으로 제한 없이 변경됩니다</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--gray-500);margin-bottom:6px">진행단계</div>
+        <select id="admin-stage-sel" style="width:100%;padding:9px 12px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;background:#fff">
+          <option value="">변경 안 함</option>
+          <option value="초기접촉">초기접촉</option>
+          <option value="상담">상담</option>
+          <option value="미팅">미팅</option>
+          <option value="제안">제안</option>
+          <option value="협의">협의</option>
+          <option value="계약">계약</option>
+          <option value="관리고객">관리고객</option>
+        </select>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--gray-500);margin-bottom:6px">상태</div>
+        <select id="admin-status-sel" style="width:100%;padding:9px 12px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;background:#fff">
+          <option value="">변경 안 함</option>
+          <option value="assigned">배정</option>
+          <option value="contacted">접촉</option>
+          <option value="no_answer">부재중</option>
+          <option value="consulting">상담중</option>
+          <option value="done">상담완료</option>
+          <option value="contract">계약</option>
+          <option value="managed">관리</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--gray-500);margin-bottom:6px">메모 <span style="font-weight:400">(선택)</span></div>
+      <input type="text" id="admin-status-note" placeholder="변경 사유" style="width:100%;padding:9px 12px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;box-sizing:border-box">
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-outline" onclick="closeOv('ov-admin-status')">취소</button>
+      <button class="btn btn-primary" onclick="confirmAdminStatusChange()" style="background:#7c3aed;border-color:#7c3aed">⚡ 일괄 변경 확정</button>
+    </div>
+  </div>`;
+  ov.classList.add('open');
+}
+
+async function confirmAdminStatusChange(){
+  const stage=document.getElementById('admin-stage-sel')?.value||'';
+  const status=document.getElementById('admin-status-sel')?.value||'';
+  const note=document.getElementById('admin-status-note')?.value.trim()||'';
+  if(!stage&&!status){showToast('단계 또는 상태를 선택하세요.','error');return;}
+  // 계약/관리 상태 선택 시 current_stage 자동 연동
+  let autoStage=stage;
+  if(status==='contract' && !autoStage) autoStage='계약';
+  if(status==='managed'  && !autoStage) autoStage='관리고객';
+
+  const ids=[...selIds];
+  closeOv('ov-admin-status');
+  showToast(`${ids.length}건 변경 중...`,'success');
+  let ok=0;
+  for(const id of ids){
+    const params={note, force:true}; // 관리자: force=true로 모든 제한 우회
+    if(autoStage) params.stage=autoStage;
+    if(status) params.status=status;
+    const res=await changeLeadStatus(id, params);
+    if(res!==false) ok++;
+  }
+  clearSel();
+  showToast(`✅ ${ok}건 변경 완료`,'success');
+  filterLeads();
+}
+
 function openDrop(){
   if(curUser?.role==='dbmanager'){showToast('DB관리자는 드랍 권한이 없습니다.','error');return;}
   if(!selIds.size){showToast('선택하세요.','error');return;}
@@ -6966,6 +7055,61 @@ async function syncAccountsToSB(){
   if(fail===0) showToast(`✅ ${ok}개 계정 Supabase 동기화 완료`,'success');
   else showToast(`⚠️ ${ok}개 성공 / ${fail}개 실패`,'warn');
 }
+// ── 신청시간 마이그레이션 (한국어 → ISO) ─────────────────
+async function migrateAppliedAt(){
+  if(testMode){showToast('Supabase 연결 후 사용 가능합니다','error');return;}
+  if(!confirm('Supabase의 applied_at 값을 ISO 형식으로 일괄 변환합니다.\n(한국어 오전/오후 형식만 변환, 나머지는 유지)\n계속하시겠습니까?')) return;
+
+  const btn=document.querySelector('[onclick="migrateAppliedAt()"]');
+  if(btn){btn.disabled=true;btn.textContent='변환 중...';}
+
+  // 전체 leads 조회
+  const rows=await sbGet('leads?select=id,applied_at&limit=5000');
+  if(!rows){showToast('데이터 조회 실패','error');if(btn){btn.disabled=false;btn.textContent='🔧 신청시간 형식 마이그레이션';}return;}
+
+  let ok=0, skip=0, fail=0;
+  const targets=rows.filter(r=>{
+    if(!r.applied_at) return false;
+    const s=String(r.applied_at);
+    // 이미 ISO면 스킵, 오전/오후 포함이거나 한국 점 표기면 변환
+    if(/^d{4}-d{2}-d{2}/.test(s)) return false;
+    return true;
+  });
+
+  showToast(`변환 대상 ${targets.length}건 처리 중...`,'success');
+
+  for(const r of targets){
+    const iso=_applyAtToIso(String(r.applied_at));
+    if(!iso){skip++;continue;}
+    const res=await sbPatch('leads',r.id,{applied_at:iso});
+    if(res) ok++; else fail++;
+    // allLeads 캐시도 갱신
+    if(allLeads){const l=allLeads.find(x=>x.id===r.id);if(l)l.applied_at=iso;}
+  }
+
+  if(btn){btn.disabled=false;btn.textContent='🔧 신청시간 형식 마이그레이션';}
+  showToast(`✅ ${ok}건 변환 완료 / ${skip}건 스킵 / ${fail}건 실패`,'success');
+  if(ok>0) filterLeads(); // 화면 갱신
+}
+
+// applied_at 문자열 → ISO 변환 (마이그레이션용)
+function _applyAtToIso(s){
+  if(!s) return null;
+  s=s.trim();
+  if(/^d{4}-d{2}-d{2}/.test(s)) return s; // 이미 ISO
+  // 한국어 오전/오후: '2026. 3. 23 오후 5:58:'
+  if(s.includes('오전')||s.includes('오후')){
+    const t=_parseKorDt(s);
+    return isNaN(t)?null:new Date(t).toISOString();
+  }
+  // 한국 점 표기 날짜: '2026. 3. 23'
+  const km=s.match(/^(d{4}).s*(d{1,2}).s*(d{1,2})/);
+  if(km){const t=Date.UTC(+km[1],+km[2]-1,+km[3]);return isNaN(t)?null:new Date(t).toISOString();}
+  // 기타
+  const t=Date.parse(s);
+  return isNaN(t)?null:new Date(t).toISOString();
+}
+
 async function deleteUser(uid){
   if(!confirm('삭제?'))return;
   const accs=getAccs().filter(a=>a.id!==uid);
