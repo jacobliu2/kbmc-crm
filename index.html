@@ -1631,7 +1631,7 @@ tbody tr.selected td{background:var(--blue-50)!important}
         </button>
         <button class="tm-main-tab" id="tmt-recalldone" onclick="switchTmMainTab('recalldone',this)"
           style="padding:10px 18px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit;white-space:nowrap">
-          ✅ 이관완료 <span id="tq-recalldone" style="font-size:11px;padding:1px 5px;background:var(--gray-100);color:var(--gray-500);border-radius:8px;margin-left:3px">0</span>
+          🔄 재콜 <span id="tq-recalldone" style="font-size:11px;padding:1px 5px;background:var(--gray-100);color:var(--gray-500);border-radius:8px;margin-left:3px">0</span>
         </button>
       </div>
 
@@ -8983,11 +8983,14 @@ async function loadTmPanel(){
   const cntHC=tmLeads.filter(l=>l.tm_happycall&&!l.happycall_done&&(!l.happycall_date||l.happycall_date<=today)).length;
   const cntHCPending=tmLeads.filter(l=>l.tm_happycall&&!l.happycall_done&&l.happycall_date&&l.happycall_date>today).length;
   const cntDrop=tmLeads.filter(l=>l.status==='drop').length;
-  const cntRecallDone=tmLeads.filter(l=>{
-    if(!l.tm_done) return false;
+  const cntRecallDone=(function(){
     const acts3=allActivities?.length?allActivities:lg('activities');
-    return acts3.some(a=>a.lead_id===l.id&&a.type!=='assign'&&a.type!=='status_change');
-  }).length;
+    const teamNames=new Set(Object.values(window.TEAM_MAP||{}).flat());
+    return tmLeads.filter(l=>{
+      if(!(l.tm_transferred===true||l.tm_transferred==='true')) return false;
+      return acts3.some(a=>a.lead_id===l.id&&a.type!=='assign'&&a.type!=='status_change'&&teamNames.has(a.author));
+    }).length;
+  })();
 
   // 48h 미통화 (TM 이관 후 48h 이상 미통화)
   const overdue48=tmLeads.filter(l=>{
@@ -9036,6 +9039,16 @@ async function loadTmPanel(){
   _tmMainTab=defaultTab; _tmQuickTab=defaultTab;
   switchTmMainTab(defaultTab,document.getElementById('tmt-'+defaultTab));
   renderAllTmTabs();
+  // 뷰 상태 복원 (목록뷰 유지)
+  if(_tmViewMode==='list'){
+    ['all','new','contacted','happycall','drop','recalldone'].forEach(t=>{
+      const el=document.getElementById('tm-tab-'+t);
+      if(el) el.style.display='none';
+    });
+    const lv=document.getElementById('tm-list-view');
+    if(lv) lv.style.display='';
+    renderTmListView();
+  }
 }
 
 // tmQuickTab 하위호환
@@ -9057,6 +9070,20 @@ function switchTmMainTab(tab,btn){
     activeBtn.style.fontWeight='700';
     const sp=activeBtn.querySelector('span');
     if(sp){sp.style.background='rgba(49,130,246,.12)';sp.style.color='var(--blue)';}
+  }
+  // 목록뷰 상태면 카드탭 숨기고 목록뷰 업데이트
+  if(_tmViewMode==='list'){
+    ['all','new','contacted','happycall','drop','recalldone'].forEach(t=>{
+      const el=document.getElementById('tm-tab-'+t);
+      if(el) el.style.display='none';
+    });
+    const lv=document.getElementById('tm-list-view');
+    if(lv) lv.style.display='';
+    const s=(document.getElementById('tm-search')?.value||'').toLowerCase();
+    const br=document.getElementById('tm-branch-filter')?.value||'';
+    tmFiltered=_filterForTab(tab,s,br);
+    renderTmListView();
+    return;
   }
   ['all','new','contacted','happycall','drop','recalldone'].forEach(t=>{
     const el=document.getElementById('tm-tab-'+t);
@@ -9171,11 +9198,13 @@ function _filterForTab(tab,s,br){
       return !l.happycall_date||l.happycall_date<=today;
     }
     if(tab==='drop') return l.status==='drop';
-    // 이관완료: tm_done=true + 기존 팀장 활동기록 있는 건
+    // 재콜: 팀장 활동기록이 있는 건 + tm_transferred=true (팀장→대전TM 재이관)
     if(tab==='recalldone'){
-      if(!l.tm_done) return false;
+      if(!(l.tm_transferred===true||l.tm_transferred==='true')) return false;
       const acts2=allActivities?.length?allActivities:lg('activities');
-      return acts2.some(a=>a.lead_id===l.id&&a.type!=='assign'&&a.type!=='status_change');
+      const teamNames=new Set(Object.values(window.TEAM_MAP||{}).flat());
+      // 팀장이 작성한 활동기록이 1건이라도 있으면 재콜
+      return acts2.some(a=>a.lead_id===l.id&&a.type!=='assign'&&a.type!=='status_change'&&teamNames.has(a.author));
     }
     return true;
   });
@@ -9617,7 +9646,7 @@ async function saveTmRecord(){
   }
   closeM('modal-tm-input');
   showToast('TM 기록 저장','success');
-  loadTmPanel();
+  await loadTmPanel();
 }
 
 
