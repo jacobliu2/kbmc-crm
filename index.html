@@ -1632,6 +1632,10 @@ tbody tr.selected td{background:var(--blue-50)!important}
           style="padding:10px 18px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit;white-space:nowrap">
           드랍 <span id="tq-drop" style="font-size:11px;padding:1px 5px;background:var(--gray-100);color:var(--gray-500);border-radius:8px;margin-left:3px">0</span>
         </button>
+        <button class="tm-main-tab" id="tmt-recalldone" onclick="switchTmMainTab('recalldone',this)"
+          style="padding:10px 18px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit;white-space:nowrap">
+          ✅ 이관완료 <span id="tq-recalldone" style="font-size:11px;padding:1px 5px;background:var(--gray-100);color:var(--gray-500);border-radius:8px;margin-left:3px">0</span>
+        </button>
       </div>
 
       <!-- 탭별 단(컨테이너) -->
@@ -1640,7 +1644,7 @@ tbody tr.selected td{background:var(--blue-50)!important}
       </div>
       <div id="tm-tab-new" style="padding-top:16px">
         <!-- 48h 미통화 경고 배너 -->
-        <div id="tm-overdue-banner" style="display:none;margin-bottom:12px;padding:10px 14px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:var(--r-sm);display:flex;align-items:center;gap:10px">
+        <div id="tm-overdue-banner" style="display:none;margin-bottom:12px;padding:10px 14px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:var(--r-sm);align-items:center;gap:10px">
           <span style="font-size:18px">⛔</span>
           <div>
             <div style="font-size:13px;font-weight:700;color:var(--err)" id="tm-overdue-title">48시간 미통화 건 있음</div>
@@ -1660,6 +1664,22 @@ tbody tr.selected td{background:var(--blue-50)!important}
       </div>
       <div id="tm-tab-drop" style="display:none;padding-top:16px">
         <div id="tm-card-grid-drop" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px"></div>
+      </div>
+      <div id="tm-tab-recalldone" style="display:none;padding-top:16px">
+        <div id="tm-card-grid-recalldone" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px"></div>
+      </div>
+
+      <!-- ⑤ 목록뷰 전환 버튼 -->
+      <div style="position:fixed;bottom:24px;right:24px;z-index:200">
+        <button id="tm-view-toggle" onclick="toggleTmView()"
+          style="padding:8px 14px;background:var(--navy);color:#fff;border:none;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 3px 10px rgba(0,0,0,.2);display:flex;align-items:center;gap:6px">
+          <span id="tm-view-icon">☰</span>
+          <span id="tm-view-label">목록뷰</span>
+        </button>
+      </div>
+      <!-- 목록뷰 컨테이너 -->
+      <div id="tm-list-view" style="display:none;padding-top:16px">
+        <div id="tm-list-wrap"></div>
       </div>
     </div>
     <!-- TM 입력 모달 -->
@@ -4852,9 +4872,14 @@ let _visCols=getVisibleCols();
 function colVal(l, key, acts){
   switch(key){
     case 'company_name': {
-      const isRecall=l.tm_transferred&&l.tm_done;  // 재콜: 한번 완료 후 다시 대전 배정
-      const clr=isRecall?'#7c3aed':'var(--navy)';
-      const tag=isRecall?'<span style="font-size:9px;font-weight:700;color:#7c3aed;background:rgba(124,58,237,.08);padding:1px 5px;border-radius:6px;margin-left:4px">재콜</span>':'';
+      const isRecall=l.tm_transferred&&l.tm_done;
+      const isTmDone=!l.tm_transferred&&l.tm_done&&l.status==='pending'; // 이관완료 → 관리자 대기
+      const clr=isRecall?'#7c3aed':isTmDone?'var(--ok)':'var(--navy)';
+      const tag=isRecall
+        ?'<span style="font-size:9px;font-weight:700;color:#7c3aed;background:rgba(124,58,237,.08);padding:1px 5px;border-radius:6px;margin-left:4px">재콜</span>'
+        :isTmDone
+        ?'<span style="font-size:9px;font-weight:700;color:var(--ok);background:rgba(0,192,115,.1);padding:1px 5px;border-radius:6px;margin-left:4px">TM완료</span>'
+        :'';
       return `<td style="font-weight:700;color:${clr}">${esc(l.company_name||'-')}${tag}</td>`;
     }
     case 'contact_name': return`<td>${esc(l.contact_name||'-')}</td>`;
@@ -8953,6 +8978,11 @@ async function loadTmPanel(){
   const cntHC=tmLeads.filter(l=>l.tm_happycall&&!l.happycall_done&&(!l.happycall_date||l.happycall_date<=today)).length;
   const cntHCPending=tmLeads.filter(l=>l.tm_happycall&&!l.happycall_done&&l.happycall_date&&l.happycall_date>today).length;
   const cntDrop=tmLeads.filter(l=>l.status==='drop').length;
+  const cntRecallDone=tmLeads.filter(l=>{
+    if(!l.tm_done) return false;
+    const acts3=allActivities?.length?allActivities:lg('activities');
+    return acts3.some(a=>a.lead_id===l.id&&a.type!=='assign'&&a.type!=='status_change');
+  }).length;
 
   // 48h 미통화 (TM 이관 후 48h 이상 미통화)
   const overdue48=tmLeads.filter(l=>{
@@ -8969,6 +8999,7 @@ async function loadTmPanel(){
   setTQ('tq-done',cntDone);
   setTQ('tq-hc',cntHC+(cntHCPending>0?` (+${cntHCPending}예정)`:''));
   setTQ('tq-drop',cntDrop);
+  setTQ('tq-recalldone',cntRecallDone);
 
   const tmSub=document.getElementById('tm-sub');
   if(tmSub) tmSub.textContent=cntAll+'건';
@@ -9022,13 +9053,97 @@ function switchTmMainTab(tab,btn){
     const sp=activeBtn.querySelector('span');
     if(sp){sp.style.background='rgba(49,130,246,.12)';sp.style.color='var(--blue)';}
   }
-  ['all','new','scheduled','contacted','happycall','drop'].forEach(t=>{
+  ['all','new','scheduled','contacted','happycall','drop','recalldone'].forEach(t=>{
     const el=document.getElementById('tm-tab-'+t);
     if(el) el.style.display=(t===tab?'':'none');
   });
-  filterTmLeads();
+  const s=(document.getElementById('tm-search')?.value||'').toLowerCase();
+  const br=document.getElementById('tm-branch-filter')?.value||'';
+  tmFiltered=_filterForTab(tab,s,br);
+  _renderTmCardsToGrid('tm-card-grid-'+tab, tmFiltered);
 }
 function switchTmView(){}  // 호환성 유지
+
+// ── 목록뷰 토글 ─────────────────────────────────────────
+let _tmViewMode='card'; // 'card' | 'list'
+function toggleTmView(){
+  _tmViewMode=_tmViewMode==='card'?'list':'card';
+  const icon=document.getElementById('tm-view-icon');
+  const label=document.getElementById('tm-view-label');
+  if(icon) icon.textContent=_tmViewMode==='list'?'⊞':'☰';
+  if(label) label.textContent=_tmViewMode==='list'?'카드뷰':'목록뷰';
+
+  // 모든 카드 그리드 탭 show/hide
+  const tabs=['all','new','scheduled','contacted','happycall','drop','recalldone'];
+  tabs.forEach(t=>{
+    const tabEl=document.getElementById('tm-tab-'+t);
+    if(tabEl&&tabEl.style.display!=='none'){
+      tabEl.style.display=_tmViewMode==='list'?'none':'';
+    }
+  });
+  const listView=document.getElementById('tm-list-view');
+  if(listView) listView.style.display=_tmViewMode==='list'?'':'none';
+
+  if(_tmViewMode==='list') renderTmListView();
+}
+
+function renderTmListView(){
+  const wrap=document.getElementById('tm-list-wrap');
+  if(!wrap) return;
+  const s=(document.getElementById('tm-search')?.value||'').toLowerCase();
+  const br=document.getElementById('tm-branch-filter')?.value||'';
+  const data=_filterForTab(_tmMainTab,s,br);
+  if(!data.length){
+    wrap.innerHTML='<div style="text-align:center;padding:40px;color:var(--gray-400);font-size:14px">해당 DB 없음</div>';
+    return;
+  }
+  const TML={pending:'미배정',assigned:'배정',contacted:'통화완료',no_answer:'부재중',drop:'드랍'};
+  const acts=allActivities?.length?allActivities:lg('activities');
+  wrap.innerHTML=`<div class="db-wrap" style="overflow-x:auto">
+    <table class="db-table" style="width:100%;border-collapse:collapse">
+      <thead><tr style="background:var(--navy);color:#fff;font-size:12px">
+        <th style="padding:8px 12px;text-align:left;white-space:nowrap">회사명</th>
+        <th style="padding:8px 12px;text-align:left;white-space:nowrap">신청자</th>
+        <th style="padding:8px 12px;text-align:left;white-space:nowrap">연락처</th>
+        <th style="padding:8px 12px;text-align:left;white-space:nowrap">지점</th>
+        <th style="padding:8px 12px;text-align:left;white-space:nowrap">팀장</th>
+        <th style="padding:8px 12px;text-align:left;white-space:nowrap">상태</th>
+        <th style="padding:8px 12px;text-align:left;white-space:nowrap">TM결과</th>
+        <th style="padding:8px 12px;text-align:left;white-space:nowrap">TM날짜</th>
+        <th style="padding:8px 12px;text-align:left;white-space:nowrap">1차미팅일</th>
+        <th style="padding:8px 12px;text-align:left;white-space:nowrap">최근활동</th>
+        <th style="padding:8px 12px;text-align:left;white-space:nowrap">기록</th>
+      </tr></thead>
+      <tbody>
+        ${data.map(l=>{
+          const lastAct=acts.filter(a=>a.lead_id===l.id&&a.type!=='assign').sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];
+          const isRecall=l.tm_transferred&&l.tm_done;
+          const rowStyle=isRecall?'background:rgba(124,58,237,.04)':'';
+          return `<tr onclick="openTmDetail('${l.id}')" style="border-bottom:1px solid var(--gray-100);cursor:pointer;${rowStyle}" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background='${isRecall?'rgba(124,58,237,.04)':''}'" >
+            <td style="padding:9px 12px;font-weight:700;color:var(--navy);font-size:13px">
+              ${esc(l.company_name||'-')}
+              ${isRecall?'<span style="font-size:9px;color:#7c3aed;background:rgba(124,58,237,.08);padding:1px 5px;border-radius:6px;margin-left:4px">재콜</span>':''}
+            </td>
+            <td style="padding:9px 12px;font-size:12px">${esc(l.contact_name||'-')}</td>
+            <td style="padding:9px 12px;font-size:12px">${esc(l.phone||'-')}</td>
+            <td style="padding:9px 12px;font-size:11px">
+              ${l.branch_name?'<span class="badge badge-navy" style="font-size:10px">'+esc(l.branch_name)+'</span>':'-'}
+            </td>
+            <td style="padding:9px 12px;font-size:11px;color:var(--gray-600)">${esc(l.team_name||'-')}</td>
+            <td style="padding:9px 12px">${sBadge(l.status)}</td>
+            <td style="padding:9px 12px;font-size:11px;color:var(--gray-600)">${TML[l.tm_result]||l.tm_result||'-'}</td>
+            <td style="padding:9px 12px;font-size:11px;color:var(--gray-400)">${fmtD(l.tm_date)}</td>
+            <td style="padding:9px 12px;font-size:11px;color:var(--blue);font-weight:600">${fmtD(l.tm_meeting)||'-'}</td>
+            <td style="padding:9px 12px;font-size:11px;color:var(--gray-500);max-width:180px">${esc((lastAct?.content||'').slice(0,40)||'-')}</td>
+            <td style="padding:9px 12px">
+              <button class="btn btn-primary btn-xs" onclick="event.stopPropagation();openTmInput('${l.id}','${esc(l.company_name||'')}')">기록</button>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
 
 function _filterForTab(tab,s,br){
   const today=new Date().toISOString().slice(0,10);
@@ -9051,6 +9166,12 @@ function _filterForTab(tab,s,br){
       return !l.happycall_date||l.happycall_date<=today;
     }
     if(tab==='drop') return l.status==='drop';
+    // 이관완료: tm_done=true + 기존 팀장 활동기록 있는 건
+    if(tab==='recalldone'){
+      if(!l.tm_done) return false;
+      const acts2=allActivities?.length?allActivities:lg('activities');
+      return acts2.some(a=>a.lead_id===l.id&&a.type!=='assign'&&a.type!=='status_change');
+    }
     return true;
   });
 }
@@ -9182,7 +9303,7 @@ function renderTmCards(){
 function renderAllTmTabs(){
   const s=(document.getElementById('tm-search')?.value||'').toLowerCase();
   const br=document.getElementById('tm-branch-filter')?.value||'';
-  ['all','new','scheduled','contacted','happycall','drop'].forEach(tab=>{
+  ['all','new','scheduled','contacted','happycall','drop','recalldone'].forEach(tab=>{
     _renderTmCardsToGrid('tm-card-grid-'+tab, _filterForTab(tab,s,br));
   });
 }
