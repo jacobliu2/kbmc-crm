@@ -6495,7 +6495,12 @@ async function saveActivity(){
 let myLeads=[];
 async function loadMyLeads(){
   const [all, nas] = await Promise.all([dbQ('leads'), dbQ('next_actions')]);
-  myLeads=all.filter(l=>l.team_name===curUser.name&&l.status!=='deleted');
+  myLeads=all.filter(l=>{
+    if(l.status==='deleted') return false;
+    if(l.team_name===curUser.name) return true;
+    // 협업/공동배정: team_names에 내 이름 포함
+    try{ return JSON.parse(l.team_names||'[]').includes(curUser.name); }catch(e){ return false; }
+  });
   ls('next_actions', nas);
   (document.getElementById('my-leads-sub')||{}).textContent=myLeads.length+'건';
   renderMyGoal(); renderNAWidget(); renderTodayTodo(); filterMyLeads();
@@ -9786,8 +9791,6 @@ async function loadBranchScreen(){
     if(l.branch_name===curUser.name) return true;
     try{const arr=JSON.parse(l.team_names||'[]');if(arr.length&&arr.some(t=>myTeams.has(t)))return true;}catch(e){}
     if(l.team_name){const names=l.team_name.split(', ').map(s=>s.trim());if(names.some(n=>myTeams.has(n)))return true;}
-    // 협업 건: team_names에 내 지점 소속 아닌 팀장이 포함된 건
-    try{const mySet=new Set([curUser.name,...(TEAM_MAP[curUser.name]||[])]);const arr=JSON.parse(l.team_names||'[]');if(arr.length&&arr.some(t=>!mySet.has(t)))return true;}catch(e){}
     return false;
   });
   const mine=brAllLeads;
@@ -9853,8 +9856,10 @@ async function loadBranchScreen(){
       if(l.status==='drop') return false;
       try{
         const arr=JSON.parse(l.team_names||'[]');
-        // team_names에 내 지점이 아닌 팀장이 1명이라도 있으면 협업 건
-        return arr.some(t=>!myTeamSetForCollab.has(t));
+        // 내 소속 팀장이 포함 AND 타 지점 팀장도 포함된 건만 협업
+        const hasMyTeam=arr.some(t=>myTeamSetForCollab.has(t));
+        const hasOtherTeam=arr.some(t=>!myTeamSetForCollab.has(t));
+        return hasMyTeam&&hasOtherTeam;
       }catch(e){return false;}
     });
     const collabCard=collabLeads.length?`<div class="mgr-card" onclick="selectBrLeaderCard(this,'__collab__')" data-team="__collab__" style="min-width:80px;border-color:var(--blue)">
@@ -9907,13 +9912,15 @@ function selectBrLeaderCard(el, team){
       return true;
     });
   } else if(team==='__collab__'){
-    // 협업 건: team_names에 내 지점 소속이 아닌 타 지점 팀장이 포함된 건
+    // 협업 건: 내 소속 팀장 포함 AND 타 지점 팀장도 포함된 건
     const myTeamSetCollab=new Set([curUser.name,...(TEAM_MAP[curUser.name]||[])]);
     brFiltered=brAllLeads.filter(l=>{
       if(l.status==='drop') return false;
       try{
         const arr=JSON.parse(l.team_names||'[]');
-        return arr.some(t=>!myTeamSetCollab.has(t));
+        const hasMyTeam=arr.some(t=>myTeamSetCollab.has(t));
+        const hasOtherTeam=arr.some(t=>!myTeamSetCollab.has(t));
+        return hasMyTeam&&hasOtherTeam;
       }catch(e){return false;}
     });
   } else {
@@ -9961,7 +9968,7 @@ function renderBrTable(){
     <td style="font-size:11px">${esc((l.consult_type||'').slice(0,18))}</td>
     <td>${sBadge(l.status)}</td>
     <td>${(function(){
-      const isCollab=(function(){try{const mySet=new Set([curUser.name,...(TEAM_MAP[curUser.name]||[])]);const arr=JSON.parse(l.team_names||'[]');return arr.some(t=>!mySet.has(t));}catch(e){return false;}})();
+      const isCollab=(function(){try{const mySet=new Set([curUser.name,...(TEAM_MAP[curUser.name]||[])]);const arr=JSON.parse(l.team_names||'[]');return arr.some(t=>mySet.has(t))&&arr.some(t=>!mySet.has(t));}catch(e){return false;}})();
       if(!l.team_name) return '<span class="badge badge-no_answer" style="font-size:10px">미배정</span>';
       const badge='<span class="badge badge-blue" style="font-size:10px">'+esc(l.team_name)+'</span>';
       const collabBadge=isCollab?'<span class="badge" style="font-size:9px;background:rgba(49,130,246,.1);color:var(--blue);margin-left:3px">🤝협업</span>':'';
