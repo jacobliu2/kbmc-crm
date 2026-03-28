@@ -2225,6 +2225,7 @@ tbody tr.selected td{background:var(--blue-50)!important}
       <div>
         <div class="mt">📝 활동 등록</div>
         <div style="font-size:13px;font-weight:700;color:var(--navy);margin-top:4px" id="act-company-name"></div>
+        <div id="act-lead-meta" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px"></div>
       </div>
       <button class="mc" onclick="closeM('modal-activity')">✕</button>
     </div>
@@ -4621,7 +4622,7 @@ const PG=50;
 
 async function loadLeads(){
   // 역할별 엑셀 업로드 버튼 제어
-  const _canUpload = curUser?.role==='admin' || curUser?.role==='branch' || curUser?.role==='dbmanager';
+  const _canUpload = curUser?.role==='admin' || curUser?.role==='dbmanager' || curUser?.role==='tm';
   const _uploadWrap = document.getElementById('btn-excel-upload-wrap');
   const _tplBtn = document.getElementById('btn-template-download');
   if(_uploadWrap) _uploadWrap.style.display = _canUpload ? '' : 'none';
@@ -4631,7 +4632,9 @@ async function loadLeads(){
   const _abarDrop = document.querySelector('#leads-abar .abar-btn.warn');
   const _abarDel  = document.querySelector('#leads-abar .abar-btn.err');
   const _isDbMgr  = curUser?.role==='dbmanager';
-  if(_abarDist) _abarDist.style.display = _isDbMgr ? 'none' : '';
+  const _isTeam   = curUser?.role==='team';
+  // dbmanager: 배정/드랍/삭제 모두 숨김, team: 배정만 숨김
+  if(_abarDist) _abarDist.style.display = (_isDbMgr||_isTeam) ? 'none' : '';
   if(_abarDrop) _abarDrop.style.display = _isDbMgr ? 'none' : '';
   if(_abarDel)  _abarDel.style.display  = _isDbMgr ? 'none' : '';
   const isYJ=curUser?.name==='유영준';
@@ -4848,7 +4851,12 @@ let _visCols=getVisibleCols();
 
 function colVal(l, key, acts){
   switch(key){
-    case 'company_name': return`<td style="font-weight:700;color:var(--navy)">${esc(l.company_name||'-')}</td>`;
+    case 'company_name': {
+      const isRecall=l.tm_transferred&&l.tm_done;  // 재콜: 한번 완료 후 다시 대전 배정
+      const clr=isRecall?'#7c3aed':'var(--navy)';
+      const tag=isRecall?'<span style="font-size:9px;font-weight:700;color:#7c3aed;background:rgba(124,58,237,.08);padding:1px 5px;border-radius:6px;margin-left:4px">재콜</span>':'';
+      return `<td style="font-weight:700;color:${clr}">${esc(l.company_name||'-')}${tag}</td>`;
+    }
     case 'contact_name': return`<td>${esc(l.contact_name||'-')}</td>`;
     case 'phone':        return`<td style="font-size:12px">${esc(l.phone||'-')}</td>`;
     case 'distributed_at': return`<td style="font-size:11px;color:var(--gray-400)">${fmtD(l.distributed_at||l.created_at)}</td>`;
@@ -4860,13 +4868,19 @@ function colVal(l, key, acts){
     case 'tax_delinquent':return`<td style="font-size:11px">${l.tax_delinquent&&l.tax_delinquent!=='없음'?`<span style="color:var(--err);font-weight:700">${esc(l.tax_delinquent)}</span>`:esc(l.tax_delinquent||'-')}</td>`;
     case 'email':        return`<td style="font-size:11px">${esc(l.email||'-')}</td>`;
     case 'note':         return`<td style="font-size:11px;color:var(--gray-400)">${esc(l.note||'-')}</td>`;
-    case 'branch_name':  return`<td>${l.yj_transferred?`<span class="badge" style="font-size:10px;background:rgba(124,58,237,.1);color:#7c3aed">초도이관</span>`:(l.branch_name?`<span class="badge badge-navy" style="font-size:10px">${esc(l.branch_name)}</span>`:'-')}</td>`;
+    case 'branch_name': return(function(){
+      if(l.yj_transferred) return '<td><span class="badge" style="font-size:10px;background:rgba(124,58,237,.1);color:#7c3aed">초도이관</span></td>';
+      const hasTm=(function(){try{return JSON.parse(l.collab_branches||'[]').includes('대전TM');}catch(e){return false;}})();
+      const brBadge=l.branch_name?'<span class="badge badge-navy" style="font-size:10px">'+esc(l.branch_name)+'</span>':'';
+      const tmBadge=hasTm?'<span class="badge" style="font-size:10px;background:rgba(124,58,237,.1);color:#7c3aed;margin-left:3px">대전</span>':'';
+      return '<td>'+(brBadge||tmBadge?brBadge+tmBadge:'-')+'</td>';
+    })();
     case 'team_name':    return`<td>${l.team_name?`<span class="badge badge-blue" style="font-size:10px">${esc(l.team_name.slice(0,8))}</span>`:'-'}</td>`;
     case 'status':       return`<td>${sBadge(l.status)}</td>`;
     // 대전TM
-    case 'tm_result':    return`<td style="font-size:11px">${esc(l.tm_result||'-')}</td>`;
+    case 'tm_result':    {const _TML={pending:'미배정',assigned:'배정',contacted:'통화완료',no_answer:'부재중',drop:'드랍',consulting:'상담중'};return`<td style="font-size:11px;color:var(--gray-600)">${esc(_TML[l.tm_result]||l.tm_result||'-')}</td>`;}
     case 'tm_date':      return`<td style="font-size:11px;color:var(--gray-400)">${fmtD(l.tm_date)}</td>`;
-    case 'tm_meeting':   return`<td style="font-size:11px;color:var(--blue)">${fmtD(l.tm_meeting_date)}</td>`;
+    case 'tm_meeting':   return`<td style="font-size:11px;color:var(--blue)">${fmtD(l.tm_meeting)}</td>`;
     case 'tm_content':   return`<td style="font-size:11px;max-width:160px;overflow:visible">${esc((l.tm_content||'-').slice(0,50))}</td>`;
     case 'tm_happycall': return`<td style="font-size:11px;max-width:160px;overflow:visible">${esc((l.tm_happycall||'-').slice(0,50))}</td>`;
     // 진행내용
@@ -5247,12 +5261,36 @@ function _renderLDetailInfo(lead){
         ${STAGE_LIST.map(s=>`<option value="${s}" ${lead.current_stage===s?'selected':''}>${s}</option>`).join('')}
       </select>
     </div>`;
+  // 관리지점 행
+  const _isTm=lead.branch_name==='대전'||lead.tm_transferred;
+  const _hasTmCollab=(function(){try{return JSON.parse(lead.collab_branches||'[]').includes('대전TM');}catch(e){return false;}})();
+  const _brLabel=_isTm
+    ?`<span style="font-size:13px;font-weight:700;color:#7c3aed">${esc(lead.branch_name||'대전TM')}</span>`
+    :(lead.branch_name?`<span style="font-size:13px;font-weight:500;color:var(--gray-800)">${esc(lead.branch_name)}</span>`:'<span style="color:var(--gray-200)">—</span>');
+  const _tmBadge=_isTm
+    ?'<span style="font-size:10px;font-weight:700;color:#7c3aed;background:rgba(124,58,237,.1);padding:1px 6px;border-radius:8px;margin-left:6px">대전TM</span>'
+    :(_hasTmCollab?'<span style="font-size:10px;font-weight:700;color:#7c3aed;background:rgba(124,58,237,.1);padding:1px 6px;border-radius:8px;margin-left:6px">대전</span>':'');
+  const _brRow=`<div style="padding:9px 14px;border-bottom:1px solid var(--gray-100);display:flex;gap:8px;align-items:center">
+    <span style="font-size:11px;color:var(--gray-400);font-weight:500;min-width:72px;flex-shrink:0">관리지점</span>
+    ${_brLabel}${_tmBadge}
+  </div>`;
+  // 관리팀장 행 (복수 포함)
+  let _teamNames=[];
+  try{_teamNames=JSON.parse(lead.team_names||'[]');}catch(e){}
+  if(!_teamNames.length&&lead.team_name) _teamNames=lead.team_name.split(', ').map(s=>s.trim()).filter(Boolean);
+  const _teamDisplay=_teamNames.length
+    ?_teamNames.map(t=>`<span style="font-size:12px;font-weight:600;color:var(--navy);background:rgba(15,40,90,.07);padding:2px 8px;border-radius:8px;margin-right:4px">${esc(t)}</span>`).join('')
+    :'<span style="color:var(--gray-200)">—</span>';
+  const _teamRow=`<div style="padding:9px 14px;border-bottom:1px solid var(--gray-100);display:flex;gap:8px;align-items:flex-start">
+    <span style="font-size:11px;color:var(--gray-400);font-weight:500;min-width:72px;flex-shrink:0;padding-top:3px">관리팀장</span>
+    <div style="display:flex;flex-wrap:wrap;gap:3px">${_teamDisplay}</div>
+  </div>`;
+
   grid.innerHTML = statusHtml +
     row('신청자',   lead.contact_name) +
     row('연락처',   lead.phone) +
     row('이메일',   lead.email) +
-    row('지점',     lead.branch_name) +
-    row('팀장',     lead.team_name) +
+    _brRow + _teamRow +
     row('소재지',   lead.region) +
     row('업종',     lead.industry) +
     row('매출',     lead.revenue) +
@@ -5478,6 +5516,28 @@ let curActStatus='';
 function openActM(lid,cname){
   (document.getElementById('act-lead-id')||{}).value=lid;
   (document.getElementById('act-company-name')||{}).textContent=cname;
+  // 담당 지점 / 담당 팀장 메타 표시
+  const _metaEl=document.getElementById('act-lead-meta');
+  if(_metaEl){
+    const _lead=allLeads?.find(l=>l.id===lid)||myLeads?.find(l=>l.id===lid);
+    const _isTm=_lead?.branch_name==='대전'||_lead?.tm_transferred;
+    const _brColor=_isTm?'#7c3aed':'var(--navy)';
+    const _brBg=_isTm?'rgba(124,58,237,.08)':'rgba(15,40,90,.07)';
+    let _teamNames=[];
+    try{_teamNames=JSON.parse(_lead?.team_names||'[]');}catch(e){}
+    if(!_teamNames.length&&_lead?.team_name) _teamNames=_lead.team_name.split(', ').map(s=>s.trim()).filter(Boolean);
+    const _brBadge=_lead?.branch_name
+      ?'<span style="font-size:10px;font-weight:700;color:'+_brColor+';background:'+_brBg+';padding:2px 7px;border-radius:8px">'+esc(_lead.branch_name)+'</span>'
+      :'';
+    // 대전 협업/동반배정 배지
+    const _hasTmCollab=(function(){
+      if(_lead?.tm_transferred===true||_lead?.tm_transferred==='true') return true;
+      try{return JSON.parse(_lead?.collab_branches||'[]').includes('대전TM');}catch(e){return false;}
+    })();
+    const _tmCollabBadge=_hasTmCollab?'<span style="font-size:10px;font-weight:700;color:#7c3aed;background:rgba(124,58,237,.08);padding:2px 7px;border-radius:8px">대전</span>':'';
+    const _tmBadges=_teamNames.map(t=>'<span style="font-size:10px;font-weight:700;color:var(--blue);background:rgba(49,130,246,.08);padding:2px 7px;border-radius:8px">'+esc(t)+'</span>').join('');
+    _metaEl.innerHTML=(_brBadge||_tmBadges||_tmCollabBadge)?(_brBadge+_tmCollabBadge+_tmBadges):'';
+  }
   (document.getElementById('act-content')||{}).value='';
   // 서류접수 드롭다운 — 현재 상태 표시
   const docEl=document.getElementById('act-doc-received');
@@ -6081,98 +6141,9 @@ function renderBrTodayTodo(targetId){
   let todos=[];
   try{todos=JSON.parse(localStorage.getItem(TODO_KEY)||'[]');}catch(e){}
 
-  function daysElapsed(dateStr){
-    if(!dateStr) return 0;
-    return Math.floor((Date.now()-new Date(dateStr).getTime())/86400000);
-  }
+  // daysElapsed: 5824번 줄에 정의됨
 
-  function todoRowBr(t){
-    const done=t.done||false;
-    const overdue=t.due_date&&t.due_date<today&&!done;
-    const elapsed=overdue?daysElapsed(t.due_date):0;
-    return`<div id="br-todo-row-${t.id}" style="display:flex;align-items:center;gap:8px;padding:7px 10px;
-      background:${done?'transparent':overdue?'rgba(239,68,68,.06)':'rgba(37,99,235,.04)'};
-      border-radius:6px;border-left:3px solid ${done?'var(--gray-200)':overdue?'var(--err)':'var(--blue)'};
-      opacity:${done?.6:1};transition:all .2s">
-      <input type="checkbox" ${done?'checked':''} onchange="brToggleTodo('${t.id}',this.checked)"
-        style="accent-color:var(--blue);width:15px;height:15px;cursor:pointer;flex-shrink:0">
-      <div style="flex:1;min-width:0" ondblclick="brEditTodo('${t.id}')">
-        <div style="font-size:12px;font-weight:600;
-          color:${done?'var(--gray-400)':'var(--gray-800)'};
-          ${done?'text-decoration:line-through':''}">
-          ${esc(t.text)}
-          <span style="font-size:10px;color:var(--gray-300);margin-left:4px" title="더블클릭으로 편집">✎</span>
-        </div>
-        ${t.due_date?`<div style="font-size:10px;margin-top:1px;color:${overdue?'var(--err)':'var(--gray-400)'}">
-          ${t.due_date}${overdue?` · <strong>+${elapsed}일 경과</strong>`:''}
-        </div>`:''}
-      </div>
-      <button onclick="brDeleteTodo('${t.id}')" style="background:none;border:none;color:var(--gray-300);
-        cursor:pointer;font-size:12px;padding:2px 4px;flex-shrink:0" title="삭제">✕</button>
-    </div>`;
-  }
-
-  // 시스템 알림 아이템
-  const sysItems=[];
-  if(warn30.length>0) sysItems.push(`
-    <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:rgba(239,68,68,.07);border-radius:6px;border-left:3px solid var(--err)">
-      <span style="font-size:14px">⚠️</span>
-      <div style="flex:1"><div style="font-size:12px;font-weight:700;color:var(--err)">30h 미기록 ${warn30.length}건</div>
-      <div style="font-size:11px;color:var(--gray-400)">${warn30.slice(0,3).map(l=>esc(l.company_name)).join(', ')}${warn30.length>3?' 외 '+(warn30.length-3)+'건':''}</div></div>
-    </div>`);
-  if(overdueMeets.length>0) sysItems.push(`
-    <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:rgba(239,68,68,.07);border-radius:6px;border-left:3px solid var(--err)">
-      <span style="font-size:14px">🔴</span>
-      <div style="flex:1"><div style="font-size:12px;font-weight:700;color:var(--err)">지연 미팅 ${overdueMeets.length}건</div></div>
-    </div>`);
-  todayMeets.forEach(a=>sysItems.push(`
-    <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:rgba(37,99,235,.05);border-radius:6px;border-left:3px solid var(--blue)">
-      <span style="font-size:14px">🤝</span>
-      <div style="flex:1"><div style="font-size:12px;font-weight:600;color:var(--navy)">오늘 미팅: ${esc(a.lead_name||'-')}</div>
-      <div style="font-size:11px;color:var(--gray-400)">${a.due_time||''} · ${esc(a.team_leader||'-')}</div></div>
-    </div>`));
-  if(tomorrowMeets.length>0) sysItems.push(`
-    <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:var(--gray-50);border-radius:6px;border-left:3px solid var(--gray-300)">
-      <span style="font-size:14px">📅</span>
-      <div><div style="font-size:12px;font-weight:600;color:var(--gray-700)">내일 미팅 ${tomorrowMeets.length}건</div>
-      <div style="font-size:11px;color:var(--gray-400)">${tomorrowMeets.map(a=>esc(a.lead_name||'-')).join(', ')}</div></div>
-    </div>`);
-
-  const totalCount=todos.filter(t=>!t.done).length+sysItems.length;
-
-  el.innerHTML=`<div class="card" style="padding:14px 16px;margin-bottom:0">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-      <div style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px">
-        📋 오늘 할 일${totalCount>0?' ('+totalCount+')':''}
-      </div>
-      <div style="display:flex;align-items:center;gap:6px">
-        <span style="font-size:11px;color:var(--gray-400)">${today}</span>
-        <button onclick="openBrAddTodo()" title="할 일 추가"
-          style="width:24px;height:24px;border-radius:50%;background:var(--blue);color:#fff;border:none;
-          cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;
-          line-height:1;padding:0;flex-shrink:0">+</button>
-      </div>
-    </div>
-    <!-- TODO 추가 인라인 폼 -->
-    <div id="br-todo-add-form" style="display:none;margin-bottom:10px;padding:10px;background:var(--gray-50);border-radius:8px">
-      <input type="text" id="br-todo-input-text" placeholder="할 일 입력..."
-        style="width:100%;padding:7px 10px;border:1.5px solid var(--gray-200);border-radius:6px;
-        font-size:13px;font-family:inherit;margin-bottom:6px;box-sizing:border-box"
-        onkeydown="if(event.key==='Enter')saveBrTodo();if(event.key==='Escape')closeBrTodoForm()">
-      <div style="display:flex;gap:6px;align-items:center">
-        <input type="date" id="br-todo-input-due" style="flex:1;padding:6px 8px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:12px;font-family:inherit">
-        <button class="btn btn-primary btn-xs" onclick="saveBrTodo()">추가</button>
-        <button class="btn btn-outline btn-xs" onclick="closeBrTodoForm()">취소</button>
-      </div>
-    </div>
-    ${sysItems.length?`<div style="display:flex;flex-direction:column;gap:4px;margin-bottom:${todos.length?8:0}px">${sysItems.join('')}</div>`:''}
-    ${todos.length?`<div style="display:flex;flex-direction:column;gap:4px">${todos.map(todoRowBr).join('')}</div>`:''}
-    ${!sysItems.length&&!todos.length?`<div style="text-align:center;padding:10px 0;font-size:13px;color:var(--gray-400)">
-      ✅ 오늘 할 일이 없어요
-      ${tomorrowMeets.length?`<div style="font-size:11px;margin-top:3px">내일 미팅 ${tomorrowMeets.length}건</div>`:''}
-    </div>`:''}
-  </div>`;
-}
+} // end renderBrTodayTodo
 
 // 지점장 TODO (팀장과 동일한 getTodoKey() 사용)
 function openBrAddTodo(){
@@ -6870,6 +6841,96 @@ function _parseKorDt(s){
   // 로컬 시간 기준 Date 생성 (UTC 시차 문제 방지)
   return new Date(+y,+mo-1,+d,+h,+min,+(sec||0)).getTime();
 }
+// ── 대전TM 엑셀 업로드 ────────────────────────────────────
+// 일반 importExcel과 동일하되: branch_name='대전', tm_transferred=true 강제 세팅
+async function importTmExcel(event){
+  const file=event.target.files[0];if(!file)return;event.target.value='';
+  if(!window.XLSX){await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
+  const buf=await file.arrayBuffer();
+  const wb=XLSX.read(buf,{type:'array',cellDates:false,dense:true});
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
+  if(rows.length<2){showToast('데이터가 없습니다.','error');return;}
+  const hdrs=rows[0].map(h=>h?String(h).trim().replace(/[\r\n]/g,''):'');
+  const ALIAS={company_name:['회사명','기업명','업체명'],contact_name:['신청자','담당자','대표자'],phone:['연락처','전화번호'],email:['이메일'],region:['소재지','지역'],industry:['업종'],revenue:['매출','매출액'],consult_type:['상담유형','유형'],inflow:['유입경로'],tax_delinquent:['체납여부'],note:['비고'],applied_at:['상담신청시간','신청시간','신청일시']};
+  const hm={};Object.entries(ALIAS).forEach(([key,al])=>al.forEach(a=>hm[a.toLowerCase()]=key));
+  _pending=[];let dup=0;
+  const existing=allLeads?.length?allLeads:lg('leads');
+  const existSet=new Set(existing.map(l=>(l.company_name||'')+(l.phone||'').replace(/[^0-9]/g,'')));
+  for(let i=1;i<rows.length;i++){
+    const row=rows[i];
+    const map={};hdrs.forEach((h,j)=>{const k=hm[h.toLowerCase()];if(k)map[k]=row[j];else if(h)map[h]=row[j];});
+    const co=String(map.company_name||'').trim();if(!co)continue;
+    const ph=String(map.phone||'').trim().replace(/[^0-9]/g,'');
+    if(existSet.has(co+ph)){dup++;continue;}
+    _pending.push({
+      id:uuid(),company_name:co,contact_name:String(map.contact_name||'').trim(),
+      phone:formatPhone(String(map.phone||'')).trim(),email:String(map.email||'').trim(),
+      region:String(map.region||'').trim(),industry:String(map.industry||'').trim(),
+      revenue:String(map.revenue||'').trim(),consult_type:String(map.consult_type||'').trim(),
+      inflow:String(map.inflow||'').trim(),tax_delinquent:String(map.tax_delinquent||'').trim(),
+      note:String(map.note||'').trim(),
+      // 대전TM 강제 세팅
+      branch_name:'대전',team_name:'대전센터',tm_transferred:true,
+      status:'assigned',registered_by:curUser?.name||'',
+      applied_at:(function(){
+        const v=map.applied_at;if(!v)return null;
+        if(v instanceof Date){const y=v.getFullYear(),mo=String(v.getMonth()+1).padStart(2,'0'),d=String(v.getDate()).padStart(2,'0'),h=String(v.getHours()).padStart(2,'0'),min=String(v.getMinutes()).padStart(2,'0');return y+'-'+mo+'-'+d+'T'+h+':'+min+':00';}
+        if(typeof v==='number'){const serial=v>59?v-1:v;const epoch=new Date(1899,11,31).getTime();const dt=new Date(epoch+Math.floor(serial)*86400000+Math.round((v%1)*86400000));return dt.toISOString().slice(0,16);}
+        const s=String(v).trim();if(!s)return null;
+        if(/^d{4}-d{2}-d{2}/.test(s))return s;
+        if(s.includes('오전')||s.includes('오후')){const t=_parseKorDt(s);if(!isNaN(t))return new Date(t).toISOString().slice(0,16);}
+        const km=s.match(/^(d{4}).s*(d{1,2}).s*(d{1,2})/);
+        if(km)return km[1]+'-'+String(+km[2]).padStart(2,'0')+'-'+String(+km[3]).padStart(2,'0');
+        return s;
+      }()),
+      assigned_at:new Date().toISOString(),
+      created_at:new Date().toISOString(),updated_at:new Date().toISOString()
+    });
+  }
+  const _sumEl=document.getElementById('import-summary');
+  const _headEl=document.getElementById('import-head');
+  const _bodyEl=document.getElementById('import-body');
+  const _warnEl=document.getElementById('import-warn');
+  if(!_sumEl||!_headEl||!_bodyEl){showToast('미리보기 UI 오류','error');return;}
+  _sumEl.innerHTML=`<strong>${_pending.length}건</strong> 등록 예정 · <span style="color:#7c3aed">대전TM 자동배정</span>${dup?` · <span style="color:var(--gray-400)">중복제외 ${dup}건</span>`:''}  `;
+  const PCOLS=['company_name','contact_name','phone','region','consult_type'];
+  _headEl.innerHTML='<tr>'+PCOLS.map(col=>`<th style="padding:8px 10px">${col}</th>`).join('')+'</tr>';
+  _bodyEl.innerHTML=_pending.slice(0,20).map(r=>'<tr>'+PCOLS.map(col=>`<td style="padding:7px 10px;border-bottom:1px solid var(--gray-100)">${esc(r[col]||'-')}</td>`).join('')+'</tr>').join('');
+  if(_warnEl)_warnEl.textContent=_pending.length>20?`전체 ${_pending.length}건 중 20건만 미리보기`:'';
+  openM('modal-import');
+}
+
+async function openTmExport(){
+  if(!window.XLSX){await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
+  const data=tmLeads.length?tmLeads:(allLeads?.filter(l=>l.tm_transferred)||[]);
+  if(!data.length){showToast('내보낼 데이터가 없습니다.','error');return;}
+  const rows=[['회사명','신청자','연락처','지점','팀장','상태','TM결과','TM날짜','1차미팅일','TM내용','해피콜내용','분배날짜']];
+  data.forEach(l=>rows.push([
+    l.company_name||'',l.contact_name||'',l.phone||'',
+    l.branch_name||'',l.team_name||'',l.status||'',
+    l.tm_result||'',l.tm_date||'',l.tm_meeting||'',
+    l.tm_content||'',l.tm_happycall||'',
+    (l.distributed_at||l.created_at||'').slice(0,10)
+  ]));
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[20,12,14,10,12,8,10,10,10,30,20,10].map(w=>({wch:w}));
+  XLSX.utils.book_append_sheet(wb,ws,'대전TM');
+  XLSX.writeFile(wb,'대전TM_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  showToast('엑셀 다운로드 완료','success');
+}
+
+async function downloadTmTemplate(){
+  if(!window.XLSX){await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet([['회사명','신청자','연락처','이메일','소재지','상담유형','유입경로','매출','체납여부','비고','상담신청시간']]);
+  ws['!cols']=[{wch:20},{wch:10},{wch:14},{wch:22},{wch:20},{wch:22},{wch:10},{wch:16},{wch:8},{wch:14},{wch:18}];
+  XLSX.utils.book_append_sheet(wb,ws,'TM 업로드 양식');
+  XLSX.writeFile(wb,'대전TM_업로드양식.xlsx');
+  showToast('양식 다운로드 완료','success');
+}
+
 async function importExcel(event){
   const file=event.target.files[0];if(!file)return;event.target.value='';
   if(!window.XLSX){await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
@@ -9050,7 +9111,7 @@ function _buildTmCard(l,acts){
     `<div style="height:8px"></div>`;
 
   const metaRow=`<div style="font-size:11px;color:#94a3b8;margin-bottom:10px">
-    ${l.branch_name?`<span style="font-weight:600;color:#1e3a5f">${esc(l.branch_name)}</span><span style="margin:0 4px">·</span>`:''}
+    ${l.branch_name?`<span style="font-weight:600;color:${l.branch_name==='대전'?'#7c3aed':'#1e3a5f'}">${esc(l.branch_name)}</span><span style="margin:0 4px">·</span>`:''}
     ${l.team_name&&isCollabTrack?`<span style="color:#3182f6;font-weight:600">${esc(l.team_name)}</span><span style="margin:0 4px">·</span>`:''}
     <span>이관 ${fmtD(l.assigned_at||l.created_at)}</span>
     ${actCount?`<span style="color:#3182f6;margin-left:4px">· ${actCount}회 기록</span>`:''}
@@ -9331,12 +9392,14 @@ async function tmToAdmin(lid){
   await dbU('leads', lid, {
     branch_name: '',
     team_name: '',
-    team_names: '',
+    team_names: JSON.stringify([]),
     tm_transferred: false,
+    tm_done: true,
     assigned_at: '',
-    status: 'assigned'
+    status: 'pending',   // 미배정으로 → 관리자 화면에서 강조 표시
+    collab_branches: null
   });
-  await logActivity(lid, 'assign', '대전TM 완료 → 관리자 신규배정 풀 이관', 'assigned', '');
+  await logActivity(lid, 'assign', '대전TM 완료 → 관리자 신규배정 풀 이관 (미배정)', 'pending', '');
   closePanel();
   // 이관 완료 확인 팝업
   let ov=document.getElementById('ov-tm-done');
@@ -9392,7 +9455,16 @@ async function saveTmRecord(){
   // 1. 상태 변경 (autoLog:false — 아래서 통화내용과 함께 기록)
   if(curTmStatus) await changeLeadStatus(lid, {status:curTmStatus, autoLog:false});
 
-  // 2. 통화 내용 활동 기록 (항상)
+  // 2. TM 필드 DB 저장 (tm_result, tm_content, tm_date, tm_meeting)
+  const tmFieldUpdate={
+    tm_result: curTmStatus||'',
+    tm_content: cont,
+    tm_date: new Date().toISOString().slice(0,10)
+  };
+  if(mdate) tmFieldUpdate.tm_meeting=mdate;
+  await dbU('leads', lid, tmFieldUpdate);
+
+  // 3. 통화 내용 활동 기록 (항상)
   await logActivity(lid, 'call', cont, curTmStatus||null, '', null);
 
   // 3. 해피콜 결과/내용/예정일 저장
@@ -9400,7 +9472,7 @@ async function saveTmRecord(){
   const hcUpdate={};
   if(hcDate) hcUpdate.happycall_date=hcDate;
   if(_hcResult&&_hcResult!=='none') hcUpdate.happycall_result=_hcResult;
-  if(hcContent) hcUpdate.happycall_memo=hcContent;
+  if(hcContent){ hcUpdate.happycall_memo=hcContent; hcUpdate.tm_happycall=hcContent; }
   if(Object.keys(hcUpdate).length) await dbU('leads',lid,hcUpdate);
   // 해피콜 결과 활동 기록
   if(hcContent||(_hcResult&&_hcResult!=='none')){
