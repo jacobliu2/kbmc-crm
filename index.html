@@ -9240,6 +9240,7 @@ function filterTmLeads(){
   const br=document.getElementById('tm-branch-filter')?.value||'';
   const activeTab=_tmMainTab||'new';
   tmFiltered=_filterForTab(activeTab,s,br);
+  if(_tmViewMode==='list'){ renderTmListView(); return; }
   renderTmCards();
 }
 
@@ -9357,8 +9358,11 @@ function _renderTmCardsToGrid(gridId, data){
   grid.innerHTML=data.map(l=>_buildTmCard(l,acts)).join('');
 }
 function renderTmCards(){
-  const activeTab=_tmMainTab||'assigned';
-  _renderTmCardsToGrid('tm-card-grid-'+activeTab, tmFiltered);
+  const activeTab=_tmMainTab||'new';
+  const s=(document.getElementById('tm-search')?.value||'').toLowerCase();
+  const br=document.getElementById('tm-branch-filter')?.value||'';
+  const filtered=_filterForTab(activeTab,s,br);
+  _renderTmCardsToGrid('tm-card-grid-'+activeTab, filtered);
 }
 function renderAllTmTabs(){
   const s=(document.getElementById('tm-search')?.value||'').toLowerCase();
