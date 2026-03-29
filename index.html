@@ -9046,17 +9046,32 @@ async function loadTmPanel(){
   // 초기 탭: 저장된 값 또는 'new'
   const defaultTab=getTmDefaultTab();
   _tmMainTab=defaultTab; _tmQuickTab=defaultTab;
-  switchTmMainTab(defaultTab,document.getElementById('tmt-'+defaultTab));
-  renderAllTmTabs();
-  // 뷰 상태 복원 (목록뷰 유지)
+  // 탭 UI만 변경 (렌더 없이)
+  document.querySelectorAll('.tm-main-tab').forEach(b=>{
+    b.style.color='var(--gray-500)';b.style.borderBottom='2px solid transparent';b.style.fontWeight='600';
+    const sp=b.querySelector('span');if(sp){sp.style.background='var(--gray-100)';sp.style.color='var(--gray-500)';}
+  });
+  const _activeBtn=document.getElementById('tmt-'+defaultTab);
+  if(_activeBtn){
+    _activeBtn.style.color='var(--blue)';_activeBtn.style.borderBottom='2px solid var(--blue)';_activeBtn.style.fontWeight='700';
+    const sp=_activeBtn.querySelector('span');if(sp){sp.style.background='rgba(49,130,246,.12)';sp.style.color='var(--blue)';}
+  }
+  ['all','new','contacted','happycall','drop','recalldone'].forEach(t=>{
+    const el=document.getElementById('tm-tab-'+t);
+    if(el) el.style.display=(t===defaultTab&&_tmViewMode==='card'?'':'none');
+  });
+  // 뷰 상태에 따라 렌더
   if(_tmViewMode==='list'){
-    ['all','new','contacted','happycall','drop','recalldone'].forEach(t=>{
-      const el=document.getElementById('tm-tab-'+t);
-      if(el) el.style.display='none';
-    });
     const lv=document.getElementById('tm-list-view');
     if(lv) lv.style.display='';
+    const s2=(document.getElementById('tm-search')?.value||'').toLowerCase();
+    const br2=document.getElementById('tm-branch-filter')?.value||'';
+    tmFiltered=_filterForTab(defaultTab,s2,br2);
     renderTmListView();
+  } else {
+    const lv=document.getElementById('tm-list-view');
+    if(lv) lv.style.display='none';
+    renderAllTmTabs(); // 각 탭별 필터 적용하여 렌더
   }
 }
 
