@@ -262,7 +262,12 @@ select option{background:#fff;color:var(--gray-900)}
 .badge-consulting{background:#fff6e8;color:#c67c00}
 .badge-contacted{background:var(--gray-100);color:var(--gray-600)}
 .badge-no_answer{background:#fff0f0;color:#cc3333}
-.badge-drop{background:var(--gray-100);color:var(--gray-400)}
+.badge-drop{background:rgba(239,68,68,.1);color:#ef4444}
+.badge-stage-green{background:rgba(0,192,115,.12);color:#00a060;font-weight:700}
+.badge-stage-sky{background:rgba(56,189,248,.12);color:#0284c7;font-weight:700}
+.badge-stage-blue{background:rgba(49,130,246,.12);color:#1d4ed8;font-weight:700}
+.badge-stage-orange{background:rgba(245,158,11,.12);color:#b45309;font-weight:700}
+.badge-stage-red{background:rgba(239,68,68,.1);color:#ef4444;font-weight:700}
 .badge-pending{background:var(--gray-100);color:var(--gray-500)}
 .badge-navy{background:var(--navy);color:#fff}
 .badge-blue{background:var(--blue-50);color:var(--blue)}
@@ -1169,10 +1174,15 @@ tbody tr.selected td{background:var(--blue-50)!important}
         </select>
         <select id="leads-team" onchange="filterLeads()"><option value="">전체 팀장</option></select>
         <select id="leads-status" onchange="filterLeads()">
-          <option value="">전체 상태</option>
-          <option value="assigned">배정</option>
-          <option value="contacted">접촉</option>
-          <option value="no_answer">부재중</option>
+          <option value="">전체 단계</option>
+          <option value="배정">배정</option>
+          <option value="접촉">접촉</option>
+          <option value="상담">상담</option>
+          <option value="제안">제안</option>
+          <option value="계약">계약</option>
+          <option value="관리">관리</option>
+          <option value="보류">보류</option>
+          <option value="드랍">드랍</option>
         </select>
         <select id="leads-type" onchange="filterLeads()"><option value="">전체 유형</option></select>
         <select id="leads-yj-filter" onchange="filterLeads()" style="display:none;padding:8px 12px;background:#fff;border:1px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit">
@@ -2261,22 +2271,43 @@ tbody tr.selected td{background:var(--blue-50)!important}
     <div id="act-tab-panel-form" style="flex:1;overflow-y:auto;padding:16px 24px">
       <div style="margin-bottom:12px"><label style="font-size:12px;font-weight:700;color:var(--gray-600)">활동 날짜</label><br><input type="date" id="act-date" style="margin-top:5px;padding:8px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;width:180px"></div>
       <div style="margin-bottom:14px">
-        <div style="font-size:12px;font-weight:700;color:var(--gray-600);margin-bottom:8px">상태 변경</div>
-        <div class="status-select" id="status-select-wrap"></div>
+        <div style="font-size:12px;font-weight:700;color:var(--gray-600);margin-bottom:8px">진행단계</div>
+        <div class="status-select" id="status-select-wrap" style="flex-wrap:wrap;gap:6px"></div>
+        <!-- 보류 사유 입력 (보류 선택 시 표시) -->
+        <div id="act-hold-reason-wrap" style="display:none;margin-top:10px;padding:14px;background:rgba(245,158,11,.04);border:1.5px solid rgba(245,158,11,.25);border-radius:var(--r-sm)">
+          <label style="font-size:12px;font-weight:700;color:var(--warn);margin-bottom:8px;display:block">보류 사유 <span style="color:var(--warn)">*필수</span></label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px" id="act-hold-reason-presets">
+            <button type="button" onclick="setActHoldReason('전화 부재중')" style="padding:5px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;color:var(--gray-700)">전화 부재중</button>
+            <button type="button" onclick="setActHoldReason('제안 보류')" style="padding:5px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;color:var(--gray-700)">제안 보류</button>
+            <button type="button" onclick="setActHoldReason('팀장 판단')" style="padding:5px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;color:var(--gray-700)">팀장 판단</button>
+            <button type="button" onclick="setActHoldReason('기타')" style="padding:5px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;color:var(--gray-700)">기타</button>
+          </div>
+          <textarea id="act-hold-reason" rows="2" placeholder="보류 사유를 입력하세요 (직접 작성 또는 위 선택)"
+            style="width:100%;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;resize:none;box-sizing:border-box"></textarea>
+        </div>
+        <!-- 드랍 사유 입력 (드랍 선택 시 표시) -->
+        <div id="act-drop-reason-wrap" style="display:none;margin-top:10px;padding:14px;background:rgba(239,68,68,.04);border:1.5px solid rgba(239,68,68,.2);border-radius:var(--r-sm)">
+          <label style="font-size:12px;font-weight:700;color:var(--err);margin-bottom:8px;display:block">드랍 사유 <span style="color:var(--err)">*필수</span></label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px" id="act-drop-reason-presets">
+            <button type="button" onclick="setActDropReason('보험 기피')" style="padding:5px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;color:var(--gray-700)">보험 기피</button>
+            <button type="button" onclick="setActDropReason('가격 불만족')" style="padding:5px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;color:var(--gray-700)">가격 불만족</button>
+            <button type="button" onclick="setActDropReason('서비스 내용 불만족')" style="padding:5px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;color:var(--gray-700)">서비스 내용 불만족</button>
+            <button type="button" onclick="setActDropReason('연락두절')" style="padding:5px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;color:var(--gray-700)">연락두절</button>
+            <button type="button" onclick="setActDropReason('팀장 판단')" style="padding:5px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;color:var(--gray-700)">팀장 판단</button>
+            <button type="button" onclick="setActDropReason('기타')" style="padding:5px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;color:var(--gray-700)">기타</button>
+          </div>
+          <textarea id="act-drop-reason" rows="2" placeholder="드랍 사유를 입력하세요 (직접 작성 또는 위 선택)"
+            style="width:100%;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;resize:none;box-sizing:border-box"></textarea>
+        </div>
       </div>
-      <div class="form-grid" style="margin-bottom:12px">
+      <div style="margin-bottom:12px">
         <div class="fg"><label>활동 유형</label>
-          <select id="act-type" style="padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--gray-900)">
+          <select id="act-type" style="padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--gray-900);width:100%">
             <option value="call">전화</option><option value="meeting">미팅</option>
             <option value="email">이메일</option><option value="online">화상회의</option><option value="note">메모</option>
           </select>
         </div>
-        <div class="fg"><label>진행단계</label>
-          <select id="act-stage" onchange="onStageChange(this)" style="padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--gray-900)">
-            <option value="">선택 안함</option>
-            <option>초기접촉</option><option>상담</option><option>제안</option><option>협의</option><option>계약</option><option>관리고객</option><option>드랍</option><option>보류</option>
-          </select>
-        </div>
+        <select id="act-stage" style="display:none"></select>
       </div>
       <div id="act-contract-date-wrap" style="display:none;margin-bottom:12px;padding:10px 14px;background:rgba(0,192,115,.06);border:1px solid rgba(0,192,115,.25);border-radius:var(--r-sm)">
         <label style="font-size:12px;font-weight:700;color:var(--ok);display:block;margin-bottom:6px">🎉 계약일 지정</label>
@@ -3064,7 +3095,7 @@ function filterBrByTeams(teams, cardEl){
 }
 function renderMcSections(potentials){
   const contract=_mcFiltered.filter(l=>l.current_stage==='계약');
-  const managed=_mcFiltered.filter(l=>l.current_stage==='관리고객');
+  const managed=_mcFiltered.filter(l=>l.current_stage==='관리');
   const potContract=potentials.filter(p=>p.customer_type==='contract');
   const potManaged=potentials.filter(p=>p.customer_type==='managed');
   const potPotential=potentials.filter(p=>!p.customer_type||p.customer_type==='potential');
@@ -3458,7 +3489,7 @@ function renderLeadCards(){
     const isUnrec = !recorded.has(l.id) && !['drop','deleted'].includes(l.status)
       && l.current_stage !== '계약' && l.current_stage !== '관리고객';
     const assignedAt = new Date(l.assigned_at||l.created_at||0).getTime();
-    const isOverdue = isUnrec && (now - assignedAt) >= H30;
+    const isOverdue = isUnrec && bizElapsedMs(assignedAt,now) >= H30;
     const leadActs = acts.filter(a=>a.lead_id===l.id && a.type!=='assign')
       .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
     const lastAct = leadActs[0];
@@ -3906,6 +3937,11 @@ async function logActivity(leadId, type, content, newStatus, stage, actDate){
 // autoLog: false면 activity 생성 안 함 (배치용)
 // ══════════════════════════════════════════════════════════════
 async function changeLeadStatus(leadId, {status, stage, note='', autoLog=true, actDate=null, force=false}={}){
+  // 진행단계에서 status 자동 매핑
+  if(stage&&!status){
+    const _s2s={'배정':'assigned','접촉':'contacted','상담':'contacted','제안':'contacted','계약':'contacted','관리':'contacted','보류':'assigned','드랍':'drop'};
+    status=_s2s[stage]||status;
+  }
   // Supabase 모드: allLeads 인메모리 캐시 우선, fallback localStorage
   const cache = (allLeads?.length ? allLeads : lg('leads'));
   const prev = cache.find(l=>l.id===leadId)||{};
@@ -3915,7 +3951,7 @@ async function changeLeadStatus(leadId, {status, stage, note='', autoLog=true, a
   // ── 강제 로직: 기록 없으면 차단 (관리자는 전면 우회) ────
   const _isAdmin = curUser?.role==='admin';
   if(!force && !_isAdmin && stage && stage!==prevStage){
-    const LOCKED_STAGES=['제안','협의','계약','관리고객'];
+    const LOCKED_STAGES=['제안','협의','계약','관리'];
     if(LOCKED_STAGES.includes(stage)){
       const _actCache = typeof allActivities!=='undefined'&&allActivities?.length ? allActivities : lg('activities');
       const acts=_actCache.filter(a=>a.lead_id===leadId&&a.type!=='status_change'&&a.type!=='assign');
@@ -3950,7 +3986,7 @@ async function changeLeadStatus(leadId, {status, stage, note='', autoLog=true, a
   await dbU('leads', leadId, upd);
 
   if(autoLog){
-    const SL={pending:'배정',assigned:'배정',contacted:'접촉',no_answer:'부재중',consulting:'상담중',done:'상담완료',contract:'계약',managed:'관리',drop:'드랍',deleted:'삭제'};
+    const SL={pending:'배정',assigned:'배정',contacted:'접촉',no_answer:'부재중',consulting:'상담',done:'상담완료',contract:'계약',managed:'관리',drop:'드랍',deleted:'삭제'};
     const parts=[];
     if(status !== undefined && status !== prevStatus)
       parts.push(`상태: ${SL[prevStatus]||prevStatus||'?'} → ${SL[status]||status}`);
@@ -4172,6 +4208,11 @@ function fmtM(v){const n=parseInt(v)||0;if(!n)return'-';if(n>=100000000)return(n
 const SL={pending:'배정',assigned:'배정',contacted:'접촉',no_answer:'부재중',consulting:'상담중',done:'상담완료',contract:'계약',managed:'관리',drop:'드랍',deleted:'삭제'};
 const SC={pending:'badge-blue',assigned:'badge-blue',contacted:'badge-contacted',consulting:'badge-consulting',done:'badge-done',contract:'badge-contract',managed:'badge-contract',no_answer:'badge-no_answer',drop:'badge-drop'};
 function sBadge(s){return `<span class="badge ${SC[s]||'badge-pending'}">${SL[s]||s||'미접촉'}</span>`;}
+function stageBadge(stage){
+  if(!stage) return '<span style="color:var(--gray-300);font-size:12px">—</span>';
+  const cls={'배정':'badge-stage-green','접촉':'badge-stage-sky','상담':'badge-stage-sky','제안':'badge-stage-sky','계약':'badge-stage-blue','관리':'badge-stage-blue','보류':'badge-stage-orange','드랍':'badge-stage-red'}[stage]||'badge-pending';
+  return `<span class="badge ${cls}">${stage}</span>`;
+}
 
 // ── Toast ─────────────────────────────────────────────────
 function showToast(msg,type=''){const el=document.getElementById('toast');if(!el){console.warn('[showToast] #toast 없음:',msg);return;}el.textContent=msg;el.className='toast show'+(type?' '+type:'');clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('show'),2800);}
@@ -4507,7 +4548,7 @@ function renderKpiDashboard(leads){
   if(kpiDropsSub) kpiDropsSub.textContent='전체 대비 '+dropRate+'%';
 
   // 전환율 (상담완료→계약)
-  const doneLeads=leads.filter(l=>['협의','계약','관리고객'].includes(l.current_stage));
+  const doneLeads=leads.filter(l=>['협의','계약','관리'].includes(l.current_stage));
   const contracts=leads.filter(l=>l.current_stage==='계약');
   const convRate=doneLeads.length?Math.round(contracts.length/doneLeads.length*100):0;
   const kpiConv=document.getElementById('kpi-conv');
@@ -4651,9 +4692,9 @@ async function loadLeads(){
   const _abarDel  = document.querySelector('#leads-abar .abar-btn.err');
   const _isDbMgr  = curUser?.role==='dbmanager';
   const _isTeam   = curUser?.role==='team';
-  // dbmanager: 배정/드랍/삭제 모두 숨김, team: 배정만 숨김
+  // dbmanager: 배정/드랍/삭제 모두 숨김, team: 배정·드랍 버튼 숨김 (진행단계에서 드랍 선택)
   if(_abarDist) _abarDist.style.display = (_isDbMgr||_isTeam) ? 'none' : '';
-  if(_abarDrop) _abarDrop.style.display = _isDbMgr ? 'none' : '';
+  if(_abarDrop) _abarDrop.style.display = (_isDbMgr||_isTeam) ? 'none' : '';
   if(_abarDel)  _abarDel.style.display  = _isDbMgr ? 'none' : '';
   const isYJ=curUser?.name==='유영준';
   const yjFilterEl=document.getElementById('leads-yj-filter');
@@ -4767,7 +4808,8 @@ function filterLeads(){
     if(s&&!(l.company_name||'').toLowerCase().includes(s)&&!(l.contact_name||'').toLowerCase().includes(s)&&!(l.phone||'').includes(s))return false;
     if(br&&l.branch_name!==br)return false;
     if(tm&&l.team_name!==tm)return false;
-    if(st&&l.status!==st)return false;
+    // leads-status 드롭다운은 이제 current_stage 기반
+    if(st&&l.current_stage!==st)return false;
     if(tp&&l.consult_type!==tp)return false;
     if(rg){const rgKey=rg.split('(')[0].trim();if(!(l.region||'').includes(rgKey)&&l.region!==rg)return false;}
     // 유영준 필터
@@ -4843,7 +4885,7 @@ const LEAD_COLS=[
   {k:'note',          l:'비고',      g:'basic',    w:100},
   {k:'branch_name',   l:'지점장',    g:'basic',    w:70,  lock:true},
   {k:'team_name',     l:'팀장',      g:'basic',    w:70,  lock:true},
-  {k:'status',        l:'상태',      g:'basic',    w:80},
+  {k:'status',        l:'진행단계',  g:'basic',    w:90},
   // 대전TM 그룹
   {k:'tm_result',     l:'TM결과',    g:'tm',       w:80},
   {k:'tm_date',       l:'TM날짜',    g:'tm',       w:90},
@@ -4906,7 +4948,7 @@ function colVal(l, key, acts){
       return '<td>'+(brBadge||tmBadge?brBadge+tmBadge:'-')+'</td>';
     })();
     case 'team_name':    return`<td>${l.team_name?`<span class="badge badge-blue" style="font-size:10px">${esc(l.team_name.slice(0,8))}</span>`:'-'}</td>`;
-    case 'status':       return`<td>${sBadge(l.status)}</td>`;
+    case 'status':       return`<td>${stageBadge(l.current_stage)}</td>`;
     // 대전TM
     case 'tm_result':    {const _TML={pending:'미배정',assigned:'배정',contacted:'통화완료',no_answer:'부재중',drop:'드랍',consulting:'상담중'};return`<td style="font-size:11px;color:var(--gray-600)">${esc(_TML[l.tm_result]||l.tm_result||'-')}</td>`;}
     case 'tm_date':      return`<td style="font-size:11px;color:var(--gray-400)">${fmtD(l.tm_date)}</td>`;
@@ -4918,13 +4960,13 @@ function colVal(l, key, acts){
       // 1순위: 실제 활동 기록 존재 여부 (전화/미팅/이메일 등 어떤 접촉이든)
       const hasAct = acts && acts[l.id] && acts[l.id].count > 0;
       // 2순위: 진행단계가 상담 이후 단계
-      const stageConsulted = ['상담','제안','협의','계약','관리고객'].includes(l.current_stage);
+      const stageConsulted = ['상담','제안','협의','계약','관리'].includes(l.current_stage);
       if(hasAct || stageConsulted){
         return`<td style="font-size:10px;text-align:center"><span style="padding:2px 7px;border-radius:10px;background:rgba(0,192,115,.12);color:var(--ok);font-weight:700">상담완료</span></td>`;
       }
       return`<td style="font-size:11px;text-align:center;color:var(--gray-300)">-</td>`;
     }
-    case 'current_stage':return`<td>${l.current_stage?`<span class="badge badge-blue" style="font-size:10px">${esc(l.current_stage)}</span>`:'-'}</td>`;
+    case 'current_stage': return`<td>${stageBadge(l.current_stage)}</td>`;
     case 'doc_received': return`<td style="font-size:11px;text-align:center">${l.doc_received?`<span style="font-size:10px;padding:2px 7px;border-radius:10px;background:${l.doc_received==='검토 완료'?'rgba(0,192,115,.12)':l.doc_received==='서류 접수'?'rgba(49,130,246,.12)':'rgba(139,149,161,.1)'};color:${l.doc_received==='검토 완료'?'var(--ok)':l.doc_received==='서류 접수'?'var(--blue)':'var(--gray-500)'};font-weight:700">${l.doc_received}</span>`:'<span style="color:var(--gray-200)">-</span>'}</td>`;
     case 'proposal':     return`<td style="font-size:11px;">${esc((l.proposal||'-').slice(0,30))}</td>`;
     case 'last_activity':{
@@ -5151,6 +5193,36 @@ function openDropModal(ids){
   ov.classList.add('open');
   setTimeout(()=>document.getElementById('drop-reason-input')?.focus(),80);
 }
+function setActHoldReason(reason){
+  const inp=document.getElementById('act-hold-reason');
+  if(reason==='기타'){
+    if(inp){inp.value='';inp.placeholder='기타 사유를 직접 입력하세요';inp.focus();}
+  } else {
+    if(inp) inp.value=reason;
+  }
+  document.querySelectorAll('#act-hold-reason-presets button').forEach(b=>{
+    const on=b.textContent.trim()===reason;
+    b.style.background=on?'var(--warn)':'var(--gray-50)';
+    b.style.color=on?'#fff':'var(--gray-700)';
+    b.style.borderColor=on?'var(--warn)':'var(--gray-200)';
+  });
+}
+
+function setActDropReason(reason){
+  const inp=document.getElementById('act-drop-reason');
+  if(reason==='기타'){
+    if(inp){inp.value='';inp.placeholder='기타 사유를 직접 입력하세요';inp.focus();}
+  } else {
+    if(inp) inp.value=reason;
+  }
+  document.querySelectorAll('#act-drop-reason-presets button').forEach(b=>{
+    const on=b.textContent.trim()===reason;
+    b.style.background=on?'var(--err)':'var(--gray-50)';
+    b.style.color=on?'#fff':'var(--gray-700)';
+    b.style.borderColor=on?'var(--err)':'var(--gray-200)';
+  });
+}
+
 function setDropReason(reason){
   const inp=document.getElementById('drop-reason-input');
   if(inp){
@@ -5540,8 +5612,31 @@ const _origBuildNav=typeof buildNav!=='undefined'?buildNav:null;
 function closePanel(){document.getElementById('detail-panel')?.classList.remove('open');const _pov=document.getElementById('panel-overlay');if(_pov)_pov.style.display='none';}
 
 // ── 활동 기록 ─────────────────────────────────────────────
-const SLIST=[{v:'assigned',l:'배정'},{v:'contacted',l:'접촉'},{v:'no_answer',l:'부재중'}];
-const STAGE_LIST=['초기접촉','상담','제안','협의','계약','관리고객','드랍','보류'];
+// 팀장용 진행단계 선택 (status 대신 current_stage 기반)
+const SLIST_STAGES=['배정','접촉','상담','제안','계약','관리','보류','드랍'];
+const STAGE_LIST=['배정','접촉','상담','제안','계약','관리','보류','드랍'];
+// 진행단계별 색상
+const STAGE_COLOR={
+  '배정':'#00c073',    // 초록
+  '접촉':'#38bdf8',    // 하늘
+  '상담':'#38bdf8',
+  '제안':'#38bdf8',
+  '계약':'#3182f6',    // 파랑
+  '관리':'#3182f6',
+  '보류':'#f59e0b',    // 주황
+  '드랍':'#ef4444',    // 빨강
+};
+// 진행단계 → status 자동 매핑
+const STAGE_TO_STATUS={
+  '배정':'assigned',
+  '접촉':'contacted',
+  '상담':'contacted',
+  '제안':'contacted',
+  '계약':'contacted',
+  '관리':'contacted',
+  '보류':'assigned',
+  '드랍':'drop',
+};
 let curActStatus='';
 function openActM(lid,cname){
   (document.getElementById('act-lead-id')||{}).value=lid;
@@ -5569,6 +5664,18 @@ function openActM(lid,cname){
     _metaEl.innerHTML=(_brBadge||_tmBadges||_tmCollabBadge)?(_brBadge+_tmCollabBadge+_tmBadges):'';
   }
   (document.getElementById('act-content')||{}).value='';
+  // 드랍사유 초기화
+  const _drEl=document.getElementById('act-drop-reason');
+  if(_drEl) _drEl.value='';
+  const _drWrap=document.getElementById('act-drop-reason-wrap');
+  if(_drWrap) _drWrap.style.display='none';
+  const _hrWrap=document.getElementById('act-hold-reason-wrap');
+  if(_hrWrap) _hrWrap.style.display='none';
+  const _hrEl=document.getElementById('act-hold-reason');
+  if(_hrEl) _hrEl.value='';
+  document.querySelectorAll('#act-drop-reason-presets button, #act-hold-reason-presets button').forEach(b=>{
+    b.style.background='var(--gray-50)';b.style.color='var(--gray-700)';b.style.borderColor='var(--gray-200)';
+  });
   // 서류접수 드롭다운 — 현재 상태 표시
   const docEl=document.getElementById('act-doc-received');
   if(docEl) docEl.value='';
@@ -5590,9 +5697,19 @@ function openActM(lid,cname){
   if(dateEl) dateEl.value=new Date().toISOString().slice(0,10);
   curActStatus='';
   const lead=allLeads.find(l=>l.id===lid)||myLeads?.find(l=>l.id===lid);
-  const cur=lead?.status||'pending';
-  (document.getElementById('status-select-wrap')||document.createElement('div')).innerHTML=SLIST.map(o=>`<div class="status-opt${o.v===cur?' active':''}" onclick="pickStatus(this,'${o.v}')">${o.l}</div>`).join('');
-  curActStatus=cur;
+  const curStage=lead?.current_stage||'배정';
+  // 진행단계 선택 버튼 렌더
+  const stageWrap=document.getElementById('status-select-wrap')||document.createElement('div');
+  const STAGE_CLR_MAP={'배정':'#00c073','접촉':'#38bdf8','상담':'#38bdf8','제안':'#38bdf8','계약':'#3182f6','관리':'#3182f6','보류':'#f59e0b','드랍':'#ef4444'};
+  stageWrap.innerHTML=SLIST_STAGES.map(s=>{
+    const isActive=s===curStage;
+    const clr=STAGE_CLR_MAP[s]||'#94a3b8';
+    return `<div class="status-opt${isActive?' active':''}" 
+      style="${isActive?'background:'+clr+';color:#fff;border-color:'+clr:'color:'+clr+';border-color:'+clr+'44'}"
+      onclick="pickStage(this,'${s}')">${s}</div>`;
+  }).join('');
+  curActStatus=STAGE_TO_STATUS[curStage]||'assigned';
+  window._curActStage=curStage;
   // 유영준 이관 DB - 재이관 버튼 표시
   const yjReWrap=document.getElementById('act-yj-reassign');
   if(yjReWrap){
@@ -6163,7 +6280,7 @@ function renderBrTodayTodo(targetId){
   const warn30=(brAllLeads||[]).filter(l=>{
     if(l.yj_transferred) return false;
     const t=new Date(l.assigned_at||l.created_at||0).getTime();
-    return (now-t)>=H30&&!acts.some(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type));
+    return bizElapsedMs(t,now)>=H30&&!acts.some(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type));
   });
 
   // 개인 TODO (팀장과 공유 함수 사용)
@@ -6172,6 +6289,49 @@ function renderBrTodayTodo(targetId){
   try{todos=JSON.parse(localStorage.getItem(TODO_KEY)||'[]');}catch(e){}
 
   // daysElapsed: 5824번 줄에 정의됨
+
+// ── 영업시간 계산 (토·일·공휴일 제외) ──────────────────────
+const KR_HOLIDAYS_2025=[
+  '2025-01-01','2025-01-28','2025-01-29','2025-01-30',
+  '2025-03-01','2025-05-05','2025-05-06','2025-06-06',
+  '2025-08-15','2025-10-03','2025-10-05','2025-10-06','2025-10-07','2025-10-08',
+  '2025-10-09','2025-12-25'
+];
+const KR_HOLIDAYS_2026=[
+  '2026-01-01','2026-01-28','2026-01-29','2026-01-30',
+  '2026-03-01','2026-05-05','2026-06-06',
+  '2026-08-17','2026-09-24','2026-09-25','2026-09-26',
+  '2026-10-03','2026-10-09','2026-12-25'
+];
+const KR_HOLIDAYS=new Set([...KR_HOLIDAYS_2025,...KR_HOLIDAYS_2026]);
+
+function isHoliday(date){
+  const d=date instanceof Date?date:new Date(date);
+  const dow=d.getDay();
+  if(dow===0||dow===6) return true; // 토·일
+  const key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  return KR_HOLIDAYS.has(key);
+}
+
+// 두 시점 사이 영업시간(ms) 계산 (토·일·공휴일 제외, 시간대 무관)
+function bizElapsedMs(fromMs, toMs){
+  if(toMs<=fromMs) return 0;
+  let elapsed=0;
+  let cur=fromMs;
+  const HOUR=3600000;
+  const maxIter=720;
+  let iter=0;
+  while(cur<toMs&&iter<maxIter){
+    const d=new Date(cur);
+    if(!isHoliday(d)){
+      const remaining=toMs-cur;
+      elapsed+=Math.min(remaining,HOUR);
+    }
+    cur+=HOUR;
+    iter++;
+  }
+  return elapsed;
+}
 
 } // end renderBrTodayTodo
 
@@ -6377,16 +6537,38 @@ function deleteTodo(id){
   renderTodayTodo();
 }
 
-function pickStatus(el,s){
-  document.querySelectorAll('.status-opt').forEach(e=>e.classList.remove('active'));
+function pickStatus(el,s){ // 하위호환 유지
+  pickStage(el, Object.keys(STAGE_TO_STATUS).find(k=>STAGE_TO_STATUS[k]===s)||'배정');
+}
+function pickStage(el, stage){
+  const STAGE_CLR_MAP2={'배정':'#00c073','접촉':'#38bdf8','상담':'#38bdf8','제안':'#38bdf8','계약':'#3182f6','관리':'#3182f6','보류':'#f59e0b','드랍':'#ef4444'};
+  const clr=STAGE_CLR_MAP2[stage]||'#94a3b8';
+  document.querySelectorAll('.status-opt').forEach(e=>{
+    e.classList.remove('active');
+    const es=e.textContent.trim();
+    const ec=STAGE_CLR_MAP2[es]||'#94a3b8';
+    e.style.background='';e.style.color=ec;e.style.borderColor=ec+'44';
+  });
   el.classList.add('active');
-  curActStatus=s;
+  el.style.background=clr;el.style.color='#fff';el.style.borderColor=clr;
+  window._curActStage=stage;
+  curActStatus=STAGE_TO_STATUS[stage]||'assigned';
+  // 드랍/보류 선택 시 사유 입력창 표시
+  const dropReasonWrap=document.getElementById('act-drop-reason-wrap');
+  if(dropReasonWrap) dropReasonWrap.style.display=(stage==='드랍')?'':'none';
+  const holdReasonWrap=document.getElementById('act-hold-reason-wrap');
+  if(holdReasonWrap) holdReasonWrap.style.display=(stage==='보류')?'':'none';
+  // 계약일 표시
+  const cdWrap=document.getElementById('act-contract-date-wrap');
+  if(cdWrap) cdWrap.style.display=(stage==='계약'||stage==='관리')?'':'none';
+  const cdInput=document.getElementById('act-contract-date');
+  if(cdInput&&!cdInput.value&&(stage==='계약'||stage==='관리')) cdInput.value=new Date().toISOString().slice(0,10);
 }
 function onStageChange(sel){
   const stage=sel.value;
   const lid=document.getElementById('act-lead-id').value;
   if(!stage||!lid) return;
-  const LOCKED=['제안','협의','계약','관리고객'];
+  const LOCKED=['제안','협의','계약','관리'];
   if(LOCKED.includes(stage)){
     const acts=(allActivities?.length?allActivities:lg('activities')).filter(a=>a.lead_id===lid&&a.type!=='status_change'&&a.type!=='assign');
     if(!acts.length){
@@ -6401,7 +6583,7 @@ function onStageChange(sel){
   // 계약일 입력 필드 표시/숨김
   const cdWrap=document.getElementById('act-contract-date-wrap');
   if(cdWrap){
-    cdWrap.style.display=(stage==='계약'||stage==='관리고객')?'':'none';
+    cdWrap.style.display=(stage==='계약'||stage==='관리')?'':'none';
     // 오늘 날짜 기본값
     const cdInput=document.getElementById('act-contract-date');
     if(cdInput&&!cdInput.value) cdInput.value=new Date().toISOString().slice(0,10);
@@ -6411,22 +6593,41 @@ async function saveActivity(){
   const lid=document.getElementById('act-lead-id').value;
   const content=document.getElementById('act-content').value.trim();
   const type=document.getElementById('act-type').value;
-  const stage=document.getElementById('act-stage').value;
+  const stage=window._curActStage||document.getElementById('act-stage').value;
   const nextAct=document.getElementById('act-next').value.trim();
   if(!content){showToast('상담 내용을 입력하세요.','error');return;}
+  // 드랍 선택 시 사유 필수
+  if(window._curActStage==='드랍'||curActStatus==='drop'){
+    const dropReason=document.getElementById('act-drop-reason')?.value.trim();
+    if(!dropReason){showToast('드랍 사유를 입력하세요.','error');document.getElementById('act-drop-reason')?.focus();return;}
+  }
+  // 보류 선택 시 사유 필수
+  if(window._curActStage==='보류'){
+    const holdReason=document.getElementById('act-hold-reason')?.value.trim();
+    if(!holdReason){showToast('보류 사유를 입력하세요.','error');document.getElementById('act-hold-reason')?.focus();return;}
+  }
   const actDate=document.getElementById('act-date')?.value||new Date().toISOString().slice(0,10);
   // 상태 또는 단계 변경이 있으면 changeLeadStatus로 처리 (강제 로직 포함)
   if(curActStatus||stage){
     const result=await changeLeadStatus(lid,{
       status:curActStatus||undefined,
-      stage:stage||undefined,
+      stage:window._curActStage||stage||undefined,
       note:content,
-      autoLog:false,  // 아래에서 직접 logActivity
+      autoLog:false,
       actDate
     });
-    if(result===false){ return; } // 강제 로직에서 차단됨
+    if(result===false){ return; }
+    // 드랍/보류 사유 저장
+    if(window._curActStage==='드랍'||curActStatus==='drop'){
+      const dr=document.getElementById('act-drop-reason')?.value.trim();
+      if(dr) await dbU('leads',lid,{drop_reason:dr});
+    }
+    if(window._curActStage==='보류'){
+      const hr=document.getElementById('act-hold-reason')?.value.trim();
+      if(hr) await dbU('leads',lid,{hold_reason:hr});
+    }
   }
-  await logActivity(lid,type,content,curActStatus||null,stage||null,actDate);
+  await logActivity(lid,type,content,curActStatus||null,window._curActStage||stage||null,actDate);
 
   // 협업 팀장 저장 (팀장 전용)
   if(curUser?.role==='team'&&window._actCollabSel){
@@ -6467,7 +6668,7 @@ async function saveActivity(){
     await dbU('leads',lid,{proposal:proposal});
   }
   // 계약일 저장 (계약/관리고객 단계 진입 시)
-  if(stage==='계약'||stage==='관리고객'){
+  if(stage==='계약'||stage==='관리'){
     const contractDate=document.getElementById('act-contract-date')?.value
       ||new Date().toISOString().slice(0,10);
     await dbU('leads',lid,{contract_date:contractDate});
@@ -6529,9 +6730,9 @@ async function checkUnrecorded(){
   const countEl=document.getElementById('unrecorded-count');
   const now=Date.now();
   const H24=24*3600*1000, H30=30*3600*1000, H48=48*3600*1000;
-  const warn24=unrecorded.filter(l=>{const t=new Date(l.assigned_at||l.created_at||0).getTime();return(now-t)>=H24&&(now-t)<H30;});
-  const warn30=unrecorded.filter(l=>{const t=new Date(l.assigned_at||l.created_at||0).getTime();if(l.yj_transferred)return false;return(now-t)>=H30&&(now-t)<H48;});
-  const warn48=unrecorded.filter(l=>{const t=new Date(l.assigned_at||l.created_at||0).getTime();if(l.yj_transferred)return false;return(now-t)>=H48;});
+  const warn24=unrecorded.filter(l=>{const t=new Date(l.assigned_at||l.created_at||0).getTime();const e=bizElapsedMs(t,now);return e>=H24&&e<H30;});
+  const warn30=unrecorded.filter(l=>{const t=new Date(l.assigned_at||l.created_at||0).getTime();if(l.yj_transferred)return false;const e=bizElapsedMs(t,now);return e>=H30&&e<H48;});
+  const warn48=unrecorded.filter(l=>{const t=new Date(l.assigned_at||l.created_at||0).getTime();if(l.yj_transferred)return false;return bizElapsedMs(t,now)>=H48;});
   if(banner){
     if(unrecorded.length>0){
       banner.style.display='flex';
@@ -6572,9 +6773,9 @@ async function checkUnrecordedAdmin(){
   const acts=allActivities?.length?allActivities:lg('activities'); const now=Date.now();
   const warn48=leads.filter(l=>{
     if(l.status==='deleted'||l.yj_transferred) return false;
-    if(['drop','계약','관리고객'].includes(l.current_stage||l.status)) return false;
+    if(['drop','계약','관리'].includes(l.current_stage||l.status)) return false;
     const t=new Date(l.assigned_at||l.created_at||0).getTime();
-    if((now-t)<48*3600000) return false;
+    if(bizElapsedMs(t,now)<48*3600000) return false;
     return !acts.some(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type));
   });
   if(!warn48.length) return;
@@ -6612,9 +6813,9 @@ function filterMyLeads(){
     const naL=na?`<span style="font-size:10px;color:${na.due_date<today?'var(--err)':na.due_date===today?'var(--warn)':'var(--blue)'};">${fmtD(na.due_date)} ${esc(na.action_type)}</span>`:'-';
     const lid=l.id, lname=esc(l.company_name||'');
     // 미기록 여부
-    const isUnrecorded=!recorded.has(l.id)&&!['drop','deleted'].includes(l.status)&&l.current_stage!=='계약'&&l.current_stage!=='관리고객';
+    const isUnrecorded=!recorded.has(l.id)&&!['drop','deleted'].includes(l.status)&&l.current_stage!=='계약'&&l.current_stage!=='관리';
     const assignedAt=new Date(l.assigned_at||l.created_at||0).getTime();
-    const _elapsed=Date.now()-assignedAt;
+    const _elapsed=bizElapsedMs(assignedAt,Date.now());
     const isOverdue48=isUnrecorded&&_elapsed>=48*3600000;
     const isOverdue30=isUnrecorded&&_elapsed>=30*3600000&&!isOverdue48;
     const isOverdue24=isUnrecorded&&_elapsed>=24*3600000&&!isOverdue30&&!isOverdue48;
@@ -7120,7 +7321,7 @@ async function getExpData(){
   if(from)data=data.filter(l=>new Date(l.distributed_at||l.created_at||0)>=from);
   if(to)data=data.filter(l=>new Date(l.distributed_at||l.created_at||0)<=to);
   if(br)data=data.filter(l=>l.branch_name===br);
-  if(st)data=data.filter(l=>l.status===st);
+  if(st)data=data.filter(l=>l.current_stage===st);
   return data;
 }
 async function doExport(){
@@ -7919,7 +8120,7 @@ function showDailyBriefing(){
 
   // ── 미기록 30h+ ──
   const unrec=leads.filter(l=>{
-    if(l.yj_transferred||['drop','deleted','계약','관리고객'].includes(l.current_stage||l.status)) return false;
+    if(l.yj_transferred||['drop','deleted','계약','관리'].includes(l.current_stage||l.status)) return false;
     const t=new Date(l.assigned_at||l.created_at||0).getTime();
     return (now-t)>=30*3600*1000&&!acts.some(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type));
   });
@@ -8172,7 +8373,7 @@ function openMcModal(leadId){
     const ctype = lead.customer_type||'';
     if(stage==='계약'||ctype==='contract'){
       ctLabel='계약고객'; bgClr='#e8faf2'; txtClr='#00a060';
-    } else if(stage==='관리고객'||ctype==='managed'){
+    } else if(stage==='관리'||ctype==='managed'){
       ctLabel='관리고객'; bgClr='var(--blue-50)'; txtClr='var(--blue)';
     } else {
       ctLabel='잠재고객'; bgClr='var(--gray-100)'; txtClr='var(--gray-500)';
@@ -8229,7 +8430,7 @@ function _renderMcInfoCard(lead, info){
 
   // 고객구분 (current_stage 우선, customer_type fallback)
   const _ct = lead.current_stage==='계약' ? 'contract'
-             : lead.current_stage==='관리고객' ? 'managed'
+             : lead.current_stage==='관리' ? 'managed'
              : (lead.customer_type||'potential');
   const CT_LBL={contract:'계약 고객', managed:'관리 고객', potential:'잠재 고객'};
 
@@ -8522,7 +8723,7 @@ async function loadMyClients(){
   // 전체 캐시 — 지점장은 지점 전체 수집
   _mcAll = all.filter(l=>{
     if(l.status==='deleted') return false;
-    if(!['계약','관리고객'].includes(l.current_stage||'')) return false;
+    if(!['계약','관리'].includes(l.current_stage||'')) return false;
     if(curUser.role==='admin') return true;
     if(isBranch) return l.branch_name===curUser.name; // 지점 전체
     return l.team_name===curUser.name;
@@ -9274,7 +9475,8 @@ function _buildTmCard(l,acts){
   const actCount=leadActs.length;
   const isNew=l.status==='assigned'||l.status==='pending';
   const isHC=!!l.tm_happycall;
-  const msAgo=l.assigned_at?Date.now()-new Date(l.assigned_at).getTime():0;
+  const _msFrom=l.assigned_at?new Date(l.assigned_at).getTime():0;
+  const msAgo=_msFrom?bizElapsedMs(_msFrom,Date.now()):0;
   const hoursAgo=Math.floor(msAgo/3600000);
   const isOverdue48=isNew&&hoursAgo>=48&&!actCount;
   const isOverdue30=isNew&&hoursAgo>=30&&!isOverdue48&&!actCount;
@@ -9711,7 +9913,7 @@ function _applyQuickTab(tab, btn){
   else if(tab==='contacted'){if(statusEl)statusEl.value='';}
   else if(tab==='contract_stage'){if(statusEl)statusEl.value='';}
   else if(tab==='consulting'){if(statusEl)statusEl.value='contacted';}
-  else if(tab==='drop'){if(statusEl)statusEl.value='drop';}
+  else if(tab==='drop'){if(statusEl)statusEl.value='드랍';}
   else if(tab==='reassign'){if(statusEl)statusEl.value='';}
   filterLeads();
 }
@@ -10612,7 +10814,7 @@ function updateLeadsSubTabCounts(){
   const trash=_trashCount||getTrash().length; // Supabase 모드에서는 _trashCount 사용
   const recall=leads.filter(l=>{
     if(l.status==='deleted'||l.status==='drop'||l.yj_transferred) return false;
-    if(['계약','관리고객'].includes(l.current_stage||'')) return false;
+    if(['계약','관리'].includes(l.current_stage||'')) return false;
     const t=new Date(l.assigned_at||l.created_at||0).getTime();
     if((now-t)<48*3600000) return false;
     return !acts.some(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type));
@@ -10642,7 +10844,7 @@ function renderRecallPanel(){
   const now=Date.now();
   _recallAll=leads.filter(l=>{
     if(l.status==='deleted'||l.status==='drop'||l.yj_transferred) return false;
-    if(['계약','관리고객'].includes(l.current_stage||'')) return false;
+    if(['계약','관리'].includes(l.current_stage||'')) return false;
     const t=new Date(l.assigned_at||l.created_at||0).getTime();
     if((now-t)<48*3600000) return false;
     return !acts.some(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type));
@@ -12427,8 +12629,8 @@ function renderLeadsTable(){
   tbody.innerHTML=page.map(l=>{
     const sel=selIds.has(l.id);
     const _now2=Date.now(),_t2=new Date(l.assigned_at||l.created_at||0).getTime();
-    const _unr2=!(allActivities?.length?allActivities:lg('activities')).some(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type))&&!['drop','deleted'].includes(l.status)&&!l.yj_transferred&&l.current_stage!=='계약'&&l.current_stage!=='관리고객';
-    const _el2=_now2-_t2;
+    const _unr2=!(allActivities?.length?allActivities:lg('activities')).some(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type))&&!['drop','deleted'].includes(l.status)&&!l.yj_transferred&&l.current_stage!=='계약'&&l.current_stage!=='관리';
+    const _el2=bizElapsedMs(_t2,_now2);
     const _rc2=_unr2&&_el2>=48*3600000?'overdue-48h-row':_unr2&&_el2>=30*3600000?'overdue-30h-row':_unr2&&_el2>=24*3600000?'overdue-24h-row':'';
     const _isReassign=(l.tm_done===true||l.tm_done==='true')||(l.yj_done===true||l.yj_done==='true');
     const _rowStyle=_isReassign?'background:rgba(124,58,237,.04);border-left:3px solid #7c3aed':'';
