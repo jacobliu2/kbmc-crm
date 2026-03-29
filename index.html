@@ -3162,7 +3162,7 @@ function _renderMcGrid(gridId, items, emptyMsg, isPotential){
     const lastAct=leadActs[0];
     const actCnt=leadActs.length;
     // _isPot 항목은 customer_type 기반으로 색상 결정
-    const _effStage = l.current_stage || (l.customer_type==='contract'?'계약':l.customer_type==='managed'?'관리고객':'');
+    const _effStage = l.current_stage || (l.customer_type==='contract'?'계약':l.customer_type==='managed'?'관리':'');
     const stageClr=_effStage==='계약'?'var(--ok)':'var(--blue)';
     const _effLabel=_effStage||l.customer_type||'-';
     const isFav=favs.includes(l.id);
@@ -3272,7 +3272,7 @@ function updateFabCounts(){
   const recorded = new Set(acts.map(a=>a.lead_id));
   const unrecCnt = (myLeads||[]).filter(l=>
     !recorded.has(l.id) && !['drop','deleted'].includes(l.status)
-    && l.current_stage !== '계약' && l.current_stage !== '관리고객'
+    && l.current_stage !== '계약' && l.current_stage !== '관리'
   ).length;
   const badge = document.getElementById('fab-unrecorded-cnt');
   if(badge){
@@ -3467,7 +3467,7 @@ function renderLeadCards(){
     if(st && l.status !== st) return false;
     if(_myLeadsFilter === 'unrecorded'){
       const isUnrec = !recorded.has(l.id) && !['drop','deleted'].includes(l.status)
-        && l.current_stage !== '계약' && l.current_stage !== '관리고객';
+        && l.current_stage !== '계약' && l.current_stage !== '관리';
       return isUnrec;
     }
     if(_myLeadsFilter === 'contacted') return l.status === 'contacted';
@@ -3487,7 +3487,7 @@ function renderLeadCards(){
 
   grid.innerHTML = data.map(l=>{
     const isUnrec = !recorded.has(l.id) && !['drop','deleted'].includes(l.status)
-      && l.current_stage !== '계약' && l.current_stage !== '관리고객';
+      && l.current_stage !== '계약' && l.current_stage !== '관리';
     const assignedAt = new Date(l.assigned_at||l.created_at||0).getTime();
     const isOverdue = isUnrec && bizElapsedMs(assignedAt,now) >= H30;
     const leadActs = acts.filter(a=>a.lead_id===l.id && a.type!=='assign')
@@ -3951,7 +3951,7 @@ async function changeLeadStatus(leadId, {status, stage, note='', autoLog=true, a
   // ── 강제 로직: 기록 없으면 차단 (관리자는 전면 우회) ────
   const _isAdmin = curUser?.role==='admin';
   if(!force && !_isAdmin && stage && stage!==prevStage){
-    const LOCKED_STAGES=['제안','협의','계약','관리'];
+    const LOCKED_STAGES=['제안','계약','관리'];
     if(LOCKED_STAGES.includes(stage)){
       const _actCache = typeof allActivities!=='undefined'&&allActivities?.length ? allActivities : lg('activities');
       const acts=_actCache.filter(a=>a.lead_id===leadId&&a.type!=='status_change'&&a.type!=='assign');
@@ -4495,7 +4495,7 @@ async function loadAdmin(){
       <td style="padding:9px 12px;text-align:center">${bl.length}</td>
       <td style="padding:9px 12px;text-align:center"><strong style="color:var(--ok)">${ct}</strong></td>
       <td style="padding:9px 12px;text-align:center">${ctContacted}</td>
-      <td style="padding:9px 12px;text-align:center">${bl.filter(l=>l.current_stage==='협의').length}</td>
+      <td style="padding:9px 12px;text-align:center">${bl.filter(l=>l.current_stage==='제안').length}</td>
       <td style="padding:9px 12px;text-align:center">${ctUnassigned}</td>
       <td style="padding:9px 12px;text-align:center">${bl.length?Math.round(ct/bl.length*100):0}%</td></tr>`;
   });
@@ -4548,7 +4548,7 @@ function renderKpiDashboard(leads){
   if(kpiDropsSub) kpiDropsSub.textContent='전체 대비 '+dropRate+'%';
 
   // 전환율 (상담완료→계약)
-  const doneLeads=leads.filter(l=>['협의','계약','관리'].includes(l.current_stage));
+  const doneLeads=leads.filter(l=>['제안','계약','관리'].includes(l.current_stage));
   const contracts=leads.filter(l=>l.current_stage==='계약');
   const convRate=doneLeads.length?Math.round(contracts.length/doneLeads.length*100):0;
   const kpiConv=document.getElementById('kpi-conv');
@@ -4960,7 +4960,7 @@ function colVal(l, key, acts){
       // 1순위: 실제 활동 기록 존재 여부 (전화/미팅/이메일 등 어떤 접촉이든)
       const hasAct = acts && acts[l.id] && acts[l.id].count > 0;
       // 2순위: 진행단계가 상담 이후 단계
-      const stageConsulted = ['상담','제안','협의','계약','관리'].includes(l.current_stage);
+      const stageConsulted = ['상담','제안','계약','관리'].includes(l.current_stage);
       if(hasAct || stageConsulted){
         return`<td style="font-size:10px;text-align:center"><span style="padding:2px 7px;border-radius:10px;background:rgba(0,192,115,.12);color:var(--ok);font-weight:700">상담완료</span></td>`;
       }
@@ -5090,13 +5090,14 @@ function openAdminStatusChange(){
         <select id="admin-stage-sel" style="width:100%;padding:9px 12px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;background:#fff">
           <option value="">변경 안 함</option>
           <option value="__reset__" style="color:#dc2626;font-weight:700">↺ 초기화 (단계 삭제)</option>
-          <option value="초기접촉">초기접촉</option>
+          <option value="배정">배정</option>
+          <option value="접촉">접촉</option>
           <option value="상담">상담</option>
-          <option value="미팅">미팅</option>
           <option value="제안">제안</option>
-          <option value="협의">협의</option>
           <option value="계약">계약</option>
-          <option value="관리고객">관리고객</option>
+          <option value="관리">관리</option>
+          <option value="보류">보류</option>
+          <option value="드랍">드랍</option>
         </select>
       </div>
       <div>
@@ -5140,7 +5141,7 @@ async function confirmAdminStatusChange(){
   // 계약/관리 상태 선택 시 current_stage 자동 연동
   let autoStage = realStage;
   if(realStatus==='contract' && !autoStage) autoStage='계약';
-  if(realStatus==='managed'  && !autoStage) autoStage='관리고객';
+  if(realStatus==='managed'  && !autoStage) autoStage='관리';
 
   const ids=[...selIds];
   closeOv('ov-admin-status');
@@ -6568,7 +6569,7 @@ function onStageChange(sel){
   const stage=sel.value;
   const lid=document.getElementById('act-lead-id').value;
   if(!stage||!lid) return;
-  const LOCKED=['제안','협의','계약','관리'];
+  const LOCKED=['제안','계약','관리'];
   if(LOCKED.includes(stage)){
     const acts=(allActivities?.length?allActivities:lg('activities')).filter(a=>a.lead_id===lid&&a.type!=='status_change'&&a.type!=='assign');
     if(!acts.length){
@@ -6718,7 +6719,7 @@ function getUnrecordedLeads(){
   // drop/deleted 제외하고 기록 없는 것
   return myLeads.filter(l=>
     !['drop','deleted'].includes(l.status) &&
-    l.current_stage!=='계약' && l.current_stage!=='관리고객' &&
+    l.current_stage!=='계약' && l.current_stage!=='관리' &&
     !l.yj_transferred && // 유영준 이관 건 제외
     !recorded.has(l.id)
   );
@@ -7337,7 +7338,7 @@ async function doExport(){
   }
 
   const wb=XLSX.utils.book_new();
-  const hdr=['분배날짜','신청시간','상담유형','유입경로','매출','소재지','회사명','신청자','연락처','이메일','비고','체납여부','지점장','팀장','상태','진행단계','상담여부','서류접수','제안부분','TM결과','TM날짜','드랍사유'];
+  const hdr=['분배날짜','신청시간','상담유형','유입경로','매출','소재지','회사명','신청자','연락처','이메일','비고','체납여부','지점장','팀장','진행단계','상담여부','서류접수','제안부분','TM결과','TM날짜','드랍사유'];
   const rows=[hdr,...data.map(l=>[
     fmtD(l.distributed_at),fmtD(l.applied_at),
     l.consult_type,l.inflow,l.revenue,l.region,
@@ -7949,7 +7950,7 @@ function formatPhone(raw){
 // ── 고객 온도/등급 산정 ──────────────────────────────────
 function calcLeadGrade(lead, acts){
   // 기준: 최근 활동일, 진행단계, 활동 횟수
-  const stageScore={'초기접촉':10,'상담':30,'제안':50,'협의':70,'계약':100,'관리고객':80,'드랍':0,'보류':5};
+  const stageScore={'배정':5,'접촉':10,'상담':30,'제안':50,'계약':100,'관리':80,'드랍':0,'보류':5};
   const now=Date.now();
   const leadActs=(acts||[]).filter(a=>a.lead_id===lead.id&&a.type!=='assign');
   const actCount=leadActs.length;
@@ -7974,7 +7975,7 @@ function calcLeadGrade(lead, acts){
 function checkAtrisk(leads, acts){
   const now=Date.now();
   return (leads||[]).filter(l=>{
-    if(['drop','deleted','관리고객'].includes(l.current_stage||l.status)) return false;
+    if(['drop','deleted','관리'].includes(l.current_stage||l.status)) return false;
     if(l.current_stage==='계약') return false;
     const leadActs=(acts||[]).filter(a=>a.lead_id===l.id&&a.type!=='assign');
     const last=leadActs.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];
