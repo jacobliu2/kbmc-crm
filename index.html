@@ -8941,7 +8941,9 @@ let _tmQuickTab='new';
 let _tmMainTab='new';
 
 function getTmDefaultTab(){
-  return localStorage.getItem(TM_DEFAULT_TAB_KEY)||'new';
+  const saved=localStorage.getItem(TM_DEFAULT_TAB_KEY)||'new';
+  // 'all'은 기본탭으로 부적절 → 'new'로 강제
+  return saved==='all'?'new':saved;
 }
 function saveTmDefaultTab(){
   const sel=document.querySelector('input[name="tm-default-tab"]:checked');
