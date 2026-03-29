@@ -1641,7 +1641,7 @@ tbody tr.selected td{background:var(--blue-50)!important}
       <div id="tm-tab-all" style="display:none;padding-top:16px">
         <div id="tm-card-grid-all" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px"></div>
       </div>
-      <div id="tm-tab-new" style="padding-top:16px">
+      <div id="tm-tab-new" style="display:none;padding-top:16px">
         <!-- 48h 미통화 경고 배너 -->
         <div id="tm-overdue-banner" style="display:none;margin-bottom:12px;padding:10px 14px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:var(--r-sm);align-items:center;gap:10px">
           <span style="font-size:18px">⛔</span>
@@ -9043,6 +9043,12 @@ async function loadTmPanel(){
       banner.style.display='none';
     }
   }
+
+  // 모든 카드 그리드 초기화 (이전 렌더 잔재 제거)
+  ['all','new','contacted','happycall','drop','recalldone'].forEach(t=>{
+    const g=document.getElementById('tm-card-grid-'+t);
+    if(g) g.innerHTML='';
+  });
 
   tmFiltered=[...tmLeads];
   // 초기 탭: 저장된 값 또는 'new'
