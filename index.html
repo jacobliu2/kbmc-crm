@@ -1099,11 +1099,11 @@ tbody tr.selected td{background:var(--blue-50)!important}
           ❌ 드랍 DB <span id="leads-subtab-drop-cnt" style="font-size:11px;font-weight:400;color:var(--gray-400)"></span>
         </button>
         <button id="leads-subtab-trash" onclick="switchLeadsSubTab('trash',this)"
-          style="display:none;padding:9px 18px;border:none;background:transparent;cursor:pointer;font-size:14px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">
+          style="display:none;padding:9px 18px;border:none;outline:none;background:transparent;cursor:pointer;font-size:14px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">
           🗑️ 휴지통 <span id="leads-subtab-trash-cnt" style="font-size:11px;font-weight:400;color:var(--gray-400)"></span>
         </button>
         <button id="leads-subtab-recall" onclick="switchLeadsSubTab('recall',this)"
-          style="display:none;padding:9px 18px;border:none;background:transparent;cursor:pointer;font-size:14px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">
+          style="display:none;padding:9px 18px;border:none;outline:none;background:transparent;cursor:pointer;font-size:14px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">
           ⛔ 회수대상 <span id="leads-subtab-recall-cnt" style="font-size:11px;font-weight:400;color:var(--err)"></span>
         </button>
       </div>
@@ -4778,7 +4778,7 @@ async function loadLeads(){
   if(_o30btn) _o30btn.style.display=_showAdminTabs?'':'none';
   ['leads-subtab-recall','leads-subtab-trash'].forEach(id=>{
     const el=document.getElementById(id);
-    if(el) el.style.display=_showAdminTabs?'inline-block':'none';
+    if(el) el.style.removeProperty('display'); if(!_showAdminTabs) el.style.display='none';
   });
   // dbmanager: 배정/드랍/삭제 모두 숨김, team: 배정·드랍 버튼 숨김 (진행단계에서 드랍 선택)
   if(_abarDist) _abarDist.style.display = (_isDbMgr||_isTeam) ? 'none' : '';
