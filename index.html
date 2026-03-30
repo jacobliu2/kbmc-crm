@@ -3741,6 +3741,11 @@ function handleRealtimeChange(table, payload){
       const i = allActivities.findIndex(a=>a.id===oldRow.id);
       if(i>=0) allActivities.splice(i,1);
     }
+    // 활동기록 변경 시 진행내용 컬럼 즉시 갱신
+    clearTimeout(_rtDebounceTimer);
+    _rtDebounceTimer = setTimeout(()=>{
+      if(typeof filterLeads==='function') filterLeads();
+    }, 300);
 
   } else if(table === 'next_actions'){
     if(eventType === 'INSERT' && newRow){
@@ -6800,8 +6805,21 @@ async function saveActivity(){
   }
   // 활동 등록 모달 히스토리 갱신 (닫기 전 탭 전환 시 최신 반영)
   _renderActModalHistory(lid);
+  // loadLeads() 대신 filterLeads() — allActivities 초기화 없이 즉시 재렌더
+  // (loadLeads는 allActivities를 []로 초기화 후 재로드 → 렌더 공백 발생)
   const scr=document.querySelector('.screen.active')?.id?.replace('screen-','');
-  if(scr==='leads')loadLeads(); else if(scr==='my-leads')loadMyLeads();
+  if(scr==='leads'){
+    filterLeads();           // 화면 즉시 갱신
+    // 백그라운드로 activities만 새로고침 (leads는 이미 캐시에 있음)
+    if(!testMode){
+      dbQ('activities').then(acts=>{
+        if(acts&&acts.length) allActivities=acts;
+        renderLeadsTable();
+      }).catch(()=>{});
+    }
+  } else if(scr==='my-leads'){
+    filterMyLeads();
+  }
 }
 
 // ── 팀장 내 고객 ──────────────────────────────────────────
