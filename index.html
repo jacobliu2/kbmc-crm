@@ -12978,10 +12978,6 @@ function renderMyLeadsTable(){
         ${esc(l.company_name||'-')}
       </td>
       ${visCols.slice(1).map(c=>{
-        if(c.k==='last_activity'){
-          const naL=na?`<span style="font-size:10px;color:${na.due_date<today?'var(--err)':na.due_date===today?'var(--warn)':'var(--blue)'}">${fmtD(na.due_date)} ${esc(na.action_type)}</span>`:'-';
-          return`<td>${naL}</td>`;
-        }
         return colVal(l,c.k,acts);
       }).join('')}
     </tr>`;
