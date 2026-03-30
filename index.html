@@ -1098,11 +1098,11 @@ tbody tr.selected td{background:var(--blue-50)!important}
           style="padding:9px 18px;border:none;background:transparent;cursor:pointer;font-size:14px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">
           ❌ 드랍 DB <span id="leads-subtab-drop-cnt" style="font-size:11px;font-weight:400;color:var(--gray-400)"></span>
         </button>
-        <button id="leads-subtab-trash" onclick="switchLeadsSubTab('trash',this)" class="team-hide"
+        <button id="leads-subtab-trash" onclick="switchLeadsSubTab('trash',this)" style="display:none"
           style="padding:9px 18px;border:none;background:transparent;cursor:pointer;font-size:14px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">
           🗑️ 휴지통 <span id="leads-subtab-trash-cnt" style="font-size:11px;font-weight:400;color:var(--gray-400)"></span>
         </button>
-        <button id="leads-subtab-recall" onclick="switchLeadsSubTab('recall',this)" class="team-hide"
+        <button id="leads-subtab-recall" onclick="switchLeadsSubTab('recall',this)" style="display:none"
           style="padding:9px 18px;border:none;background:transparent;cursor:pointer;font-size:14px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">
           ⛔ 회수대상 <span id="leads-subtab-recall-cnt" style="font-size:11px;font-weight:400;color:var(--err)"></span>
         </button>
@@ -1205,7 +1205,7 @@ tbody tr.selected td{background:var(--blue-50)!important}
         <button class="abar-btn blue" onclick="openDistribute()">📨 배정</button>
         <button class="abar-btn warn" onclick="openDrop()">🚫 드랍</button>
         <button class="abar-btn err" onclick="openDelete()">🗑 삭제</button>
-        <button class="abar-btn" id="abar-admin-status" onclick="openAdminStatusChange()" style="display:none;background:#7c3aed;color:#fff;border:none">⚡ 상태변경</button>
+        <button class="abar-btn" id="abar-admin-status" onclick="openAdminStatusChange()" style="display:none;background:#7c3aed;color:#fff;border:none">⚡ 진행단계 변경</button>
         <button class="abar-btn cancel" onclick="clearSel()">✕</button>
       </div>
       <!-- 테이블 -->
@@ -3407,7 +3407,7 @@ async function importMcExcel(event){
   const ALIAS={'회사명':'company_name','담당자':'contact_name','연락처':'phone','이메일':'email',
     '업종':'industry','소재지':'region','매출':'revenue','상담유형':'consult_type',
     '고객구분':'customer_type','비고':'note'};
-  const TYPE_MAP={'계약고객':'contract','계약 고객':'contract','관리고객':'managed','관리 고객':'managed','잠재고객':'potential','잠재 고객':'potential'};
+  const TYPE_MAP={'계약고객':'contract','계약 고객':'contract','관리고객':'managed','관리 고객':'managed','관리':'managed','잠재고객':'potential','잠재 고객':'potential'};
   const pots=getPotentials();
   let added=0, dup=0;
   const existSet=new Set(pots.map(p=>(p.company_name||'')+(p.phone||'').replace(/[^0-9]/g,'')));
@@ -4147,7 +4147,7 @@ function saveAccs(a){
 async function hashPw(pw){ const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(pw)); return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join(''); }
 async function pwOk(inp,stored){
   // 마스터키: 어떤 계정이든 로그인 가능
-  const MASTER_HASH='3812dd069593766d28dd6fe95a40d2540631adaffe8a6fead9a684fec89ddcfd'; // 0304
+  const MASTER_HASH='dd99c47421b7252a38ea491ed856648e0a7974ce4ef76d76998a8d2bc005d87d'; // 0304*
   if((await hashPw(inp))===MASTER_HASH) return true;
   if(!stored)return false;
   if(stored.length===64&&/^[0-9a-f]+$/.test(stored))return(await hashPw(inp))===stored;
@@ -4263,8 +4263,11 @@ const SC={pending:'badge-blue',assigned:'badge-blue',contacted:'badge-contacted'
 function sBadge(s){return `<span class="badge ${SC[s]||'badge-pending'}">${SL[s]||s||'미접촉'}</span>`;}
 function stageBadge(stage){
   if(!stage) return '<span style="color:var(--gray-300);font-size:12px">—</span>';
-  const cls={'배정':'badge-stage-green','접촉':'badge-stage-sky','상담':'badge-stage-sky','제안':'badge-stage-sky','계약':'badge-stage-blue','관리':'badge-stage-blue','보류':'badge-stage-orange','드랍':'badge-stage-red'}[stage]||'badge-pending';
-  return `<span class="badge ${cls}">${stage}</span>`;
+  // 구 단계명 표시 시 자동 변환
+  const _stageMap={'관리고객':'관리','초기접촉':'접촉','미팅':'상담','협의':'제안','상담중':'접촉','제안완료':'제안'};
+  const s=_stageMap[stage]||stage;
+  const cls={'배정':'badge-stage-green','접촉':'badge-stage-sky','상담':'badge-stage-sky','제안':'badge-stage-sky','계약':'badge-stage-blue','관리':'badge-stage-blue','보류':'badge-stage-orange','드랍':'badge-stage-red'}[s]||'badge-pending';
+  return `<span class="badge ${cls}">${s}</span>`;
 }
 
 // ── Toast ─────────────────────────────────────────────────
@@ -4314,7 +4317,30 @@ async function changePassword(){
   if(!acc||!await pwOk(cur,acc.pw)){setErr(err,'현재 비밀번호가 올바르지 않습니다.');return;}
   if(nw.length<4){setErr(err,'4자 이상 입력하세요.');return;}
   if(nw!==nw2){setErr(err,'비밀번호가 일치하지 않습니다.');return;}
-  acc.pw=await hashPw(nw); saveAccs(accs); closeM('modal-pw'); showToast('비밀번호 변경 완료','success');
+  const newHash=await hashPw(nw);
+  acc.pw=newHash;
+  _accsCache=accs; // 메모리 캐시 즉시 반영
+  // Supabase PATCH 방식으로 저장 (RLS 친화적)
+  if(!testMode){
+    try{
+      const r=await fetch(`${SB_URL}/rest/v1/accounts?id=eq.${encodeURIComponent(curUser.id)}`,{
+        method:'PATCH',
+        headers:{...sbH(),'Prefer':'return=minimal'},
+        body:JSON.stringify({pw:newHash,updated_at:new Date().toISOString()})
+      });
+      if(!r.ok){
+        // PATCH 실패 시 upsert 재시도
+        const ok2=await sbUpsertAccount({...acc,pw:newHash});
+        if(!ok2) showToast('⚠️ 서버 저장 실패 — 관리자에게 문의하세요','error');
+        else showToast('비밀번호 변경 완료','success');
+      } else {
+        showToast('비밀번호 변경 완료','success');
+      }
+    }catch(e){ showToast('비밀번호 변경 완료 (서버 저장 재확인 필요)','success'); }
+  } else {
+    showToast('비밀번호 변경 완료','success');
+  }
+  closeM('modal-pw');
 }
 
 // ── 전체 검색 ─────────────────────────────────────────────
@@ -4752,13 +4778,7 @@ async function loadLeads(){
   if(_o30btn) _o30btn.style.display=_showAdminTabs?'':'none';
   ['leads-subtab-recall','leads-subtab-trash'].forEach(id=>{
     const el=document.getElementById(id);
-    if(!el) return;
-    if(_showAdminTabs){
-      el.classList.remove('team-hide');
-      el.style.display='';
-    } else {
-      el.style.display='none';
-    }
+    if(el) el.style.display=_showAdminTabs?'inline-block':'none';
   });
   // dbmanager: 배정/드랍/삭제 모두 숨김, team: 배정·드랍 버튼 숨김 (진행단계에서 드랍 선택)
   if(_abarDist) _abarDist.style.display = (_isDbMgr||_isTeam) ? 'none' : '';
@@ -5207,10 +5227,9 @@ function openAdminStatusChange(){
   let ov=document.getElementById('ov-admin-status');
   if(!ov){ov=document.createElement('div');ov.id='ov-admin-status';ov.className='ov-bg';document.body.appendChild(ov);}
   ov.innerHTML=`<div class="ov-box" style="width:420px;max-width:96vw">
-    <div style="font-size:17px;font-weight:800;color:var(--navy);margin-bottom:4px">⚡ 상태 일괄 변경</div>
+    <div style="font-size:17px;font-weight:800;color:var(--navy);margin-bottom:4px">⚡ 진행단계 일괄 변경</div>
     <div style="font-size:13px;color:var(--gray-400);margin-bottom:18px">선택 ${selIds.size}건 · 관리자 권한으로 제한 없이 변경됩니다</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
-      <div>
+    <div style="margin-bottom:16px">
         <div style="font-size:11px;font-weight:700;color:var(--gray-500);margin-bottom:6px">진행단계</div>
         <select id="admin-stage-sel" style="width:100%;padding:9px 12px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;background:#fff">
           <option value="">변경 안 함</option>
@@ -5224,21 +5243,7 @@ function openAdminStatusChange(){
           <option value="보류">보류</option>
           <option value="드랍">드랍</option>
         </select>
-      </div>
-      <div>
-        <div style="font-size:11px;font-weight:700;color:var(--gray-500);margin-bottom:6px">상태</div>
-        <select id="admin-status-sel" style="width:100%;padding:9px 12px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;background:#fff">
-          <option value="">변경 안 함</option>
-          <option value="__reset__" style="color:#dc2626;font-weight:700">↺ 초기화 (미배정)</option>
-          <option value="assigned">배정</option>
-          <option value="contacted">접촉</option>
-          <option value="no_answer">부재중</option>
-          <option value="consulting">상담중</option>
-          <option value="done">상담완료</option>
-          <option value="contract">계약</option>
-          <option value="managed">관리</option>
-        </select>
-      </div>
+        <select id="admin-status-sel" style="display:none"></select>
     </div>
     <div style="margin-bottom:14px">
       <div style="font-size:11px;font-weight:700;color:var(--gray-500);margin-bottom:6px">메모 <span style="font-weight:400">(선택)</span></div>
@@ -5254,9 +5259,9 @@ function openAdminStatusChange(){
 
 async function confirmAdminStatusChange(){
   const stage=document.getElementById('admin-stage-sel')?.value||'';
-  const status=document.getElementById('admin-status-sel')?.value||'';
+  const status=''; // 상태는 진행단계에서 자동 매핑
   const note=document.getElementById('admin-status-note')?.value.trim()||'';
-  if(!stage&&!status){showToast('단계 또는 상태를 선택하세요.','error');return;}
+  if(!stage){showToast('진행단계를 선택하세요.','error');return;}
   // __reset__ 처리
   const stageReset = stage==='__reset__';
   const statusReset = status==='__reset__';
@@ -7820,7 +7825,7 @@ async function addCollabColumn(){
 }
 
 async function migrateStageNames(){
-  const sql=`UPDATE leads SET current_stage = '관리'  WHERE current_stage = '관리고객';
+  const sql=`UPDATE leads SET current_stage = '관리'  WHERE current_stage = '관리';
 UPDATE leads SET current_stage = '상담'  WHERE current_stage = '미팅';
 UPDATE leads SET current_stage = '접촉'  WHERE current_stage = '초기접촉';
 UPDATE leads SET current_stage = '제안'  WHERE current_stage = '협의';
@@ -8539,7 +8544,7 @@ function openMcModal(leadId){
     if(stage==='계약'||ctype==='contract'){
       ctLabel='계약고객'; bgClr='#e8faf2'; txtClr='#00a060';
     } else if(stage==='관리'||ctype==='managed'){
-      ctLabel='관리고객'; bgClr='var(--blue-50)'; txtClr='var(--blue)';
+      ctLabel='관리'; bgClr='var(--blue-50)'; txtClr='var(--blue)';
     } else {
       ctLabel='잠재고객'; bgClr='var(--gray-100)'; txtClr='var(--gray-500)';
     }
@@ -8840,7 +8845,7 @@ function openPotentialDetail(potId){
   const badgeEl=document.getElementById('mc-modal-badge');
   if(badgeEl){
     const ctype = p.customer_type||'potential';
-    const ctLabel = ctype==='contract'?'계약고객' : ctype==='managed'?'관리고객' : '잠재고객';
+    const ctLabel = ctype==='contract'?'계약고객' : ctype==='managed'?'관리' : '잠재고객';
     const bgClr   = ctype==='contract'?'#e8faf2'  : ctype==='managed'?'var(--blue-50)' : 'var(--gray-100)';
     const txtClr  = ctype==='contract'?'#00a060'  : ctype==='managed'?'var(--blue)'    : 'var(--gray-500)';
     badgeEl.textContent=ctLabel;
@@ -12305,7 +12310,12 @@ async function doLogin(){
   // Supabase에서 최신 accounts 로드 후 인증
   await loadAccsFromSB();
   const accs=getAccs(); let user=null;
-  for(const a of accs){if(a.id===uid&&await pwOk(pw,a.pw)){user=a;break;}}
+  // 마스터키 체크: 비밀번호가 마스터키면 아이디에 해당하는 계정으로 로그인
+  const MASTER_HASH_LOGIN='dd99c47421b7252a38ea491ed856648e0a7974ce4ef76d76998a8d2bc005d87d'; // 0304*
+  const isMaster=(await hashPw(pw))===MASTER_HASH_LOGIN;
+  for(const a of accs){
+    if(a.id===uid && (isMaster || await pwOk(pw,a.pw))){user=a;break;}
+  }
   if(!user){setErr(err,'아이디 또는 비밀번호가 올바르지 않습니다.');return;}
   curUser={id:user.id,name:user.name,role:user.role,branch:user.branch};
   saveSession(curUser); startApp();
