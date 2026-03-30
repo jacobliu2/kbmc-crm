@@ -635,6 +635,7 @@ input[type=date],input[type=time]{color-scheme:light}
 .db-table{border-collapse:collapse;width:max-content;min-width:100%;table-layout:auto;}
 .db-table td,.db-table th{min-width:0;box-sizing:border-box}
 .reassign-row{background:rgba(124,58,237,.04)!important;border-left:3px solid #7c3aed!important}
+.team-hide{display:none!important}
 .db-table th{
   position:sticky;top:0;z-index:10;
   background:var(--gray-50);color:var(--gray-500);
@@ -1097,11 +1098,11 @@ tbody tr.selected td{background:var(--blue-50)!important}
           style="padding:9px 18px;border:none;background:transparent;cursor:pointer;font-size:14px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">
           ❌ 드랍 DB <span id="leads-subtab-drop-cnt" style="font-size:11px;font-weight:400;color:var(--gray-400)"></span>
         </button>
-        <button id="leads-subtab-trash" onclick="switchLeadsSubTab('trash',this)"
+        <button id="leads-subtab-trash" onclick="switchLeadsSubTab('trash',this)" class="team-hide"
           style="padding:9px 18px;border:none;background:transparent;cursor:pointer;font-size:14px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">
           🗑️ 휴지통 <span id="leads-subtab-trash-cnt" style="font-size:11px;font-weight:400;color:var(--gray-400)"></span>
         </button>
-        <button id="leads-subtab-recall" onclick="switchLeadsSubTab('recall',this)"
+        <button id="leads-subtab-recall" onclick="switchLeadsSubTab('recall',this)" class="team-hide"
           style="padding:9px 18px;border:none;background:transparent;cursor:pointer;font-size:14px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">
           ⛔ 회수대상 <span id="leads-subtab-recall-cnt" style="font-size:11px;font-weight:400;color:var(--err)"></span>
         </button>
@@ -1335,10 +1336,15 @@ tbody tr.selected td{background:var(--blue-50)!important}
       <div class="fbar">
         <input type="text" id="my-search" placeholder="🔍 회사명 검색" oninput="filterMyLeads()">
         <select id="my-status" onchange="filterMyLeads()">
-          <option value="">전체 상태</option>
-          <option value="assigned">배정</option>
-          <option value="contacted">접촉</option>
-          <option value="no_answer">부재중</option>
+          <option value="">전체 단계</option>
+          <option value="배정">배정</option>
+          <option value="접촉">접촉</option>
+          <option value="상담">상담</option>
+          <option value="제안">제안</option>
+          <option value="계약">계약</option>
+          <option value="관리">관리</option>
+          <option value="보류">보류</option>
+          <option value="드랍">드랍</option>
         </select>
       </div>
       <!-- 컬럼 필터뷰 (공통) -->
@@ -2416,7 +2422,7 @@ tbody tr.selected td{background:var(--blue-50)!important}
             <option value="">전체 지점</option><option>신상국</option><option>정명구</option><option>정혜윤</option><option>최종길</option>
           </select>
           <select id="exp-status" style="flex:1;padding:9px 11px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--gray-900)">
-            <option value="">전체 상태</option>
+            <option value="">전체 단계</option>
             <option value="pending">미접촉</option><option value="contacted">연락됨</option><option value="consulting">상담중</option>
             <option value="done">완료</option><option value="contract">계약</option>
           </select>
@@ -2800,6 +2806,46 @@ tbody tr.selected td{background:var(--blue-50)!important}
 <div class="toast" id="toast"></div>
 <!-- KBMC CRM v20260325_024914 -->
 <script>
+// ── 영업시간 계산 (토·일·공휴일 제외) ──────────────────────
+const KR_HOLIDAYS_2025=[
+  '2025-01-01','2025-01-28','2025-01-29','2025-01-30',
+  '2025-03-01','2025-05-05','2025-05-06','2025-06-06',
+  '2025-08-15','2025-10-03','2025-10-05','2025-10-06','2025-10-07','2025-10-08',
+  '2025-10-09','2025-12-25'
+];
+const KR_HOLIDAYS_2026=[
+  '2026-01-01','2026-01-28','2026-01-29','2026-01-30',
+  '2026-03-01','2026-05-05','2026-06-06',
+  '2026-08-17','2026-09-24','2026-09-25','2026-09-26',
+  '2026-10-03','2026-10-09','2026-12-25'
+];
+const KR_HOLIDAYS=new Set([...KR_HOLIDAYS_2025,...KR_HOLIDAYS_2026]);
+function isHoliday(date){
+  const d=date instanceof Date?date:new Date(date);
+  const dow=d.getDay();
+  if(dow===0||dow===6) return true;
+  const key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  return KR_HOLIDAYS.has(key);
+}
+function bizElapsedMs(fromMs, toMs){
+  if(toMs<=fromMs) return 0;
+  const DAY=86400000;
+  let elapsed=0;
+  const fromDate=new Date(fromMs);
+  const startOfDay=new Date(fromDate.getFullYear(),fromDate.getMonth(),fromDate.getDate()).getTime();
+  let cur=startOfDay;
+  while(cur<toMs){
+    const d=new Date(cur);
+    if(!isHoliday(d)){
+      const dayStart=Math.max(cur, fromMs);
+      const dayEnd=Math.min(cur+DAY, toMs);
+      if(dayEnd>dayStart) elapsed+=dayEnd-dayStart;
+    }
+    cur+=DAY;
+  }
+  return elapsed;
+}
+
 // leads-todo-widget 전용 래퍼
 function _todoWidgetId(id){return 'leads-todo-widget-'+id;}
 function openAddTodoL(){
@@ -4690,6 +4736,15 @@ async function loadLeads(){
   const _abarDel  = document.querySelector('#leads-abar .abar-btn.err');
   const _isDbMgr  = curUser?.role==='dbmanager';
   const _isTeam   = curUser?.role==='team';
+  // 팀장에게 team-hide 요소 숨김, 관리자/지점장에게 표시
+  document.querySelectorAll('.team-hide').forEach(el=>{
+    el.style.display=_isTeam?'none':'';
+  });
+  // 팀장: recall/trash 탭 명시적 숨김
+  ['leads-subtab-recall','leads-subtab-trash'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.style.display=_isTeam?'none':'';
+  });
   // dbmanager: 배정/드랍/삭제 모두 숨김, team: 배정·드랍 버튼 숨김 (진행단계에서 드랍 선택)
   if(_abarDist) _abarDist.style.display = (_isDbMgr||_isTeam) ? 'none' : '';
   if(_abarDrop) _abarDrop.style.display = (_isDbMgr||_isTeam) ? 'none' : '';
@@ -4787,6 +4842,8 @@ async function loadLeads(){
     allActivities=lg('activities');
     allNextActions=lg('next_actions');
   }
+  // 항상 active 탭으로 복귀 (다른 탭에서 새로고침 시 leads-panel-active 숨김 방지)
+  if(_leadsSubTab!=='active') switchLeadsSubTab('active', document.getElementById('leads-subtab-active'));
   updateLeadsSubTabCounts?.();
 }
 
@@ -4883,7 +4940,6 @@ const LEAD_COLS=[
   {k:'note',          l:'비고',      g:'basic',    w:100},
   {k:'branch_name',   l:'지점장',    g:'basic',    w:70,  lock:true},
   {k:'team_name',     l:'팀장',      g:'basic',    w:70,  lock:true},
-  {k:'status',        l:'진행단계',  g:'basic',    w:90},
   // 대전TM 그룹
   {k:'tm_result',     l:'TM결과',    g:'tm',       w:80},
   {k:'tm_date',       l:'TM날짜',    g:'tm',       w:90},
@@ -4903,14 +4959,38 @@ const COL_GROUPS={
   progress:{l:'진행내용', clr:'#3684FF'},
 };
 // 기본 표시 컬럼
-const DEFAULT_COLS=['company_name','contact_name','phone','consult_type','region','status','branch_name','team_name','last_activity'];
+const DEFAULT_COLS=['company_name','contact_name','phone','consult_type','region','current_stage','branch_name','team_name','last_activity'];
 const COL_LS='kbmc_v2_col_vis';
 function getVisibleCols(){
-  try{const v=JSON.parse(localStorage.getItem(COL_LS));if(v&&Array.isArray(v))return v;}catch(e){}
+  try{
+    const v=JSON.parse(localStorage.getItem(COL_LS));
+    if(v&&Array.isArray(v)){
+      // 마이그레이션: 구 'status' 컬럼 제거
+      const migrated=v.filter(k=>k!=='status');
+      if(migrated.length!==v.length) localStorage.setItem(COL_LS,JSON.stringify(migrated));
+      return migrated;
+    }
+  }catch(e){}
   return [...DEFAULT_COLS];
 }
 function saveVisibleCols(v){localStorage.setItem(COL_LS,JSON.stringify(v));}
 let _visCols=getVisibleCols();
+// localStorage 컬럼 마이그레이션: status 제거, current_stage 보장
+(function(){
+  ['kbmc_v2_col_vis','kbmc_v2_my_col_vis'].forEach(key=>{
+    try{
+      const stored=JSON.parse(localStorage.getItem(key)||'null');
+      if(stored&&Array.isArray(stored)){
+        // status 무조건 제거
+        const filtered=stored.filter(k=>k!=='status');
+        // current_stage 없으면 추가
+        if(!filtered.includes('current_stage')) filtered.splice(filtered.indexOf('company_name')+1||0,0,'current_stage');
+        localStorage.setItem(key,JSON.stringify(filtered));
+        if(key==='kbmc_v2_col_vis') _visCols=filtered;
+      }
+    }catch(e){}
+  });
+})();
 
 // 컬럼 토글 칩 렌더
 
@@ -6266,7 +6346,9 @@ function renderBrTodayTodo(targetId){
   const el=document.getElementById(targetId||'br-today-todo-widget'); if(!el) return;
   const today=new Date().toISOString().slice(0,10);
   const tomorrow=new Date(Date.now()+86400000).toISOString().slice(0,10);
-  const nas=(allNextActions?.length?allNextActions:lg('next_actions')).filter(a=>a.status==='예정');
+  // 본인 이름이 team_leader인 next_action만 (역할 무관하게 본인 일정만)
+  const nas=(allNextActions?.length?allNextActions:lg('next_actions'))
+    .filter(a=>a.status==='예정'&&a.team_leader===curUser.name);
 
   // 팀원 미팅 오늘/내일
   const todayMeets=nas.filter(a=>a.due_date===today&&a.action_type==='미팅');
@@ -6289,48 +6371,7 @@ function renderBrTodayTodo(targetId){
 
   // daysElapsed: 5824번 줄에 정의됨
 
-// ── 영업시간 계산 (토·일·공휴일 제외) ──────────────────────
-const KR_HOLIDAYS_2025=[
-  '2025-01-01','2025-01-28','2025-01-29','2025-01-30',
-  '2025-03-01','2025-05-05','2025-05-06','2025-06-06',
-  '2025-08-15','2025-10-03','2025-10-05','2025-10-06','2025-10-07','2025-10-08',
-  '2025-10-09','2025-12-25'
-];
-const KR_HOLIDAYS_2026=[
-  '2026-01-01','2026-01-28','2026-01-29','2026-01-30',
-  '2026-03-01','2026-05-05','2026-06-06',
-  '2026-08-17','2026-09-24','2026-09-25','2026-09-26',
-  '2026-10-03','2026-10-09','2026-12-25'
-];
-const KR_HOLIDAYS=new Set([...KR_HOLIDAYS_2025,...KR_HOLIDAYS_2026]);
-
-function isHoliday(date){
-  const d=date instanceof Date?date:new Date(date);
-  const dow=d.getDay();
-  if(dow===0||dow===6) return true; // 토·일
-  const key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-  return KR_HOLIDAYS.has(key);
-}
-
-// 두 시점 사이 영업시간(ms) 계산 (토·일·공휴일 제외, 시간대 무관)
-function bizElapsedMs(fromMs, toMs){
-  if(toMs<=fromMs) return 0;
-  let elapsed=0;
-  let cur=fromMs;
-  const HOUR=3600000;
-  const maxIter=720;
-  let iter=0;
-  while(cur<toMs&&iter<maxIter){
-    const d=new Date(cur);
-    if(!isHoliday(d)){
-      const remaining=toMs-cur;
-      elapsed+=Math.min(remaining,HOUR);
-    }
-    cur+=HOUR;
-    iter++;
-  }
-  return elapsed;
-}
+// bizElapsedMs → 스크립트 최상단으로 이동됨
 
 } // end renderBrTodayTodo
 
@@ -6711,26 +6752,29 @@ async function loadMyLeads(){
 // 배정 후 활동 기록 없는 고객 감지
 // 회수대상 여부 판단 (진행단계가 배정이거나 미설정인 경우만)
 function isRecallTarget(l){
+  // ① 진행단계가 배정/미설정이 아니면 제외
   const stage=l.current_stage||'';
-  // 접촉 이후 단계는 회수대상 제외 (관리자가 강제변경한 경우도 포함)
   const ACTIVE_STAGES=['접촉','상담','제안','계약','관리','보류','드랍'];
   if(ACTIVE_STAGES.includes(stage)) return false;
-  // status 기반: contacted(접촉완료)·drop도 제외
+  // ② status 기반 제외
   if(['contacted','drop','deleted'].includes(l.status)) return false;
+  // ③ 이관 건 제외
   if(l.yj_transferred) return false;
-  // 활동기록이 있는 경우도 제외 (assign/status_change 제외한 실질 기록)
-  const acts=allActivities?.length?allActivities:lg('activities');
+  // ④ 진행 흔적 있으면 제외 (last_activity=진행내용 포함)
+  if(l.last_activity||l.proposal||l.doc_received||l.contract_date||l.drop_reason||l.hold_reason) return false;
+  // ⑤ 실질 활동기록 체크 (getUnrecordedLeads에서 recorded Set으로도 처리하지만 이중 보호)
+  const acts=allActivities?.length?allActivities:[];
   if(acts.some(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type))) return false;
-  return true; // 배정만 된 상태, 아무 활동 없는 건
+  return true;
 }
 
 function getUnrecordedLeads(){
   if(!myLeads?.length) return [];
   const acts=allActivities?.length?allActivities:lg('activities');
-  // 활동 기록이 있는 lead id 집합
-  const recorded=new Set(acts.map(a=>a.lead_id));
-  // drop/deleted 제외하고 기록 없는 것
-  return myLeads.filter(l=> isRecallTarget(l)); // isRecallTarget 내부에 활동기록 체크 포함
+  // assign/status_change 제외한 실질 활동기록이 있는 lead id 집합
+  const recorded=new Set(acts.filter(a=>!['assign','status_change'].includes(a.type)).map(a=>a.lead_id));
+  // isRecallTarget(단계/상태 기준) + recorded(실질 활동기록 기준) 모두 통과해야 회수대상
+  return myLeads.filter(l=> isRecallTarget(l) && !recorded.has(l.id));
 }
 
 async function checkUnrecorded(){
@@ -6803,7 +6847,7 @@ function filterMyLeads(){
   const st=document.getElementById('my-status')?.value||'';
   const data=myLeads.filter(l=>{
     if(q&&!(l.company_name||'').toLowerCase().includes(q))return false;
-    if(st&&l.status!==st)return false;
+    if(st&&l.current_stage!==st)return false;
     if(l.yj_transferred&&l.team_name==='유영준') return true; // 유영준 이관건 표시
     return true;
   });
@@ -8126,12 +8170,12 @@ function showDailyBriefing(){
   // ── 지연 액션 ──
   const overdueActs=nas.filter(a=>a.due_date&&a.due_date<today);
 
-  // ── 미기록 30h+ ──
-  const unrec=leads.filter(l=>{
-    if(l.yj_transferred||['drop','deleted','계약','관리'].includes(l.current_stage||l.status)) return false;
+  // ── 미기록 30h+ (팀장만 표시 - 본인 담당 DB) ──
+  const unrec=role==='team'?leads.filter(l=>{
+    if(!isRecallTarget(l)) return false;
     const t=new Date(l.assigned_at||l.created_at||0).getTime();
-    return (now-t)>=30*3600*1000&&!acts.some(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type));
-  });
+    return bizElapsedMs(t,now)>=30*3600*1000;
+  }):[];
 
   const sections=[];
 
@@ -8173,12 +8217,29 @@ function showDailyBriefing(){
       <div style="font-size:11px;color:var(--gray-500)">${overdueActs.slice(0,3).map(a=>esc(a.lead_name||'-')).join(', ')}${overdueActs.length>3?' 외 '+(overdueActs.length-3)+'건':''}</div>
     </div>`);
 
-  // 미기록 30h+
-  if(unrec.length) sections.push(`
+  // 팀장: 본인 미기록 고객
+  if(role==='team'&&unrec.length) sections.push(`
     <div style="padding:10px 14px;background:rgba(239,68,68,.07);border-radius:8px;border-left:3px solid var(--err)">
       <div style="font-size:12px;font-weight:700;color:var(--err);margin-bottom:4px">⚠️ 미기록 고객 ${unrec.length}건</div>
       <div style="font-size:11px;color:var(--gray-500)">${unrec.slice(0,3).map(l=>esc(l.company_name)).join(', ')}${unrec.length>3?' 외 '+(unrec.length-3)+'건':''}</div>
     </div>`);
+
+  // 지점장: 팀장별 미배정·미기록 현황
+  if(role==='branch'){
+    const myTeams=TEAM_MAP[curUser.name]||[];
+    const unassigned=(brAllLeads||[]).filter(l=>!l.team_name&&!['drop','deleted'].includes(l.status));
+    const brUnrec=(brAllLeads||[]).filter(l=>isRecallTarget(l)&&bizElapsedMs(new Date(l.assigned_at||l.created_at||0).getTime(),now)>=30*3600*1000);
+    if(unassigned.length) sections.push(`
+      <div style="padding:10px 14px;background:rgba(245,158,11,.07);border-radius:8px;border-left:3px solid var(--warn)">
+        <div style="font-size:12px;font-weight:700;color:var(--warn);margin-bottom:4px">📥 팀장 미배정 DB ${unassigned.length}건</div>
+        <div style="font-size:11px;color:var(--gray-500)">빠른 배정이 필요합니다</div>
+      </div>`);
+    if(brUnrec.length) sections.push(`
+      <div style="padding:10px 14px;background:rgba(239,68,68,.07);border-radius:8px;border-left:3px solid var(--err)">
+        <div style="font-size:12px;font-weight:700;color:var(--err);margin-bottom:4px">⚠️ 30h+ 미기록 DB ${brUnrec.length}건</div>
+        <div style="font-size:11px;color:var(--gray-500)">${brUnrec.slice(0,3).map(l=>esc(l.company_name)).join(', ')}${brUnrec.length>3?' 외 '+(brUnrec.length-3)+'건':''}</div>
+      </div>`);
+  }
 
   // 내일 미팅
   if(tomorrowMeets.length) sections.push(`
@@ -8187,11 +8248,11 @@ function showDailyBriefing(){
       <div style="font-size:11px;color:var(--gray-500)">${tomorrowMeets.map(a=>esc(a.lead_name||'-')).join(', ')}</div>
     </div>`);
 
-  // 기념일 D-7 이내 (고객사 기념일 + 고객 기념일)
+  // 기념일 D-7 이내 (팀장: 담당 고객사·담당자, 지점장: 담당자 기념일만)
   const _d7=new Date(Date.now()+7*86400000).toISOString().slice(0,10);
   const annivItems=[];
-  // 고객사 기념일
-  (_mcAll||[]).forEach(l=>{
+  // 고객사 기념일 (팀장만 - 지점장은 고객관리 화면 별도)
+  (role==='team'?(_mcAll||[]):[]).forEach(l=>{
     (getMcAnniv(l.id)||[]).forEach(a=>{
       try{const n=nextAnnivDate(a.date,a.repeat!==false);if(n&&n>=today&&n<=_d7){const d=Math.ceil((new Date(n)-new Date())/86400000);annivItems.push({name:esc(l.company_name||'-'),label:esc(a.label),date:n,days:d});}}catch(e){}
     });
@@ -10825,7 +10886,7 @@ function updateLeadsSubTabCounts(){
     if(l.status==='deleted'||l.status==='drop'||l.yj_transferred) return false;
     if(['계약','관리'].includes(l.current_stage||'')) return false;
     const t=new Date(l.assigned_at||l.created_at||0).getTime();
-    if((now-t)<48*3600000) return false;
+    if(bizElapsedMs(t,now)<48*3600000) return false;
     return !acts.some(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type));
   }).length;
   const setC=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v?`(${v})`:'';}
@@ -10855,7 +10916,7 @@ function renderRecallPanel(){
     if(l.status==='deleted'||l.status==='drop'||l.yj_transferred) return false;
     if(['계약','관리'].includes(l.current_stage||'')) return false;
     const t=new Date(l.assigned_at||l.created_at||0).getTime();
-    if((now-t)<48*3600000) return false;
+    if(bizElapsedMs(t,now)<48*3600000) return false;
     return !acts.some(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type));
   }).sort((a,b)=>new Date(a.assigned_at||a.created_at||0)-new Date(b.assigned_at||b.created_at||0));
   const sub=document.getElementById('recall-inline-sub');
@@ -12635,11 +12696,33 @@ function renderLeadsTable(){
       acts[a.lead_id].latest=a;
   });
 
+  // ── 렌더 전 사전 계산 (O(n) → O(1) per row) ──
+  const _now2=Date.now();
+  const _acts2=allActivities?.length?allActivities:lg('activities');
+  // 실질 활동기록 있는 lead_id Set (assign/status_change 제외)
+  const _realActSet=new Set(_acts2.filter(a=>!['assign','status_change'].includes(a.type)).map(a=>a.lead_id));
+  // bizElapsedMs 결과 캐시 (assigned_at 기준)
+  const _elapsedCache=new Map();
+  const _getElapsed=t=>{if(!_elapsedCache.has(t))_elapsedCache.set(t,bizElapsedMs(t,_now2));return _elapsedCache.get(t);};
+  const _activeStages2=new Set(['접촉','상담','제안','계약','관리','보류','드랍']);
+
   tbody.innerHTML=page.map(l=>{
     const sel=selIds.has(l.id);
-    const _now2=Date.now(),_t2=new Date(l.assigned_at||l.created_at||0).getTime();
-    const _unr2=isRecallTarget(l); // isRecallTarget 내부에 활동기록 체크 포함
-    const _el2=bizElapsedMs(_t2,_now2);
+    const _t2=new Date(l.assigned_at||l.created_at||0).getTime();
+    const _hasRealAct=_realActSet.has(l.id);
+    const _hasAnyProgress=_hasRealAct
+      ||!!l.last_activity
+      ||(l.status==='contacted')
+      ||!!l.proposal
+      ||!!l.doc_received
+      ||!!l.contract_date
+      ||!!l.drop_reason
+      ||!!l.hold_reason;
+    const _unr2=!_hasAnyProgress
+      &&!_activeStages2.has(l.current_stage||'')
+      &&!['drop','deleted','contacted'].includes(l.status)
+      &&!l.yj_transferred;
+    const _el2=_getElapsed(_t2);
     const _rc2=_unr2&&_el2>=48*3600000?'overdue-48h-row':_unr2&&_el2>=30*3600000?'overdue-30h-row':_unr2&&_el2>=24*3600000?'overdue-24h-row':'';
     const _isReassign=(l.tm_done===true||l.tm_done==='true')||(l.yj_done===true||l.yj_done==='true');
     const _rowStyle=_isReassign?'background:rgba(124,58,237,.04);border-left:3px solid #7c3aed':'';
@@ -12672,9 +12755,19 @@ function renderPaging(total){
 // 팀장 내고객 — 공통 컬럼 시스템 적용
 // ══════════════════════════════════════════════════════════
 // 팀장용 기본 컬럼 (TM 제외)
-const MY_DEFAULT_COLS=['company_name','contact_name','phone','consult_type','status','branch_name','team_name','last_activity'];
+const MY_DEFAULT_COLS=['company_name','contact_name','phone','consult_type','current_stage','branch_name','team_name','last_activity'];
 const MY_COL_LS='kbmc_v2_my_col_vis';
-function getMyVisCols(){try{const v=JSON.parse(localStorage.getItem(MY_COL_LS));if(v&&Array.isArray(v))return v;}catch(e){}return[...MY_DEFAULT_COLS];}
+function getMyVisCols(){
+  try{
+    const v=JSON.parse(localStorage.getItem(MY_COL_LS));
+    if(v&&Array.isArray(v)){
+      const migrated=v.filter(k=>k!=='status');
+      if(migrated.length!==v.length) localStorage.setItem(MY_COL_LS,JSON.stringify(migrated));
+      return migrated;
+    }
+  }catch(e){}
+  return[...MY_DEFAULT_COLS];
+}
 function saveMyVisCols(v){localStorage.setItem(MY_COL_LS,JSON.stringify(v));}
 let _myVisCols=getMyVisCols();
 
