@@ -3911,7 +3911,7 @@ async function dbQ(table, filters={}){
     Object.entries(filters).forEach(([k,v])=>{if(v!==undefined&&v!=='')d=d.filter(r=>r[k]===v);});
     return d;
   }
-  let path=table+'?select=*&order=created_at.desc&limit=5000';
+  let path=table+'?select=*&order=created_at.desc&limit='+(table==='activities'?20000:5000);
   Object.entries(filters).forEach(([k,v])=>{if(v!==undefined&&v!=='')path+=`&${k}=eq.${encodeURIComponent(v)}`;});
   if(table==='leads') path+='&status=neq.deleted';
   const result=await sbGet(path);
@@ -5432,13 +5432,19 @@ async function openPanel(lead){
   let acts;
   if(!testMode){
     const rows = await sbGet(`activities?select=*&lead_id=eq.${lead.id}&order=created_at.desc&limit=200`);
-    if(rows && rows.length >= 0){
-      // Supabase 조회 성공
-      acts = rows.filter(a=>a.type!=='assign');
+    if(rows !== null){
+      // Supabase 조회 성공 (빈배열 포함)
       // 캐시 갱신
       if(Array.isArray(allActivities)){
         rows.forEach(r=>{ if(!allActivities.find(a=>a.id===r.id)) allActivities.unshift(r); });
       }
+      // sbGet 결과 + allActivities 캐시 합산 (sbGet이 빈배열이어도 캐시에 있으면 표시)
+      const cached = (allActivities||[]).filter(a=>a.lead_id===lead.id && a.type!=='assign');
+      const sbRows = rows.filter(a=>a.type!=='assign');
+      // 중복 제거 후 합산
+      const merged = [...sbRows];
+      cached.forEach(a=>{ if(!merged.find(r=>r.id===a.id)) merged.push(a); });
+      acts = merged.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
     } else {
       // sbGet 실패(null) → allActivities 캐시 fallback
       acts = (allActivities?.length ? allActivities : lg('activities'))
