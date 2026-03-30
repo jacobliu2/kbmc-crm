@@ -5116,10 +5116,10 @@ function colVal(l, key, acts){
       const la=acts?.[l.id];
       const latest=la?.latest;
       const cnt=la?.count||0;
-      if(!latest) return`<td style="font-size:11px;color:var(--gray-300)">-</td>`;
+      if(!latest) return`<td style="font-size:11px;color:var(--gray-300);cursor:pointer" onclick="event.stopPropagation();openActMHistory('${l.id}','${esc(l.company_name||'')}')">-</td>`;
       const preview=esc((latest.content||'').slice(0,40));
-      const extra=cnt>1?` <span style="font-size:10px;color:var(--gray-400);white-space:nowrap">외 ${cnt-1}건</span>`:'';
-      return`<td style="font-size:11px;max-width:220px;color:var(--gray-700);overflow:visible">${preview}${extra}</td>`;
+      const extra=cnt>1?` <span style="font-size:10px;color:var(--gray-400);white-space:nowrap">+${cnt-1}</span>`:'';
+      return`<td style="font-size:11px;max-width:220px;color:var(--gray-700);cursor:pointer;overflow:visible" onclick="event.stopPropagation();openActMHistory('${l.id}','${esc(l.company_name||'')}')">${preview}${extra}</td>`;
     }
     default: return`<td>-</td>`;
   }
@@ -5933,6 +5933,16 @@ function openActM(lid,cname){
   }
 }
 
+// 히스토리 탭을 바로 열어주는 함수 (진행내용 셀 클릭 시)
+function openActMHistory(lid, cname){
+  openActM(lid, cname);
+  // 모달 열린 후 히스토리 탭으로 전환
+  setTimeout(()=>{
+    const histBtn = document.getElementById('act-tab-history');
+    if(histBtn) switchActModalTab('history', histBtn);
+  }, 80);
+}
+
 function toggleActCollab(el, team){
   if(!window._actCollabSel) window._actCollabSel=new Set();
   if(window._actCollabSel.has(team)){
@@ -5969,9 +5979,9 @@ function switchActModalTab(tab, btn){
 function _renderActModalHistory(leadId){
   const el=document.getElementById('act-modal-history-body'); if(!el) return;
   const acts=(allActivities?.length?allActivities:lg('activities'))
-    .filter(a=>a.lead_id===leadId&&!['assign','status_change'].includes(a.type))
+    .filter(a=>a.lead_id===leadId && a.type!=='assign') // 배정 제외, 단계변경 포함
     .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
-  const ICON={call:'📞',meeting:'🤝',email:'📧',online:'💻',note:'📝',proposal:'📋',contract:'🎉',internal:'🏢',other:'📌'};
+  const ICON={call:'📞',meeting:'🤝',email:'📧',online:'💻',note:'📝',proposal:'📋',contract:'🎉',internal:'🏢',other:'📌',status_change:'🔄'};
   const isAdmin=curUser?.role==='admin';
   if(!acts.length){
     el.innerHTML=`<div style="display:flex;justify-content:flex-end;margin-bottom:10px">
@@ -11675,7 +11685,29 @@ function getActScope(){
 
 function getFilteredActEntries(){
   const scope=getActScope();
+  // localStorage 수동 등록 항목
   let entries=getActEntries();
+
+  // activities 테이블의 meeting·online 타입을 캘린더에 자동 표시
+  const autoTypes=['meeting','online'];
+  const autoActs=(allActivities?.length?allActivities:lg('activities'))
+    .filter(a=>autoTypes.includes(a.type) && a.date)
+    .map(a=>{
+      const lead=(allLeads||[]).find(l=>l.id===a.lead_id)||(myLeads||[]).find(l=>l.id===a.lead_id);
+      return {
+        id:'auto_'+a.id,
+        date:a.date||a.created_at?.slice(0,10),
+        type:a.type,
+        author:a.author||'',
+        company:lead?.company_name||'',
+        content:a.content||'',
+        _auto:true // 자동 생성 표시 (수정 불가)
+      };
+    });
+  // 중복 제거 후 합산 (수동 등록된 같은 날짜·같은 회사 제외)
+  const manualKeys=new Set(entries.map(e=>e.date+'_'+e.company));
+  const filtered=autoActs.filter(a=>!manualKeys.has(a.date+'_'+a.company));
+  entries=[...entries, ...filtered];
   // 범위 필터
   if(scope.type==='team') entries=entries.filter(a=>a.author===scope.name||a.companions?.includes(scope.name));
   else if(scope.type==='branch') entries=entries.filter(a=>{
@@ -11727,9 +11759,10 @@ function renderActCal(){
       // 표시: 이름 / 활동종류 / 제목
       const line=`${a.author||''} / ${typeLabel} / ${title}`;
       const tooltip=`${a.author} | ${typeLabel} | ${a.company||''} ${a.content||''}${compStr}`;
-      return`<div onclick="event.stopPropagation();editActEntry('${a.id}')" title="${esc(tooltip)}"
+      const isAuto=a._auto||String(a.id).startsWith('auto_');
+      return`<div onclick="event.stopPropagation();${isAuto?'':'editActEntry(\''+a.id+'\')' }" title="${esc(tooltip)}"
         style="margin-bottom:2px;padding:2px 5px;border-radius:4px;background:${clr}14;
-          border-left:3px solid ${clr};cursor:pointer;
+          border-left:3px solid ${clr};cursor:${isAuto?'default':'pointer'};opacity:${isAuto?'.85':'1'};
           font-size:10px;font-weight:500;color:var(--gray-800);
           overflow:visible;
           line-height:1.6;transition:opacity .12s"
@@ -12858,9 +12891,9 @@ function renderLeadsTable(){
   if(!tbody) return;
   if(!page.length){tbody.innerHTML=`<tr><td colspan="${colspan}" class="empty">데이터 없음</td></tr>`;renderPaging();updateAbar();return;}
 
-  // acts: {leadId: {latest: act, count: N}} — 최신 1건 + 전체 건수
+  // acts: {leadId: {latest: act, count: N}} — 실 활동기록만 (배정·단계변경 제외)
   const acts={};
-  (allActivities?.length?allActivities:lg('activities')).filter(a=>a.type!=='assign').forEach(a=>{
+  (allActivities?.length?allActivities:lg('activities')).filter(a=>!['assign','status_change'].includes(a.type)).forEach(a=>{
     if(!acts[a.lead_id]) acts[a.lead_id]={latest:null, count:0};
     acts[a.lead_id].count++;
     if(!acts[a.lead_id].latest||new Date(a.created_at)>new Date(acts[a.lead_id].latest.created_at))
