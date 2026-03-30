@@ -635,7 +635,7 @@ input[type=date],input[type=time]{color-scheme:light}
 .db-table{border-collapse:collapse;width:max-content;min-width:100%;table-layout:auto;}
 .db-table td,.db-table th{min-width:0;box-sizing:border-box}
 .reassign-row{background:rgba(124,58,237,.04)!important;border-left:3px solid #7c3aed!important}
-.team-hide{display:none!important}
+.team-hide{display:none}
 .db-table th{
   position:sticky;top:0;z-index:10;
   background:var(--gray-50);color:var(--gray-500);
@@ -1894,6 +1894,7 @@ tbody tr.selected td{background:var(--blue-50)!important}
             <button class="btn btn-outline btn-sm" onclick="migrateAppliedAt()" title="신청시간 한국어 형식을 ISO 형식으로 일괄 변환" style="color:var(--warn);border-color:var(--warn)">🔧 신청시간 형식 마이그레이션</button>
             <button class="btn btn-outline btn-sm" onclick="addCollabColumn()" title="협업 기능 컬럼 추가 (최초 1회)" style="color:var(--blue);border-color:var(--blue)">🤝 협업 컬럼 추가</button>
             <button class="btn btn-outline btn-sm" onclick="addTmMeetingColumn()" title="대전TM 필드 추가 (최초 1회)" style="color:#7c3aed;border-color:#7c3aed">📞 TM 컬럼 추가</button>
+            <button class="btn btn-outline btn-sm" onclick="migrateStageNames()" title="구 진행단계명 → 새 진행단계명 일괄 변환" style="color:#e85d04;border-color:#e85d04">🔄 진행단계 마이그레이션</button>
             <span id="sb-status" style="font-size:12px;color:var(--gray-400)"></span>
           </div>
         </div>
@@ -4736,14 +4737,11 @@ async function loadLeads(){
   const _abarDel  = document.querySelector('#leads-abar .abar-btn.err');
   const _isDbMgr  = curUser?.role==='dbmanager';
   const _isTeam   = curUser?.role==='team';
-  // 팀장에게 team-hide 요소 숨김, 관리자/지점장에게 표시
-  document.querySelectorAll('.team-hide').forEach(el=>{
-    el.style.display=_isTeam?'none':'';
-  });
-  // 팀장: recall/trash 탭 명시적 숨김
+  // 관리자만 휴지통·회수대상 탭 표시, 지점장·팀장 숨김
+  const _showAdminTabs = curUser?.role==='admin';
   ['leads-subtab-recall','leads-subtab-trash'].forEach(id=>{
     const el=document.getElementById(id);
-    if(el) el.style.display=_isTeam?'none':'';
+    if(el) el.style.display=_showAdminTabs?'':'none';
   });
   // dbmanager: 배정/드랍/삭제 모두 숨김, team: 배정·드랍 버튼 숨김 (진행단계에서 드랍 선택)
   if(_abarDist) _abarDist.style.display = (_isDbMgr||_isTeam) ? 'none' : '';
@@ -7751,6 +7749,55 @@ async function addCollabColumn(){
   const msg = `Supabase SQL Editor에서 아래 SQL을 실행하세요:\n\n${sql}\n\nSupabase → SQL Editor → New Query → 붙여넣기 → Run`;
   alert(msg);
   navigator.clipboard?.writeText(sql).then(()=>showToast('SQL이 클립보드에 복사됐습니다','success'));
+}
+
+async function migrateStageNames(){
+  const sql=`-- 구 진행단계명 → 새 진행단계명 일괄 변환
+UPDATE leads SET current_stage = '관리'  WHERE current_stage = '관리고객';
+UPDATE leads SET current_stage = '상담'  WHERE current_stage = '미팅';
+UPDATE leads SET current_stage = '접촉'  WHERE current_stage = '초기접촉';
+UPDATE leads SET current_stage = '제안'  WHERE current_stage = '협의';
+UPDATE leads SET current_stage = '접촉'  WHERE current_stage = '상담중';
+UPDATE leads SET current_stage = '제안'  WHERE current_stage = '제안완료';`;
+
+  // 클립보드 복사
+  try{ await navigator.clipboard.writeText(sql); }catch(e){}
+
+  // 직접 실행 확인
+  if(!confirm('진행단계 일괄 변환을 실행하시겠습니까?\n\n관리고객→관리, 미팅→상담, 초기접촉→접촉, 협의→제안\n\n※ 되돌릴 수 없습니다')) return;
+
+  const map={'관리고객':'관리','미팅':'상담','초기접촉':'접촉','협의':'제안','상담중':'접촉','제안완료':'제안'};
+  let total=0;
+  const btn=document.querySelector('[onclick="migrateStageNames()"]');
+  if(btn){ btn.textContent='⏳ 변환 중...'; btn.disabled=true; }
+
+  try{
+    // Supabase REST API로 직접 PATCH
+    for(const [oldStage, newStage] of Object.entries(map)){
+      const r=await fetch(`${SB_URL}/rest/v1/leads?current_stage=eq.${encodeURIComponent(oldStage)}`,{
+        method:'PATCH',
+        headers:{...sbH(),'Prefer':'return=minimal'},
+        body:JSON.stringify({current_stage:newStage, updated_at:new Date().toISOString()})
+      });
+      if(r.ok){
+        // 로컬 캐시도 갱신
+        if(allLeads){
+          allLeads.forEach(l=>{ if(l.current_stage===oldStage){ l.current_stage=newStage; total++; } });
+        }
+        console.log(`✅ ${oldStage} → ${newStage}`);
+      } else {
+        console.warn(`❌ ${oldStage} → ${newStage} 실패`, r.status);
+      }
+    }
+    showToast(`✅ 진행단계 변환 완료 (${total}건 로컬 반영)\nSupabase SQL 탭에서 위 SQL을 실행하면 완전히 적용됩니다`,'success');
+    if(typeof filterLeads==='function') filterLeads();
+  } catch(e){
+    showToast('변환 중 오류: '+e.message,'error');
+  } finally {
+    if(btn){ btn.textContent='🔄 진행단계 마이그레이션'; btn.disabled=false; }
+  }
+  // SQL도 클립보드에 복사 (Supabase 직접 실행용)
+  try{ await navigator.clipboard.writeText(sql); showToast('SQL도 클립보드에 복사됨 (Supabase SQL Editor에서도 실행 가능)','success'); }catch(e){}
 }
 
 async function deleteUser(uid){
