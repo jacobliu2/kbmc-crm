@@ -4813,7 +4813,15 @@ async function loadLeads(){
   const _qtabAll=document.getElementById('qtab-all');
   if(_qtabAll){_qtabAll.style.background='var(--navy)';_qtabAll.style.color='#fff';_qtabAll.style.borderColor='var(--navy)';}
   const _ltb=document.getElementById('leads-tbody'); if(_ltb) _ltb.innerHTML='<tr><td colspan="12" class="loading">불러오는 중...</td></tr>';
-  allLeads=await dbQ('leads');
+  // leads + activities + next_actions 동시 로드 (타이밍 문제 근본 해결)
+  const [_leadsRaw, _actsRaw, _nasRaw] = await Promise.all([
+    dbQ('leads').catch(()=>[]),
+    testMode ? Promise.resolve(lg('activities')) : dbQ('activities').catch(()=>[]),
+    testMode ? Promise.resolve(lg('next_actions')) : dbQ('next_actions').catch(()=>[]),
+  ]);
+  allActivities = _actsRaw;
+  allNextActions = _nasRaw;
+  allLeads = _leadsRaw;
   allLeads=allLeads.filter(l=>l.status!=='deleted');
   if(curUser.role==='admin'||curUser.role==='dbmanager'){
     // 관리자/DB관리자: 모든 DB 열람 — 필터 없음
@@ -4866,22 +4874,7 @@ async function loadLeads(){
 
   (document.getElementById('leads-sub')||{}).textContent=allLeads.length+'건';
 
-  // activities / next_actions — 백그라운드 로드 후 테이블 갱신
-  // leads 먼저 렌더 → 이후 진행내용 컬럼만 업데이트 (지연 없음)
-  if(!testMode){
-    Promise.all([
-      dbQ('activities').catch(()=>[]),
-      dbQ('next_actions').catch(()=>[]),
-    ]).then(([acts, nas])=>{
-      allActivities = acts;
-      allNextActions = nas;
-      // 진행내용 컬럼만 재렌더 (전체 재조회 없이)
-      renderLeadsTable();
-    });
-  } else {
-    allActivities=lg('activities');
-    allNextActions=lg('next_actions');
-  }
+  // activities/next_actions는 위에서 이미 동시 로드 완료
   // active 패널만 직접 표시 (switchLeadsSubTab 호출 시 무한루프 방지)
   _leadsSubTab='active';
   ['active','drop','trash','recall'].forEach(t=>{
@@ -6834,8 +6827,7 @@ async function saveActivity(){
     // 백그라운드로 activities만 새로고침 (leads는 이미 캐시에 있음)
     if(!testMode){
       dbQ('activities').then(acts=>{
-        if(acts&&acts.length) allActivities=acts;
-        renderLeadsTable();
+        if(acts&&acts.length){ allActivities=acts; renderLeadsTable(); }
       }).catch(()=>{});
     }
   } else if(scr==='my-leads'){
