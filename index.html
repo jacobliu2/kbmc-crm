@@ -3466,8 +3466,7 @@ function renderLeadCards(){
     if(q && !(l.company_name||'').toLowerCase().includes(q)) return false;
     if(st && l.status !== st) return false;
     if(_myLeadsFilter === 'unrecorded'){
-      const isUnrec = !recorded.has(l.id) && !['drop','deleted'].includes(l.status)
-        && l.current_stage !== '계약' && l.current_stage !== '관리';
+      const isUnrec = isRecallTarget(l) && !recorded.has(l.id);
       return isUnrec;
     }
     if(_myLeadsFilter === 'contacted') return l.status === 'contacted';
@@ -3486,8 +3485,7 @@ function renderLeadCards(){
   const SC2 = {assigned:'var(--blue)',contacted:'var(--ok)',no_answer:'var(--warn)',drop:'var(--err)',consulting:'var(--blue)'};
 
   grid.innerHTML = data.map(l=>{
-    const isUnrec = !recorded.has(l.id) && !['drop','deleted'].includes(l.status)
-      && l.current_stage !== '계약' && l.current_stage !== '관리';
+    const isUnrec = isRecallTarget(l) && !recorded.has(l.id);
     const assignedAt = new Date(l.assigned_at||l.created_at||0).getTime();
     const isOverdue = isUnrec && bizElapsedMs(assignedAt,now) >= H30;
     const leadActs = acts.filter(a=>a.lead_id===l.id && a.type!=='assign')
@@ -6279,9 +6277,9 @@ function renderBrTodayTodo(targetId){
   const H30=30*3600*1000; const now=Date.now();
   const acts=allActivities?.length?allActivities:lg('activities');
   const warn30=(brAllLeads||[]).filter(l=>{
-    if(l.yj_transferred) return false;
+    if(!isRecallTarget(l)) return false;
     const t=new Date(l.assigned_at||l.created_at||0).getTime();
-    return bizElapsedMs(t,now)>=H30&&!acts.some(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type));
+    return bizElapsedMs(t,now)>=H30;
   });
 
   // 개인 TODO (팀장과 공유 함수 사용)
@@ -6711,18 +6709,28 @@ async function loadMyLeads(){
 }
 
 // 배정 후 활동 기록 없는 고객 감지
+// 회수대상 여부 판단 (진행단계가 배정이거나 미설정인 경우만)
+function isRecallTarget(l){
+  const stage=l.current_stage||'';
+  // 접촉 이후 단계는 회수대상 제외 (관리자가 강제변경한 경우도 포함)
+  const ACTIVE_STAGES=['접촉','상담','제안','계약','관리','보류','드랍'];
+  if(ACTIVE_STAGES.includes(stage)) return false;
+  // status 기반: contacted(접촉완료)·drop도 제외
+  if(['contacted','drop','deleted'].includes(l.status)) return false;
+  if(l.yj_transferred) return false;
+  // 활동기록이 있는 경우도 제외 (assign/status_change 제외한 실질 기록)
+  const acts=allActivities?.length?allActivities:lg('activities');
+  if(acts.some(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type))) return false;
+  return true; // 배정만 된 상태, 아무 활동 없는 건
+}
+
 function getUnrecordedLeads(){
   if(!myLeads?.length) return [];
   const acts=allActivities?.length?allActivities:lg('activities');
   // 활동 기록이 있는 lead id 집합
   const recorded=new Set(acts.map(a=>a.lead_id));
   // drop/deleted 제외하고 기록 없는 것
-  return myLeads.filter(l=>
-    !['drop','deleted'].includes(l.status) &&
-    l.current_stage!=='계약' && l.current_stage!=='관리' &&
-    !l.yj_transferred && // 유영준 이관 건 제외
-    !recorded.has(l.id)
-  );
+  return myLeads.filter(l=> isRecallTarget(l)); // isRecallTarget 내부에 활동기록 체크 포함
 }
 
 async function checkUnrecorded(){
@@ -6732,8 +6740,8 @@ async function checkUnrecorded(){
   const now=Date.now();
   const H24=24*3600*1000, H30=30*3600*1000, H48=48*3600*1000;
   const warn24=unrecorded.filter(l=>{const t=new Date(l.assigned_at||l.created_at||0).getTime();const e=bizElapsedMs(t,now);return e>=H24&&e<H30;});
-  const warn30=unrecorded.filter(l=>{const t=new Date(l.assigned_at||l.created_at||0).getTime();if(l.yj_transferred)return false;const e=bizElapsedMs(t,now);return e>=H30&&e<H48;});
-  const warn48=unrecorded.filter(l=>{const t=new Date(l.assigned_at||l.created_at||0).getTime();if(l.yj_transferred)return false;return bizElapsedMs(t,now)>=H48;});
+  const warn30=unrecorded.filter(l=>{if(!isRecallTarget(l))return false;const t=new Date(l.assigned_at||l.created_at||0).getTime();const e=bizElapsedMs(t,now);return e>=H30&&e<H48;});
+  const warn48=unrecorded.filter(l=>{if(!isRecallTarget(l))return false;const t=new Date(l.assigned_at||l.created_at||0).getTime();return bizElapsedMs(t,now)>=H48;});
   if(banner){
     if(unrecorded.length>0){
       banner.style.display='flex';
@@ -6773,8 +6781,7 @@ async function checkUnrecordedAdmin(){
   const leads=await dbQ('leads');
   const acts=allActivities?.length?allActivities:lg('activities'); const now=Date.now();
   const warn48=leads.filter(l=>{
-    if(l.status==='deleted'||l.yj_transferred) return false;
-    if(['drop','계약','관리'].includes(l.current_stage||l.status)) return false;
+    if(!isRecallTarget(l)) return false;
     const t=new Date(l.assigned_at||l.created_at||0).getTime();
     if(bizElapsedMs(t,now)<48*3600000) return false;
     return !acts.some(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type));
@@ -6814,7 +6821,7 @@ function filterMyLeads(){
     const naL=na?`<span style="font-size:10px;color:${na.due_date<today?'var(--err)':na.due_date===today?'var(--warn)':'var(--blue)'};">${fmtD(na.due_date)} ${esc(na.action_type)}</span>`:'-';
     const lid=l.id, lname=esc(l.company_name||'');
     // 미기록 여부
-    const isUnrecorded=!recorded.has(l.id)&&!['drop','deleted'].includes(l.status)&&l.current_stage!=='계약'&&l.current_stage!=='관리';
+    const isUnrecorded=!recorded.has(l.id)&&isRecallTarget(l);
     const assignedAt=new Date(l.assigned_at||l.created_at||0).getTime();
     const _elapsed=bizElapsedMs(assignedAt,Date.now());
     const isOverdue48=isUnrecorded&&_elapsed>=48*3600000;
@@ -9962,8 +9969,9 @@ function renderAssignSummary(all){
     const done=bl.filter(l=>l.team_name).length;
     const warn30=bl.filter(l=>{
       if(l.yj_transferred) return false;
+      if(!(!l.current_stage||l.current_stage===''||l.current_stage==='배정')) return false;
       const t=new Date(l.assigned_at||l.created_at||0).getTime();
-      return (now-t)>=H30 && !acts.some(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type));
+      return bizElapsedMs(t,now)>=H30 && !acts.some(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type));
     }).length;
     const rate=bl.length?Math.round(done/bl.length*100):0;
     const isMissing=b==='미배정';
@@ -12630,7 +12638,7 @@ function renderLeadsTable(){
   tbody.innerHTML=page.map(l=>{
     const sel=selIds.has(l.id);
     const _now2=Date.now(),_t2=new Date(l.assigned_at||l.created_at||0).getTime();
-    const _unr2=!(allActivities?.length?allActivities:lg('activities')).some(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type))&&!['drop','deleted'].includes(l.status)&&!l.yj_transferred&&l.current_stage!=='계약'&&l.current_stage!=='관리';
+    const _unr2=isRecallTarget(l); // isRecallTarget 내부에 활동기록 체크 포함
     const _el2=bizElapsedMs(_t2,_now2);
     const _rc2=_unr2&&_el2>=48*3600000?'overdue-48h-row':_unr2&&_el2>=30*3600000?'overdue-30h-row':_unr2&&_el2>=24*3600000?'overdue-24h-row':'';
     const _isReassign=(l.tm_done===true||l.tm_done==='true')||(l.yj_done===true||l.yj_done==='true');
