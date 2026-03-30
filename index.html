@@ -5921,8 +5921,23 @@ function openActM(lid,cname){
   openM('modal-activity'); closePanel();
   // 활동 등록 탭 초기화
   switchActModalTab('form', document.getElementById('act-tab-form'));
-  // 히스토리 렌더 (캐시 기반)
-  _renderActModalHistory(lid);
+  // 히스토리 렌더: Supabase 직접 조회 후 캐시 합산
+  _renderActModalHistory(lid); // 캐시로 즉시 표시
+  if(!testMode){
+    sbGet(`activities?select=*&lead_id=eq.${lid}&order=created_at.desc&limit=200`).then(rows=>{
+      if(rows && rows.length > 0){
+        // allActivities 캐시 갱신
+        if(Array.isArray(allActivities)){
+          rows.forEach(r=>{ if(!allActivities.find(a=>a.id===r.id)) allActivities.unshift(r); });
+        }
+        // 히스토리 탭 현재 열려있으면 재렌더
+        const histEl = document.getElementById('act-modal-history-body');
+        if(histEl && document.getElementById('modal-activity')?.classList.contains('open')){
+          _renderActModalHistory(lid);
+        }
+      }
+    }).catch(()=>{});
+  }
 }
 
 function toggleActCollab(el, team){
