@@ -2154,7 +2154,7 @@ tbody tr.selected td{background:var(--blue-50)!important}
     <div id="dist-yj-wrap" style="margin-top:10px;margin-bottom:0;display:none">
       <div style="padding:14px 16px;background:#fff;border:2px solid var(--gray-200);border-radius:var(--r);display:flex;align-items:center;justify-content:space-between">
         <div>
-          <div style="font-size:13px;font-weight:700;color:#3684FF">👤 유영준 초도상담 이관</div>
+          <div style="font-size:13px;font-weight:700;color:#7c3aed">👤 유영준 초도상담 이관 <span style="font-size:10px;background:#7c3aed15;padding:1px 6px;border-radius:6px">관리자 전용</span></div>
           <div style="font-size:11px;color:var(--gray-400);margin-top:2px">초도상담 완료 후 팀장 재배정 가능</div>
         </div>
         <button class="btn btn-sm" style="background:#3684FF;color:#fff;border-color:#3684FF;font-weight:700" onclick="distToYJ()">이관</button>
@@ -5939,10 +5939,11 @@ function openActM(lid,cname){
       );
       collabCards.innerHTML=allOtherTeams.map(({name,branch})=>{
         const isSel=window._actCollabSel.has(name);
+        const isYJ=name==='유영준';
         return `<div class="mgr-card${isSel?' selected':''}" onclick="toggleActCollab(this,'${name}')"
-          data-team="${name}" style="min-width:70px;padding:7px 8px;${isSel?'border-color:var(--blue);':''}">
-          <div style="font-size:10px;color:var(--gray-400);margin-bottom:2px">${esc(branch)}</div>
-          <div class="mgr-name" style="font-size:11px">${esc(name)}</div>
+          data-team="${name}" style="min-width:70px;padding:7px 8px;${isSel?'border-color:var(--blue);':''}${isYJ?'border-color:#7c3aed20;background:#7c3aed05;':''}">
+          <div style="font-size:10px;color:${isYJ?'#7c3aed':'var(--gray-400)'};margin-bottom:2px">${isYJ?'전략파트장':esc(branch)}</div>
+          <div class="mgr-name" style="font-size:11px;${isYJ?'color:#7c3aed;font-weight:700;':''}">${esc(name)}</div>
         </div>`;
       }).join('');
       if(collabLabel) collabLabel.textContent=existCollab.length?'✓ 현재 협업: '+existCollab.join(', '):'';
@@ -6160,7 +6161,7 @@ async function yjReassign(){
 
   const updateData={
     team_name:'',
-    team_names:'',
+    team_names:'[]',
     yj_transferred:false,
     yj_done:true,
     assigned_at:new Date().toISOString(),
@@ -10519,7 +10520,8 @@ function openDistribute(){
     ttSel.innerHTML='<option value="">팀장 선택</option>'+allTeams.map(t=>`<option>${t}</option>`).join('');
   }
   const yjWrap=document.getElementById('dist-yj-wrap');
-  if(yjWrap) yjWrap.style.display=(curUser.role==='admin'||curUser.role==='branch')?'':'none';
+  // 유영준 초도이관: 관리자만 가능
+  if(yjWrap) yjWrap.style.display=(curUser.role==='admin')?'':'none';
   openOv('ov-distribute');
 }
 
@@ -11297,13 +11299,22 @@ function renderReassignDbPanel(){
   _reassignDbAll=leads.filter(l=>{
     if(l.status==='deleted'||l.status==='drop') return false;
     if(l.yj_transferred) return false;
-    // 이미 재배정 완료된 건 제외 (team_name이 있으면 배정됨)
-    if(l.team_name&&l.team_name.trim()) return false;
     // 자동회수 or TM완료 재배정대기
     const isAutoRecalled=l.auto_recalled===true||l.auto_recalled==='true';
     const isTmDone=(l.tm_done===true||l.tm_done==='true');
     const isYjDone=(l.yj_done===true||l.yj_done==='true');
-    return isAutoRecalled||isTmDone||isYjDone;
+    if(!isAutoRecalled&&!isTmDone&&!isYjDone) return false;
+    // 재배정 완료 여부 판단
+    const tn=(l.team_name||'').trim();
+    if(isYjDone){
+      // yj_done: team_name이 비어있거나 '유영준' 본인이면 아직 재배정 대기
+      // 다른 팀장으로 배정됐으면 완료
+      if(tn && tn!=='유영준') return false;
+    } else {
+      // auto_recalled/tm_done: team_name이 있으면 완료
+      if(tn) return false;
+    }
+    return true;
   }).sort((a,b)=>new Date(b.auto_recall_at||b.updated_at||0)-new Date(a.auto_recall_at||a.updated_at||0));
 
   const sub=document.getElementById('reassigndb-sub');
@@ -11579,6 +11590,7 @@ function toggleReqAll(cb){
 }
 // 지점장 → 팀장 보고 요청
 function selectBranchCard(el, branch){
+
   document.querySelectorAll('#dist-branch-cards .mgr-card').forEach(c=>c.classList.remove('selected'));
   el.classList.add('selected');
   _selBranch=branch; _selTeams.clear();
