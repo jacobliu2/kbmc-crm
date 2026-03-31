@@ -2538,138 +2538,6 @@ tbody tr.selected td{background:var(--blue-50)!important}
   </div>
 </div>
 
-<!-- ── 보고 요청 모달 (관리자) ── -->
-<div class="modal-overlay" id="modal-req-report">
-  <div class="modal" style="width:480px;max-height:90vh;overflow-y:auto">
-    <div class="mh"><div class="mt">📢 보고 요청</div><button class="mc" onclick="closeM('modal-req-report')">✕</button></div>
-    <div class="fg" style="margin-bottom:12px">
-      <label>요청 대상</label>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px" id="req-target-wrap">
-        <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;padding:5px 11px;border:1.5px solid var(--gray-200);border-radius:20px"><input type="checkbox" value="all_branch" onchange="toggleReqAll(this)" style="accent-color:var(--navy)"> 전체 지점장</label>
-        <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;padding:5px 11px;border:1.5px solid var(--gray-200);border-radius:20px"><input type="checkbox" value="all_team" onchange="toggleReqAll(this)" style="accent-color:var(--navy)"> 전체 팀장</label>
-        <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;padding:5px 11px;border:1.5px solid var(--gray-200);border-radius:20px"><input type="checkbox" id="req-cb-신상국" value="신상국" style="accent-color:var(--navy)"> 신상국</label>
-        <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;padding:5px 11px;border:1.5px solid var(--gray-200);border-radius:20px"><input type="checkbox" id="req-cb-정명구" value="정명구" style="accent-color:var(--navy)"> 정명구</label>
-        <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;padding:5px 11px;border:1.5px solid var(--gray-200);border-radius:20px"><input type="checkbox" id="req-cb-정혜윤" value="정혜윤" style="accent-color:var(--navy)"> 정혜윤</label>
-        <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;padding:5px 11px;border:1.5px solid var(--gray-200);border-radius:20px"><input type="checkbox" id="req-cb-최종길" value="최종길" style="accent-color:var(--navy)"> 최종길</label>
-      </div>
-    </div>
-    <div class="fg" style="margin-bottom:12px"><label>제출 마감일</label><input type="date" id="req-deadline" style="width:100%;padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--gray-900)"></div>
-    <div class="fg" style="margin-bottom:16px"><label>요청 메시지</label><textarea id="req-message" rows="3" placeholder="보고 요청 내용을 입력하세요" style="width:100%;padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--gray-900);resize:vertical"></textarea></div>
-    <div class="mf"><button class="btn btn-outline" onclick="closeM('modal-req-report')">취소</button><button class="btn btn-primary" onclick="sendReportRequest()">📢 요청 발송</button></div>
-  </div>
-</div>
-
-<!-- ── 활동 등록 모달 ── -->
-<div class="modal-overlay" id="modal-act-entry">
-  <div class="modal" style="width:540px;max-height:90vh;overflow-y:auto">
-    <div class="mh"><div class="mt" id="act-entry-title">활동 등록</div><button class="mc" onclick="closeM('modal-act-entry')">✕</button></div>
-    <input type="hidden" id="ae-edit-id">
-    <div class="form-grid">
-      <div class="fg"><label>날짜 *</label><input type="date" id="ae-date"></div>
-      <div class="fg"><label>시간</label><input type="time" id="ae-time"></div>
-      <div class="fg"><label>활동 유형</label>
-        <select id="ae-type" style="padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--gray-900)">
-          <option value="call">전화</option><option value="meeting">미팅/방문</option>
-          <option value="online">화상상담</option><option value="proposal">제안서 전달</option>
-          <option value="contract">계약</option><option value="internal">내부미팅</option><option value="other">기타</option>
-        </select></div>
-      <div class="fg" style="position:relative">
-  <label>고객사 (선택)</label>
-  <input type="text" id="ae-company" placeholder="관련 고객사명"
-    autocomplete="off"
-    oninput="filterAeCompany(this.value)"
-    onfocus="filterAeCompany(this.value)"
-    onblur="setTimeout(()=>hideAeDrop(),200)"
-    style="width:100%">
-  <div id="ae-company-drop" style="display:none;position:absolute;top:100%;left:0;right:0;
-    background:#fff;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);
-    box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:9999;max-height:200px;overflow-y:auto;margin-top:2px"></div>
-</div>
-      <div class="fg full"><label>내용 *</label><textarea id="ae-content" rows="3" placeholder="활동 내용을 입력하세요"></textarea></div>
-      <div class="fg full"><label>다음 액션</label><input type="text" id="ae-next-action" placeholder="예: 3/28 추가 미팅 예정"></div>
-    </div>
-    <!-- 동행 요청 -->
-    <div style="margin-top:14px;padding:12px 14px;background:var(--gray-50);border-radius:var(--r-sm)">
-      <div style="font-size:12px;font-weight:700;color:var(--gray-600);margin-bottom:8px">👥 동행 요청 <span style="font-weight:400;color:var(--gray-400)">(선택 — 선택 시 알림 발송)</span></div>
-      <div id="ae-companion-list" style="display:flex;gap:6px;flex-wrap:wrap"></div>
-      <div id="ae-companion-selected" style="margin-top:6px;font-size:11px;color:var(--blue)"></div>
-    </div>
-    <div class="mf"><button class="btn btn-outline" onclick="closeM('modal-act-entry')">취소</button><button class="btn btn-primary" onclick="saveActEntry()">저장</button></div>
-  </div>
-</div>
-
-<!-- ── 팀장 정보 수정 모달 (지점장용) ── -->
-<div class="modal-overlay" id="modal-leader-info">
-  <div class="modal" style="width:520px;max-height:90vh;overflow-y:auto">
-    <div class="mh"><div class="mt" id="li-modal-title">팀장 정보</div><button class="mc" onclick="closeM('modal-leader-info')">✕</button></div>
-    <input type="hidden" id="li-leader-name">
-    <div class="form-grid">
-      <div class="fg"><label>이름</label><input type="text" id="li-name"></div>
-      <div class="fg"><label>연락처</label><input type="tel" id="li-phone" placeholder="010-0000-0000"></div>
-      <div class="fg"><label>이메일</label><input type="email" id="li-email"></div>
-      <div class="fg"><label>직위</label><input type="text" id="li-position" placeholder="수석 컨설턴트"></div>
-      <div class="fg"><label>위촉일</label><input type="date" id="li-start-date"></div>
-      <div class="fg"><label>해촉일</label><input type="date" id="li-end-date"></div>
-      <div class="fg full"><label>특이사항</label><textarea id="li-note" rows="2"></textarea></div>
-    </div>
-    <div style="margin-top:14px">
-      <div style="font-size:12px;font-weight:700;color:var(--gray-600);margin-bottom:8px">캘린더 표시 색상</div>
-      <div id="li-color-palette" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
-      <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
-        <span style="font-size:11px;color:var(--gray-500)">커스텀:</span>
-        <input type="color" id="li-custom-color" value="#3182f6" oninput="pickCustomColor(this.value)" style="width:36px;height:28px;border:1.5px solid var(--gray-200);border-radius:6px;cursor:pointer">
-        <span id="li-color-preview" style="font-size:11px;color:var(--gray-500)"></span>
-      </div>
-      <input type="hidden" id="li-selected-color" value="#3182f6">
-    </div>
-    <!-- 1on1 미팅 기록 -->
-    <div style="margin-top:16px;border-top:1px solid var(--gray-100);padding-top:14px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <div style="font-size:12px;font-weight:700;color:var(--gray-600)">🤝 1on1 미팅 기록</div>
-        <button class="btn btn-outline btn-xs" onclick="openAdd1on1()">+ 기록 추가</button>
-      </div>
-      <!-- 신규 입력 폼 -->
-      <div id="li-1on1-form" style="display:none;margin-bottom:12px;padding:12px;background:var(--gray-50);border-radius:var(--r-sm)">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-          <div class="fg" style="margin:0"><label style="font-size:11px">날짜</label>
-            <input type="date" id="li-1on1-date" style="padding:7px 10px;font-size:13px;width:100%;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-family:inherit">
-          </div>
-          <div class="fg" style="margin:0"><label style="font-size:11px">유형</label>
-            <select id="li-1on1-type" style="padding:7px 10px;font-size:13px;width:100%;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-family:inherit">
-              <option value="1on1">1on1 미팅</option>
-              <option value="coaching">코칭</option>
-              <option value="feedback">피드백</option>
-              <option value="etc">기타</option>
-            </select>
-          </div>
-        </div>
-        <div class="fg" style="margin:0 0 8px">
-          <label style="font-size:11px">미팅 내용 / 피드백</label>
-          <textarea id="li-1on1-content" rows="3" placeholder="미팅 주요 내용, 피드백, 다음 액션 등" style="width:100%;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;resize:vertical"></textarea>
-        </div>
-        <div style="display:flex;gap:6px;justify-content:flex-end">
-          <button class="btn btn-outline btn-xs" onclick="document.getElementById('li-1on1-form').style.display='none'">취소</button>
-          <button class="btn btn-primary btn-xs" onclick="save1on1()">저장</button>
-        </div>
-      </div>
-      <!-- 기록 목록 -->
-      <div id="li-1on1-list" style="max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:6px"></div>
-    </div>
-    <div class="mf" style="margin-top:14px"><button class="btn btn-outline" onclick="closeM('modal-leader-info')">취소</button><button class="btn btn-primary" onclick="saveLeaderInfo()">저장</button></div>
-  </div>
-</div>
-
-<!-- ── 지점장: 팀장 보고 요청 모달 ── -->
-<div class="modal-overlay" id="modal-branch-req-report">
-  <div class="modal" style="width:440px;max-height:90vh;overflow-y:auto">
-    <div class="mh"><div class="mt">📢 팀장 보고 요청</div><button class="mc" onclick="closeM('modal-branch-req-report')">✕</button></div>
-    <div class="fg" style="margin-bottom:12px"><label>요청 대상 팀장</label><div id="branch-req-targets" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"></div></div>
-    <div class="fg" style="margin-bottom:12px"><label>마감일</label><input type="date" id="branch-req-deadline" style="width:100%;padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--gray-900)"></div>
-    <div class="fg" style="margin-bottom:16px"><label>요청 메시지</label><textarea id="branch-req-message" rows="2" placeholder="보고 요청 내용" style="width:100%;padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--gray-900);resize:vertical"></textarea></div>
-    <div class="mf"><button class="btn btn-outline" onclick="closeM('modal-branch-req-report')">취소</button><button class="btn btn-primary" onclick="sendBranchReportRequest()">발송</button></div>
-  </div>
-</div>
-
 <!-- ── 공지 작성 모달 ── -->
 <div class="modal-overlay" id="modal-notice">
   <div class="modal" style="width:560px;max-height:90vh;overflow-y:auto">
@@ -6861,7 +6729,7 @@ async function saveActivity(){
     ls('next_actions',nas);
   }
   closeM('modal-activity'); showToast('활동 기록 저장','success');
-  addN('act','활동 기록',`${allLeads.find(l=>l.id===lid)?.company_name||''} — ${type}`,'act:'+lid);
+  // 본인이 저장한 활동기록은 알림 불필요 (내가 한 일이므로)
   // 상세 모달이 열려있으면 히스토리 탭 즉시 갱신
   if(document.getElementById('modal-lead-detail')?.classList.contains('open')){
     const cachedActs = (allActivities?.length?allActivities:lg('activities'))
@@ -7170,108 +7038,12 @@ async function saveContract(){
   else { await dbI('contracts',data); }
   closeM('modal-contract'); showToast('계약 저장','success'); renderPerfTable();
 }
-function viewRpt(id, src){
-  let r=null;
-  if(src==='my'||!src) r=getMyRpts().find(x=>x.id===id);
-  else if(src==='shared') r=getSharedRpts().find(x=>x.id===id);
-  if(!r) r=getMyRpts().find(x=>x.id===id); // fallback
-  if(!r){showToast('보고서를 찾을 수 없습니다.','error');return;}
-  showRptViewModal(r);
-}
-function showRptViewModal(r){
-  let ov=document.getElementById('ov-view-rpt');
-  if(!ov){ov=document.createElement('div');ov.id='ov-view-rpt';ov.className='modal-overlay';document.body.appendChild(ov);}
-  // 보고서 본문 HTML (PDF 공용)
-  const bodyHtml=(r.sections||[]).map(sec=>`
-    <div style="margin-bottom:16px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;break-inside:avoid">
-      <div style="background:#1b2f4e;color:#fff;padding:9px 16px;font-size:12px;font-weight:700;letter-spacing:.3px">${esc(sec.title)}</div>
-      <div style="padding:12px 16px;font-size:13px;color:#334155;line-height:1.9;white-space:pre-wrap">${esc(sec.content||'(내용 없음)')}</div>
-    </div>`).join('');
-
-  const rptId='rpt-body-'+r.id;
-  ov.innerHTML=`<div class="modal" style="width:700px;max-height:88vh;display:flex;flex-direction:column">
-    <!-- 헤더 -->
-    <div class="mh" style="flex-shrink:0">
-      <div>
-        <div class="mt">${esc(r.title)}</div>
-        <div style="font-size:11px;color:var(--gray-400);margin-top:2px">
-          ${esc(r.author)} · ${r.from||''} ~ ${r.to||''} · ${fmtD(r.submitted_at||r.created_at)}
-          ${r.submitted?'<span style="color:var(--ok);font-weight:700;margin-left:6px">✅ 제출됨</span>':''}
-        </div>
-      </div>
-      <div style="display:flex;gap:6px;align-items:center">
-        <button class="btn btn-primary btn-sm" onclick="downloadRptPdf('${r.id}')">📄 PDF 저장</button>
-        <button class="mc" onclick="document.getElementById('ov-view-rpt').classList.remove('open')">✕</button>
-      </div>
-    </div>
-    <!-- 본문 (스크롤) -->
-    <div id="${rptId}" style="flex:1;overflow-y:auto;padding:4px 0">
-      <div style="display:flex;flex-direction:column;gap:12px">${bodyHtml}</div>
-    </div>
-  </div>`;
-  ov.classList.add('open');
-  // 현재 보고서 캐시
-  window._viewingRpt=r;
-}
 
 // ── 보고 요청 발송 (관리자→팀장) ─────────────────────────
-function sendReportRequest(){
-  const deadline = document.getElementById('req-deadline')?.value||'';
-  const message  = document.getElementById('req-message')?.value.trim()||'';
-  const checked  = [...document.querySelectorAll('#req-target-wrap input[type=checkbox]:checked')].map(c=>c.value);
-  if(!checked.length){ showToast('요청 대상을 선택하세요','error'); return; }
-  if(!deadline){ showToast('마감일을 지정하세요','error'); return; }
-  checked.forEach(target=>{
-    addN('report_req','📢 보고 요청',`마감: ${deadline}${message?' — '+message:''}`, 'report_req:'+target);
-  });
-  closeM('modal-req-report');
-  showToast(`${checked.length}명에게 보고 요청 발송됨`,'success');
-}
 
 // ── 보고 요청 발송 (지점장→팀장) ─────────────────────────
-function sendBranchReportRequest(){
-  const deadline = document.getElementById('branch-req-deadline')?.value||'';
-  const message  = document.getElementById('branch-req-message')?.value.trim()||'';
-  const checked  = [...document.querySelectorAll('#branch-req-targets input[type=checkbox]:checked')].map(c=>c.value);
-  if(!checked.length){ showToast('요청 대상을 선택하세요','error'); return; }
-  if(!deadline){ showToast('마감일을 지정하세요','error'); return; }
-  checked.forEach(target=>{
-    addN('report_req','📢 팀장 보고 요청',`마감: ${deadline}${message?' — '+message:''}`, 'report_req:'+target);
-  });
-  closeM('modal-branch-req-report');
-  showToast(`${checked.length}명에게 보고 요청 발송됨`,'success');
-}
 
 // ── 보고서 PDF 다운로드 ───────────────────────────────────
-function downloadRptPdf(rptId){
-  const r = window._viewingRpt || getMyRpts().find(x=>x.id===rptId) || getSharedRpts().find(x=>x.id===rptId);
-  if(!r){ showToast('보고서를 찾을 수 없습니다','error'); return; }
-  const bodyHtml=(r.sections||[]).map(sec=>`
-    <div style="margin-bottom:16px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;page-break-inside:avoid">
-      <div style="background:#1b2f4e;color:#fff;padding:9px 16px;font-size:12px;font-weight:700;letter-spacing:.3px">${sec.title||''}</div>
-      <div style="padding:12px 16px;font-size:13px;color:#334155;line-height:1.9;white-space:pre-wrap">${(sec.content||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
-    </div>`).join('');
-  const html=`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">
-    <title>${(r.title||'보고서').replace(/</g,'&lt;')}</title>
-    <style>body{font-family:'Noto Sans KR',sans-serif;padding:32px 40px;max-width:720px;margin:auto;color:#1e293b}
-    h1{font-size:20px;font-weight:800;margin-bottom:4px}
-    .meta{font-size:12px;color:#64748b;margin-bottom:24px}
-    @media print{body{padding:0}}/* 지점관리 컬럼 리사이저 */
-.col-resizer{position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;background:rgba(255,255,255,.2);z-index:1}
-.col-resizer:hover{background:rgba(255,255,255,.5)}
-</style>
-  </head><body>
-    <h1>${(r.title||'').replace(/</g,'&lt;')}</h1>
-    <div class="meta">${(r.author||'').replace(/</g,'&lt;')} · ${r.from||''} ~ ${r.to||''} · 제출: ${r.submitted_at?r.submitted_at.slice(0,10):'-'}</div>
-    ${bodyHtml}
-  </body></html>`;
-  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download=`보고서_${(r.title||'report').replace(/[/\\:*?"<>|]/g,'_')}_${new Date().toISOString().slice(0,10)}.html`;
-  a.click(); URL.revokeObjectURL(a.href);
-  showToast('보고서 HTML 파일 저장됨 (브라우저에서 인쇄→PDF 가능)','success');
-}
 
 // ── _pending (엑셀 업로드 임시) ───────────────────────────
 let _pending=[];
