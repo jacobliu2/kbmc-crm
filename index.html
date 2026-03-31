@@ -6073,8 +6073,8 @@ function renderTodayTodo(targetId){
   let todos=[];
   try{todos=JSON.parse(localStorage.getItem(TODO_KEY)||'[]');}catch(e){}
 
-  // Next Action
-  const allNas=(allNextActions?.length?allNextActions:lg('next_actions')).filter(a=>a.status==='예정');
+  // Next Action — 본인 것만 (team_leader 필터)
+  const allNas=(allNextActions?.length?allNextActions:lg('next_actions')).filter(a=>a.status==='예정'&&a.team_leader===curUser.name);
   const todayNas=allNas.filter(a=>a.due_date===today);
   const overdueNas=allNas.filter(a=>a.due_date&&a.due_date<today);
   const tomorrowNas=allNas.filter(a=>a.due_date===tomorrow);
