@@ -1096,7 +1096,11 @@ tbody tr.selected td{background:var(--blue-50)!important}
         </button>
         <button id="leads-subtab-drop" onclick="switchLeadsSubTab('drop',this)"
           style="padding:9px 18px;border:none;background:transparent;cursor:pointer;font-size:14px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">
-          ❌ 드랍 DB <span id="leads-subtab-drop-cnt" style="font-size:11px;font-weight:400;color:var(--gray-400)"></span>
+          ❌ 드랍·보류 DB <span id="leads-subtab-drop-cnt" style="font-size:11px;font-weight:400;color:var(--gray-400)"></span>
+        </button>
+        <button id="leads-subtab-reassigndb" onclick="switchLeadsSubTab('reassigndb',this)"
+          style="display:none;padding:9px 18px;border:none;outline:none;background:transparent;cursor:pointer;font-size:14px;font-weight:600;color:#7c3aed;border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">
+          🔄 재배정 DB <span id="leads-subtab-reassigndb-cnt" style="font-size:11px;font-weight:400;color:#7c3aed"></span>
         </button>
         <button id="leads-subtab-trash" onclick="switchLeadsSubTab('trash',this)"
           style="display:none;padding:9px 18px;border:none;outline:none;background:transparent;cursor:pointer;font-size:14px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">
@@ -1221,10 +1225,30 @@ tbody tr.selected td{background:var(--blue-50)!important}
     </div>
       </div><!-- /leads-panel-active -->
 
+      <!-- 재배정 DB 패널 (관리자 전용) -->
+      <div id="leads-panel-reassigndb" style="display:none">
+        <div class="page-header" style="margin-bottom:12px">
+          <div class="page-title" style="font-size:16px">🔄 재배정 DB <sub id="reassigndb-sub" style="font-size:13px;color:#7c3aed"></sub></div>
+          <div style="font-size:12px;color:var(--gray-400)">접촉·상담 5영업일 경과 또는 관리 1개월 활동없음 — 자동회수된 DB</div>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="data-table" style="min-width:700px">
+            <thead><tr style="background:var(--navy);color:#fff">
+              <th style="width:32px"><input type="checkbox" onchange="toggleReassignDbAll(this.checked)" style="accent-color:#fff;width:14px;height:14px"></th>
+              <th>회사명</th><th>지점장</th><th>팀장</th><th>진행단계</th><th>최근활동</th><th>경과</th><th>조치</th>
+            </tr></thead>
+            <tbody id="reassigndb-tbody"></tbody>
+          </table>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:8px">
+          <button class="btn btn-primary btn-sm" onclick="reassignDbBulkAssign()">📨 일괄 재배정</button>
+        </div>
+      </div>
+
       <!-- 드랍 DB 패널 -->
       <div id="leads-panel-drop" style="display:none">
         <div class="page-header" style="margin-bottom:12px">
-          <div class="page-title" style="font-size:16px">드랍 DB <sub id="drop-sub"></sub></div>
+          <div class="page-title" style="font-size:16px">드랍·보류 DB <sub id="drop-sub"></sub></div>
           <div style="display:flex;gap:8px">
             <input type="text" id="drop-search" placeholder="🔍 회사명·연락처" oninput="filterDropLeads()"
               style="padding:7px 12px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;width:180px">
@@ -1813,9 +1837,12 @@ tbody tr.selected td{background:var(--blue-50)!important}
             <table class="db-table">
               <thead><tr>
                 <th style="width:32px"><input type="checkbox" id="br-chk-all" onchange="brToggleAll(this.checked)" style="accent-color:#fff;width:14px;height:14px"></th>
-                <th style="width:140px">회사명</th><th style="width:80px">신청자</th>
-                <th style="width:110px">연락처</th><th style="width:120px">상담유형</th>
-                <th style="width:80px">상태<span style="font-size:9px;opacity:.6">(결과)</span></th><th style="width:80px">팀장</th>
+                <th style="width:140px;position:relative">회사명<div class="col-resizer" onmousedown="brColResizeStart(event,this)"></div></th>
+                <th style="width:80px;position:relative">신청자<div class="col-resizer" onmousedown="brColResizeStart(event,this)"></div></th>
+                <th style="width:100px;position:relative">소재지<div class="col-resizer" onmousedown="brColResizeStart(event,this)"></div></th>
+                <th style="width:90px;position:relative">매출액<div class="col-resizer" onmousedown="brColResizeStart(event,this)"></div></th>
+                <th style="width:120px;position:relative">상담유형<div class="col-resizer" onmousedown="brColResizeStart(event,this)"></div></th>
+                <th style="width:80px">상태</th><th style="width:80px">팀장</th>
                 <th style="width:80px">분배일</th><th style="width:60px">액션</th>
               </tr></thead>
               <tbody id="br-tbody"><tr><td colspan="9" class="loading">로딩 중...</td></tr></tbody>
@@ -2932,7 +2959,7 @@ function updateRemoveReqTransfer(){
   const cntEl=document.getElementById('req-remove-db-count');
   if(!target){if(wrap)wrap.style.display='none';return;}
   // 담당 DB 수
-  const myLeads=brAllLeads.filter(l=>l.team_name===target&&!['drop','deleted'].includes(l.status));
+  const myLeads=brAllLeads.filter(l=>(l.team_name===target||((()=>{try{return JSON.parse(l.team_names||'[]').includes(target);}catch(e){return false;}})()))&&!['drop','deleted'].includes(l.status));
   const others=(TEAM_MAP[curUser.name]||[]).filter(t=>t!==target);
   if(wrap) wrap.style.display='';
   if(cntEl) cntEl.textContent=`${target} 담당 DB: ${myLeads.length}건${myLeads.length?` — 이관 대상 지정 필수`:''}`;
@@ -2946,7 +2973,7 @@ function submitRemoveLeaderReq(){
   const transfer=document.getElementById('req-remove-transfer')?.value;
   const reason=document.getElementById('req-remove-reason')?.value.trim();
   if(!target){showToast('삭제 대상 팀장을 선택하세요','error');return;}
-  const myLeads=brAllLeads.filter(l=>l.team_name===target&&!['drop','deleted'].includes(l.status));
+  const myLeads=brAllLeads.filter(l=>(l.team_name===target||(()=>{try{return JSON.parse(l.team_names||'[]').includes(target);}catch(e){return false;}})())&&!['drop','deleted'].includes(l.status));
   if(myLeads.length>0&&!transfer){showToast('담당 DB 이관 대상 팀장을 지정하세요','error');return;}
   if(!reason){showToast('삭제 사유를 입력하세요','error');return;}
   const reqs=getLeaderReqs();
@@ -2971,7 +2998,7 @@ function submitAddLeaderReq(){
 async function transferAndRemoveLeader(leaderName){
   const target=document.getElementById('transfer-target-leader')?.value;
   if(!target){showToast('이관 대상을 선택하세요','error');return;}
-  const ids=brAllLeads.filter(l=>l.team_name===leaderName&&l.status!=='deleted'&&l.status!=='drop').map(l=>l.id);
+  const ids=brAllLeads.filter(l=>(l.team_name===leaderName||((()=>{try{return JSON.parse(l.team_names||'[]').includes(leaderName);}catch(e){return false;}})()))&&l.status!=='deleted'&&l.status!=='drop').map(l=>l.id);
   for(const id of ids){
     await dbU('leads',id,{team_name:target,team_names:JSON.stringify([target])});
     await logActivity(id,'assign',leaderName+' → '+target+' 이관 (팀장 삭제)','assigned','');
@@ -3475,7 +3502,7 @@ function _updateColorSample(color){
 function openRemoveLeader(){
   const leaderName=document.getElementById('li-leader-name')?.value;
   if(!leaderName) return;
-  const myLeadsOfLeader=brAllLeads.filter(l=>l.team_name===leaderName&&l.status!=='deleted'&&l.status!=='drop');
+  const myLeadsOfLeader=brAllLeads.filter(l=>(l.team_name===leaderName||((()=>{try{return JSON.parse(l.team_names||'[]').includes(leaderName);}catch(e){return false;}})()))&&l.status!=='deleted'&&l.status!=='drop');
   const others=(TEAM_MAP[curUser.name]||[]).filter(t=>t!==leaderName);
   let ov=document.getElementById('ov-remove-leader');
   if(!ov){ov=document.createElement('div');ov.id='ov-remove-leader';ov.className='ov-bg';document.body.appendChild(ov);}
@@ -3737,14 +3764,20 @@ function handleRealtimeChange(table, payload){
     } else if(eventType === 'UPDATE' && newRow){
       const i = allActivities.findIndex(a=>a.id===newRow.id);
       if(i>=0) allActivities[i]={...allActivities[i],...newRow};
+      else allActivities.unshift(newRow);
     } else if(eventType === 'DELETE' && oldRow){
       const i = allActivities.findIndex(a=>a.id===oldRow.id);
       if(i>=0) allActivities.splice(i,1);
     }
-    // 활동기록 변경 시 진행내용 컬럼 즉시 갱신
+    // 활동기록 변경 시 진행내용 컬럼 즉시 갱신 (debounce 300ms)
     clearTimeout(_rtDebounceTimer);
     _rtDebounceTimer = setTimeout(()=>{
       if(typeof filterLeads==='function') filterLeads();
+      // 현재 열린 활동모달 히스토리도 갱신
+      const openLid = document.getElementById('act-lead-id')?.value;
+      if(openLid && document.getElementById('modal-activity')?.classList.contains('open')){
+        _renderActModalHistory(openLid);
+      }
     }, 300);
 
   } else if(table === 'next_actions'){
@@ -4761,7 +4794,7 @@ let allLeads=[], filtered=[], selIds=new Set(), curPage=1, _lastSelId=null, _sta
 let allActivities=[], allNextActions=[];  // Supabase 전역 캐시 (lg() 대체)
 // 지점 화면 전역 (openRemoveLeader 등이 화면 진입 전에도 호출될 수 있으므로 여기서 선언)
 let brAllLeads=[], brFiltered=[], brSelIds=new Set(), brPage=1;
-const PG=50;
+let PG=(()=>{const s=localStorage.getItem('kbmc_pg_size');return s==='all'?99999:s==='100'?100:50;})() // 페이지당 건수;
 
 async function loadLeads(){
   // 역할별 엑셀 업로드 버튼 제어
@@ -4877,7 +4910,7 @@ async function loadLeads(){
   // activities/next_actions는 위에서 이미 동시 로드 완료
   // active 패널만 직접 표시 (switchLeadsSubTab 호출 시 무한루프 방지)
   _leadsSubTab='active';
-  ['active','drop','trash','recall'].forEach(t=>{
+  ['active','drop','trash','recall','reassigndb'].forEach(t=>{
     const el=document.getElementById('leads-panel-'+t);
     if(el) el.style.display=t==='active'?'':'none';
     const b=document.getElementById('leads-subtab-'+t);
@@ -4888,6 +4921,8 @@ async function loadLeads(){
     }
   });
   updateLeadsSubTabCounts?.();
+  // 자동회수 체크 (관리자만)
+  if(curUser?.role==='admin') setTimeout(()=>checkAutoRecall(), 500);
 }
 
 function yjQuickFilter(val){document.querySelectorAll('[id^="qtab-"]').forEach(b=>{b.style.background='';b.style.color='';b.style.borderColor='';});_quickTab='';_stageFilter='';const sel=document.getElementById('leads-yj-filter');if(sel)sel.value=val;filterLeads();}
@@ -4903,6 +4938,8 @@ function filterLeads(){
   // 유영준 전용 필터: 초도이관(관리자발) vs 일반DB(지점장발)
   const yjF=document.getElementById('leads-yj-filter')?.value||'';
   filtered=allLeads.filter(l=>{
+    // 팀장: 드랍·보류 DB 숨김 (드랍DB탭/보류는 관리자·지점장만 봄)
+    if(curUser.role==='team'&&(l.status==='drop'||l.current_stage==='보류'||l.current_stage==='드랍')) return false;
     if(s&&!(l.company_name||'').toLowerCase().includes(s)&&!(l.contact_name||'').toLowerCase().includes(s)&&!(l.phone||'').includes(s))return false;
     if(br&&l.branch_name!==br)return false;
     if(tm){
@@ -6078,6 +6115,7 @@ async function confirmEditActivity(){
   closeOv('ov-edit-activity');
   showToast('활동기록 수정 완료','success');
   _renderActModalHistory(leadId);
+  renderLeadsTable(); // curPage 유지하면서 진행내용만 갱신
   // 상세 모달이 열려있으면 갱신
   const cachedActs=(allActivities?.length?allActivities:lg('activities'))
     .filter(a=>a.lead_id===leadId&&a.type!=='assign')
@@ -6098,6 +6136,7 @@ async function deleteActivity(actId, leadId){
 
   showToast('활동기록 삭제 완료','success');
   _renderActModalHistory(leadId);
+  renderLeadsTable(); // curPage 유지하면서 진행내용만 갱신
   const cachedActs=(allActivities?.length?allActivities:lg('activities'))
     .filter(a=>a.lead_id===leadId&&a.type!=='assign')
     .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
@@ -6837,7 +6876,11 @@ async function saveActivity(){
     // 백그라운드로 activities만 새로고침 (leads는 이미 캐시에 있음)
     if(!testMode){
       dbQ('activities').then(acts=>{
-        if(acts&&acts.length){ allActivities=acts; renderLeadsTable(); }
+        if(acts&&acts.length){
+          // 덮어쓰지 않고 캐시에 없는 것만 추가 (방금 저장한 act 보존)
+          acts.forEach(a=>{ if(!allActivities.find(x=>x.id===a.id)) allActivities.push(a); });
+          renderLeadsTable();
+        }
       }).catch(()=>{});
     }
   } else if(scr==='my-leads'){
@@ -10128,7 +10171,7 @@ function _applyQuickTab(tab, btn){
   _quickTab=tab;
   // active 패널 보장 (다른 서브탭에서 호출 시 패널 숨겨져 있을 수 있음)
   _leadsSubTab='active';
-  ['active','drop','trash','recall'].forEach(t=>{
+  ['active','drop','trash','recall','reassigndb'].forEach(t=>{
     const el=document.getElementById('leads-panel-'+t);
     if(el) el.style.display=t==='active'?'':'none';
   }); // ← 핵심: filterLeads()가 읽는 변수 세팅
@@ -10659,8 +10702,8 @@ function renderBrTable(){
   tbody.innerHTML=page.map(l=>`<tr onclick="rowClick(event,'${l.id}')" class="${brSelIds.has(l.id)?'selected':''}">
     <td onclick="event.stopPropagation()"><input type="checkbox" class="confirm-cb" value="${l.id}" ${brSelIds.has(l.id)?'checked':''} onclick="brToggleSelClick('${l.id}',event)" style="width:15px;height:15px;cursor:pointer;accent-color:var(--navy)"></td>
     <td style="font-weight:700;color:var(--navy)">${esc(l.company_name||'-')}</td>
-    <td>${esc(l.contact_name||'-')}</td>
-    <td style="font-size:12px">${esc(l.phone||'-')}</td>
+    <td style="font-size:11px">${esc(l.region||'-')}</td>
+    <td style="font-size:11px">${esc(l.revenue||'-')}</td>
     <td style="font-size:11px">${esc((l.consult_type||'').slice(0,18))}</td>
     <td>${sBadge(l.status)}</td>
     <td>${(function(){
@@ -10828,7 +10871,14 @@ async function confirmBrAssignPopup(){
       updateData.team_name=teamOnly.join(', ');
       updateData.team_names=JSON.stringify(teamOnly);
     }
+    // 재배정DB에서 배정됐으면 auto_recalled 초기화
+    if(allLeads?.find(l=>l.id===id)?.auto_recalled){
+      updateData.auto_recalled=false;
+      updateData.auto_recall_reason='';
+    }
     await dbU('leads',id,updateData);
+    // 캐시 갱신
+    if(allLeads){const i=allLeads.findIndex(l=>l.id===id);if(i>=0)allLeads[i]={...allLeads[i],...updateData,auto_recalled:false};}
     const target=selfIncluded&&!teamOnly.length?curUser.name+' (지점장 직배정)':teamDisplay;
     const collabNote=isCollab?` [협업: ${collabTeams.join(', ')}]`:'';
     const msg=`${curUser.name} → ${target} 배정${collabNote}`+(note?' ('+note+')':'');
@@ -11011,13 +11061,13 @@ let _leadsSubTab='active';
 
 function switchLeadsSubTab(tab, btn){
   _leadsSubTab=tab;
-  ['active','drop','trash','recall'].forEach(t=>{
+  ['active','drop','trash','recall','reassigndb'].forEach(t=>{
     const el=document.getElementById('leads-panel-'+t);
     if(el) el.style.display=t===tab?'':'none';
     const b=document.getElementById('leads-subtab-'+t);
     if(b){
       const isActive=t===tab;
-      const activeColor=t==='recall'?'var(--err)':'var(--navy)';
+      const activeColor=t==='recall'?'var(--err)':t==='reassigndb'?'#7c3aed':'var(--navy)';
       b.style.color=isActive?activeColor:'var(--gray-500)';
       b.style.fontWeight=isActive?'700':'600';
       b.style.borderBottom=isActive?`2px solid ${activeColor}`:'2px solid transparent';
@@ -11026,6 +11076,7 @@ function switchLeadsSubTab(tab, btn){
   if(tab==='drop') renderDropPanel();
   if(tab==='trash') renderTrashInline();
   if(tab==='recall') renderRecallPanel();
+  if(tab==='reassigndb') renderReassignDbPanel();
   // 정렬 컨트롤바: active 탭에서만 표시
   const sortBar=document.getElementById('leads-sort-bar');
   if(sortBar) sortBar.style.display=tab==='active'?'':'none';
@@ -11038,7 +11089,7 @@ function updateLeadsSubTabCounts(){
   const acts=allActivities?.length?allActivities:lg('activities');
   const now=Date.now();
   const active=leads.filter(l=>l.status!=='deleted'&&l.status!=='drop').length;
-  const drop=leads.filter(l=>l.status==='drop').length;
+  const drop=leads.filter(l=>l.status==='drop'||l.current_stage==='보류').length;
   const trash=_trashCount||getTrash().length; // Supabase 모드에서는 _trashCount 사용
   const recall=leads.filter(l=>{
     if(l.status==='deleted'||l.status==='drop'||l.yj_transferred) return false;
@@ -11054,6 +11105,21 @@ function updateLeadsSubTabCounts(){
   // 재배정대기 카운트
   const allD2=allLeads?.length?allLeads:lg('leads');
   const reassignCnt=allD2.filter(l=>(l.tm_done===true||l.tm_done==='true')||(l.yj_done===true||l.yj_done==='true')).length;
+  // 재배정DB 탭 카운트
+  const reassignDbLeads=(allLeads?.length?allLeads:lg('leads')).filter(l=>
+    !l.status||l.status!=='deleted'&&!l.yj_transferred&&
+    (l.auto_recalled===true||l.auto_recalled==='true'||
+    ((l.tm_done===true||l.tm_done==='true')&&!l.team_name)||
+    ((l.yj_done===true||l.yj_done==='true')&&!l.team_name))
+  );
+  const reassignDbBtn=document.getElementById('leads-subtab-reassigndb');
+  if(reassignDbBtn){
+    reassignDbBtn.style.removeProperty('display');
+    if(curUser?.role!=='admin') reassignDbBtn.style.display='none';
+  }
+  const reassignDbCnt=document.getElementById('leads-subtab-reassigndb-cnt');
+  if(reassignDbCnt) reassignDbCnt.textContent=reassignDbLeads.length?'('+reassignDbLeads.length+')':'';
+
   const rBtn=document.getElementById('qtab-reassign');
   if(rBtn){
     rBtn.textContent=reassignCnt?'🔄 재배정대기 ('+reassignCnt+'건)':'🔄 재배정대기';
@@ -11088,11 +11154,13 @@ function renderRecallPanel(){
   const leads=allLeads?.length?allLeads:lg('leads');
   const acts=allActivities?.length?allActivities:lg('activities');
   const now=Date.now();
+  const _recallElapsed=new Map();
+  const _getBizElapsed=t=>{if(!_recallElapsed.has(t))_recallElapsed.set(t,bizElapsedMs(t,now));return _recallElapsed.get(t);};
   _recallAll=leads.filter(l=>{
     if(l.status==='deleted'||l.status==='drop'||l.yj_transferred) return false;
     if(['계약','관리'].includes(l.current_stage||'')) return false;
     const t=new Date(l.assigned_at||l.created_at||0).getTime();
-    if(bizElapsedMs(t,now)<48*3600000) return false;
+    if(_getBizElapsed(t)<48*3600000) return false;
     return !acts.some(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type));
   }).sort((a,b)=>new Date(a.assigned_at||a.created_at||0)-new Date(b.assigned_at||b.created_at||0));
   const sub=document.getElementById('recall-inline-sub');
@@ -11119,6 +11187,139 @@ function renderRecallPanel(){
     </tr>`;
   }).join('');
 }
+// ━━ 자동회수 체크 (로그인·loadLeads 후 실행) ━━━━━━━━━━━━━━
+// 4: 접촉·상담 영업일 5일 경과 → 자동회수
+// 5: 관리 단계 30일(영업일) 활동없음 → 자동회수
+async function checkAutoRecall(){
+  if(curUser?.role!=='admin') return; // 관리자만
+  if(!allLeads?.length) return;
+  const now=Date.now();
+  const D5=5*8*3600000;  // 영업일 5일 ≈ 5*8h (bizElapsedMs로 정확 계산)
+  const D30=30*8*3600000; // 영업일 30일
+  const acts=allActivities?.length?allActivities:lg('activities');
+  const toRecall=[];
+
+  allLeads.forEach(l=>{
+    if(l.status==='deleted'||l.status==='drop') return;
+    if(l.yj_transferred) return;
+    if(!l.team_name) return; // 배정 안 된 건 제외
+
+    const stage=l.current_stage||'';
+    const t=new Date(l.assigned_at||l.created_at||0).getTime();
+    // 실질 활동기록
+    const lastAct=acts.filter(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type))
+      .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];
+    const lastT=lastAct?new Date(lastAct.created_at).getTime():t;
+
+    // 4: 접촉·상담 → 영업일 5일 경과
+    if(['접촉','상담'].includes(stage)){
+      if(bizElapsedMs(lastT,now)>=D5){
+        toRecall.push({id:l.id, reason:'접촉·상담 5영업일 경과'});
+      }
+    }
+    // 5: 관리 → 영업일 30일 활동없음
+    if(stage==='관리'){
+      if(bizElapsedMs(lastT,now)>=D30){
+        toRecall.push({id:l.id, reason:'관리 30영업일 활동없음'});
+      }
+    }
+  });
+
+  if(!toRecall.length) return;
+
+  // 자동회수 실행 (경고 없이)
+  for(const {id, reason} of toRecall){
+    await dbU('leads', id, {
+      team_name:'', team_names:'[]', assigned_at:null,
+      auto_recalled:true, auto_recall_reason:reason,
+      auto_recall_at:new Date().toISOString()
+    });
+    await logActivity(id,'assign',`자동회수: ${reason}`,'assigned','배정');
+    if(allLeads){
+      const i=allLeads.findIndex(l=>l.id===id);
+      if(i>=0){
+        allLeads[i].team_name='';
+        allLeads[i].team_names='[]';
+        allLeads[i].auto_recalled=true;
+      }
+    }
+  }
+  if(toRecall.length>0){
+    console.log(`[자동회수] ${toRecall.length}건 처리`);
+    filterLeads?.();
+    updateLeadsSubTabCounts?.();
+  }
+}
+
+// ━━ 재배정DB 패널 렌더 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+let _reassignDbAll=[], _reassignDbSel=new Set();
+
+function renderReassignDbPanel(){
+  const leads=allLeads?.length?allLeads:lg('leads');
+  const acts=allActivities?.length?allActivities:lg('activities');
+  const now=Date.now();
+
+  // auto_recalled=true 이거나 수동 회수 후 team_name 없는 건 중
+  // yj_done=true 포함 (초도이관 완료)
+  _reassignDbAll=leads.filter(l=>{
+    if(l.status==='deleted'||l.status==='drop') return false;
+    if(l.yj_transferred) return false;
+    // 자동회수 or TM완료 재배정대기
+    const isAutoRecalled=l.auto_recalled===true||l.auto_recalled==='true';
+    const isTmDone=(l.tm_done===true||l.tm_done==='true')&&!l.team_name;
+    const isYjDone=(l.yj_done===true||l.yj_done==='true')&&!l.team_name;
+    return isAutoRecalled||isTmDone||isYjDone;
+  }).sort((a,b)=>new Date(b.auto_recall_at||b.updated_at||0)-new Date(a.auto_recall_at||a.updated_at||0));
+
+  const sub=document.getElementById('reassigndb-sub');
+  if(sub) sub.textContent=_reassignDbAll.length+'건';
+  const tbody=document.getElementById('reassigndb-tbody');
+  if(!tbody) return;
+
+  if(!_reassignDbAll.length){
+    tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--gray-400)">✅ 재배정 대기 DB가 없습니다</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML=_reassignDbAll.map(l=>{
+    const chk=_reassignDbSel.has(l.id)?'checked':'';
+    const lastAct=acts.filter(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type))
+      .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];
+    const lastActTxt=lastAct?(lastAct.content||'').slice(0,30):'없음';
+    const elapsed=Math.floor((Date.now()-new Date(l.auto_recall_at||l.updated_at||0).getTime())/3600000);
+    const reason=l.auto_recall_reason||(l.tm_done?'TM완료':(l.yj_done?'초도이관완료':''));
+    return `<tr style="border-bottom:1px solid var(--gray-100)">
+      <td style="padding:8px 10px"><input type="checkbox" ${chk} onchange="toggleReassignDbSel('${l.id}',this.checked)"></td>
+      <td style="padding:8px 12px;font-weight:700;color:var(--navy)">${esc(l.company_name||'-')}</td>
+      <td style="padding:8px 10px;font-size:12px">${esc(l.branch_name||'-')}</td>
+      <td style="padding:8px 10px;font-size:12px">${esc(l.team_name||'회수됨')}</td>
+      <td style="padding:8px 10px">${stageBadge(l.current_stage||'')}</td>
+      <td style="padding:8px 10px;font-size:11px;color:var(--gray-500)">${esc(lastActTxt)}</td>
+      <td style="padding:8px 10px;font-size:11px;color:var(--purple);font-weight:700">${esc(reason)}</td>
+      <td style="padding:8px 10px;white-space:nowrap">
+        <button class="btn btn-sm btn-primary" onclick="reassignDbOne('${l.id}')">📨 배정</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function toggleReassignDbSel(id,on){ on?_reassignDbSel.add(id):_reassignDbSel.delete(id); }
+function toggleReassignDbAll(on){ _reassignDbAll.forEach(l=>on?_reassignDbSel.add(l.id):_reassignDbSel.delete(l.id)); renderReassignDbPanel(); }
+
+function reassignDbOne(id){
+  const l=allLeads?.find(x=>x.id===id);
+  if(l) openActM(l.id, l.company_name||'');
+}
+
+async function reassignDbBulkAssign(){
+  if(!_reassignDbSel.size){showToast('선택된 DB가 없습니다','error');return;}
+  selIds=_reassignDbSel;
+  switchLeadsSubTab('active', document.getElementById('leads-subtab-active'));
+  showToast(_reassignDbSel.size+'건 선택됨 — 배정 버튼을 눌러주세요','success');
+}
+
+// updateLeadsSubTabCounts에 reassigndb 카운트 추가
+
 function toggleRecallAll(cb){
   _recallAll.forEach(l=>cb.checked?_recallSel.add(l.id):_recallSel.delete(l.id));
   renderRecallPanel();
@@ -11148,7 +11349,7 @@ async function recallSelected(){
 
 let _dropAll=[], _dropFiltered=[];
 function renderDropPanel(){
-  _dropAll=(allLeads?.length ? allLeads : lg('leads')).filter(l=>l.status==='drop');
+  _dropAll=(allLeads?.length ? allLeads : lg('leads')).filter(l=>l.status==='drop'||l.current_stage==='보류');
   (document.getElementById('drop-sub')||{}).textContent=_dropAll.length+'건';
   filterDropLeads();
 }
@@ -11970,9 +12171,9 @@ function renderBrLeaders(){
   const allInfo=getLInfoAll();
 
   el.innerHTML=leaders.map(t=>{
-    const cnt=brAllLeads.filter(l=>l.team_name===t||l.team_name?.startsWith(t)).length;
-    const contract=brAllLeads.filter(l=>(l.team_name===t||l.team_name?.startsWith(t))&&l.current_stage==='계약').length;
-    const consulting=brAllLeads.filter(l=>(l.team_name===t||l.team_name?.startsWith(t))&&l.status==='contacted').length;
+    const cnt=brAllLeads.filter(l=>l.team_name===t||l.team_name?.startsWith(t)||(()=>{try{return JSON.parse(l.team_names||'[]').includes(t);}catch(e){return false;}})()).length;
+    const contract=brAllLeads.filter(l=>(l.team_name===t||l.team_name?.startsWith(t)||(()=>{try{return JSON.parse(l.team_names||'[]').includes(t);}catch(e){return false;}})())&&l.current_stage==='계약').length;
+    const consulting=brAllLeads.filter(l=>(l.team_name===t||l.team_name?.startsWith(t)||(()=>{try{return JSON.parse(l.team_names||'[]').includes(t);}catch(e){return false;}})())&&l.status==='contacted').length;
     const goal=goals['team:'+t+':'+ym]||0;
     const pct=goal?Math.min(Math.round(contract/goal*100),100):0;
     const clr=pct>=100?'var(--ok)':pct>=70?'var(--warn)':'var(--blue)';
@@ -12943,12 +13144,23 @@ function renderLeadsTable(){
 
 // renderPaging — 총 건수 인자 받도록
 const _origRenderPaging=renderPaging;
+function setPG(n){
+  PG = n==='all' ? (filtered.length||99999) : parseInt(n);
+  localStorage.setItem('kbmc_pg_size', n);
+  curPage=1; renderLeadsTable();
+}
 function renderPaging(total){
   if(total===undefined) total=filtered.length;
   const pages=Math.ceil(total/PG);
   const el=document.getElementById('leads-pagination'); if(!el)return;
-  if(pages<=1){el.textContent=`총 ${total}건`;return;}
-  let h='';
+  const savedPG=localStorage.getItem('kbmc_pg_size')||'50';
+  const pgSel=`<select onchange="setPG(this.value)" style="padding:2px 6px;border:1px solid var(--g200);border-radius:5px;font-size:11px;font-family:inherit;margin-right:8px">
+    <option value="50" ${savedPG==='50'?'selected':''}>50건</option>
+    <option value="100" ${savedPG==='100'?'selected':''}>100건</option>
+    <option value="all" ${savedPG==='all'?'selected':''}>전체</option>
+  </select>`;
+  if(pages<=1){el.innerHTML=pgSel+`<span style="font-size:12px;color:var(--gray-500)">총 ${total}건</span>`;return;}
+  let h=pgSel;
   if(curPage>1)h+=`<button class="btn btn-outline btn-xs" onclick="goPage(${curPage-1})">‹</button> `;
   h+=`<span style="font-size:12px;color:var(--gray-500)">${curPage}/${pages} (${total}건)</span>`;
   if(curPage<pages)h+=` <button class="btn btn-outline btn-xs" onclick="goPage(${curPage+1})">›</button>`;
