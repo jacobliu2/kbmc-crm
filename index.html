@@ -1135,7 +1135,7 @@ tbody tr.selected td{background:var(--blue-50)!important}
         <button class="btn btn-outline btn-sm" id="qtab-reassign" onclick="quickTab('reassign',this)" style="color:#7c3aed;border-color:#7c3aed">🔄 재배정대기</button>
         <button class="btn btn-outline btn-sm" id="qtab-overdue30" onclick="quickTab('overdue30',this)" style="display:none;color:var(--warn);border-color:var(--warn)">⏰ 30h+ 미기록</button>
         <button class="btn btn-outline btn-sm" id="qtab-yj-initial" onclick="yjQuickFilter('yj_voucher')" style="display:none;background:rgba(139,92,246,.08);border-color:rgba(139,92,246,.3);color:#7c3aed">🗺️ 지방바우처</button>
-        <div style="margin-left:auto;font-size:12px;color:var(--gray-400)" id="leads-stats-mini"></div>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:8px"><select onchange="setPG(this.value)" id="pg-size-sel" style="padding:3px 8px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:12px;font-family:inherit"><option value="50">50건</option><option value="100">100건</option><option value="all">전체</option></select><div style="font-size:12px;color:var(--gray-400)" id="leads-stats-mini"></div></div>
       </div>
       <!-- 컬럼 필터뷰 -->
       <div id="col-toggle-bar" style="margin-bottom:10px;background:var(--gray-50);border:1px solid var(--gray-200);border-radius:var(--r-sm);overflow:hidden">
@@ -1837,10 +1837,9 @@ tbody tr.selected td{background:var(--blue-50)!important}
             <table class="db-table">
               <thead><tr>
                 <th style="width:32px"><input type="checkbox" id="br-chk-all" onchange="brToggleAll(this.checked)" style="accent-color:#fff;width:14px;height:14px"></th>
-                <th style="width:140px;position:relative">회사명<div class="col-resizer" onmousedown="brColResizeStart(event,this)"></div></th>
-                <th style="width:80px;position:relative">신청자<div class="col-resizer" onmousedown="brColResizeStart(event,this)"></div></th>
-                <th style="width:100px;position:relative">소재지<div class="col-resizer" onmousedown="brColResizeStart(event,this)"></div></th>
-                <th style="width:90px;position:relative">매출액<div class="col-resizer" onmousedown="brColResizeStart(event,this)"></div></th>
+                <th style="width:160px;position:relative">회사명<div class="col-resizer" onmousedown="brColResizeStart(event,this)"></div></th>
+                <th style="width:120px;position:relative">소재지<div class="col-resizer" onmousedown="brColResizeStart(event,this)"></div></th>
+                <th style="width:100px;position:relative">매출액<div class="col-resizer" onmousedown="brColResizeStart(event,this)"></div></th>
                 <th style="width:120px;position:relative">상담유형<div class="col-resizer" onmousedown="brColResizeStart(event,this)"></div></th>
                 <th style="width:80px">상태</th><th style="width:80px">팀장</th>
                 <th style="width:80px">분배일</th><th style="width:60px">액션</th>
@@ -4904,6 +4903,9 @@ async function loadLeads(){
   if(typeF){ const types=[...new Set(allLeads.map(l=>l.consult_type).filter(Boolean))].sort(); typeF.innerHTML='<option value="">전체 유형</option>'+types.map(t=>`<option>${esc(t)}</option>`).join(''); }
 
   selIds.clear(); _lastSelId=null; curPage=1; filterLeads();
+  // 페이지당 건수 select 초기값
+  const _pgSel=document.getElementById('pg-size-sel');
+  if(_pgSel){ const _s=localStorage.getItem('kbmc_pg_size')||'50'; _pgSel.value=_s; }
 
   (document.getElementById('leads-sub')||{}).textContent=allLeads.length+'건';
 
@@ -7253,7 +7255,10 @@ function downloadRptPdf(rptId){
     <style>body{font-family:'Noto Sans KR',sans-serif;padding:32px 40px;max-width:720px;margin:auto;color:#1e293b}
     h1{font-size:20px;font-weight:800;margin-bottom:4px}
     .meta{font-size:12px;color:#64748b;margin-bottom:24px}
-    @media print{body{padding:0}}</style>
+    @media print{body{padding:0}}/* 지점관리 컬럼 리사이저 */
+.col-resizer{position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;background:rgba(255,255,255,.2);z-index:1}
+.col-resizer:hover{background:rgba(255,255,255,.5)}
+</style>
   </head><body>
     <h1>${(r.title||'').replace(/</g,'&lt;')}</h1>
     <div class="meta">${(r.author||'').replace(/</g,'&lt;')} · ${r.from||''} ~ ${r.to||''} · 제출: ${r.submitted_at?r.submitted_at.slice(0,10):'-'}</div>
@@ -10695,10 +10700,38 @@ function filterBrLeads(mode){
   });
   brPage=1; renderBrTable();
 }
+
+// ── 지점관리 컬럼 너비 조절 ────────────────────────────
+function brColResizeStart(e, resizer){
+  e.preventDefault();
+  const th = resizer.parentElement;
+  const startX = e.clientX;
+  const startW = th.offsetWidth;
+  const table = document.querySelector('.db-table');
+
+  function onMove(e){
+    const newW = Math.max(40, startW + e.clientX - startX);
+    th.style.width = newW + 'px';
+    // colgroup 동기화
+    if(table){
+      const ths = table.querySelectorAll('thead th');
+      const idx = Array.from(ths).indexOf(th);
+      const cols = table.querySelectorAll('col');
+      if(cols[idx]) cols[idx].style.width = newW + 'px';
+    }
+  }
+  function onUp(){
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+  }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
 function renderBrTable(){
   const tbody=document.getElementById('br-tbody'); if(!tbody)return;
   const start=(brPage-1)*50, page=brFiltered.slice(start,start+50);
-  if(!page.length){tbody.innerHTML='<tr><td colspan="9" class="empty">데이터 없음</td></tr>';renderBrPaging();return;}
+  if(!page.length){tbody.innerHTML='<tr><td colspan="8" class="empty">데이터 없음</td></tr>';renderBrPaging();return;}
   tbody.innerHTML=page.map(l=>`<tr onclick="rowClick(event,'${l.id}')" class="${brSelIds.has(l.id)?'selected':''}">
     <td onclick="event.stopPropagation()"><input type="checkbox" class="confirm-cb" value="${l.id}" ${brSelIds.has(l.id)?'checked':''} onclick="brToggleSelClick('${l.id}',event)" style="width:15px;height:15px;cursor:pointer;accent-color:var(--navy)"></td>
     <td style="font-weight:700;color:var(--navy)">${esc(l.company_name||'-')}</td>
@@ -11359,7 +11392,9 @@ function filterDropLeads(){
   const r=document.getElementById('drop-reason-filter')?.value||'';
   _dropFiltered=_dropAll.filter(l=>{
     if(s&&!(l.company_name||'').toLowerCase().includes(s)&&!(l.phone||'').includes(s)) return false;
-    if(r&&l.drop_reason!==r&&l.drop_category!==r) return false;
+    // 보류 건은 drop_reason 필터 미적용 (drop_reason이 없으므로)
+    const isHold=l.current_stage==='보류';
+    if(r&&!isHold&&l.drop_reason!==r&&l.drop_category!==r) return false;
     return true;
   });
   renderDropTable();
@@ -11368,19 +11403,25 @@ function filterDropLeads(){
 function renderDropTable(){
   const tbody=document.getElementById('drop-tbody'); if(!tbody) return;
   if(!_dropFiltered.length){tbody.innerHTML='<tr><td colspan="8" class="empty">드랍 DB 없음</td></tr>';return;}
-  tbody.innerHTML=_dropFiltered.map(l=>`<tr>
-    <td style="font-weight:700;color:var(--navy);cursor:pointer" onclick="openLeadDetailModal((allLeads?.length?allLeads:lg('leads')).find(x=>x.id==='${l.id}'))">${esc(l.company_name||'-')}</td>
+  tbody.innerHTML=_dropFiltered.map(l=>{
+    const isHold=l.current_stage==='보류';
+    const typeBadge=isHold
+      ?'<span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:6px;background:rgba(245,158,11,.12);color:#b45309;margin-right:5px">보류</span>'
+      :'<span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:6px;background:rgba(239,68,68,.1);color:#ef4444;margin-right:5px">드랍</span>';
+    return `<tr>
+    <td style="font-weight:700;color:var(--navy);cursor:pointer" onclick="openLeadDetailModal((allLeads?.length?allLeads:lg('leads')).find(x=>x.id==='${l.id}'))">${typeBadge}${esc(l.company_name||'-')}</td>
     <td>${esc(l.contact_name||'-')}</td>
     <td style="font-size:12px">${esc(l.phone||'-')}</td>
     <td style="font-size:11px">${esc(l.branch_name||'-')}</td>
     <td style="font-size:11px">${esc(l.team_name||'-')}</td>
-    <td style="font-size:11px"><span class="badge badge-err">${esc(l.drop_reason||l.drop_category||'-')}</span></td>
+    <td style="font-size:11px">${isHold?'<span class="badge" style="background:rgba(245,158,11,.1);color:#b45309">'+esc(l.hold_reason||'-')+'</span>':'<span class="badge badge-err">'+esc(l.drop_reason||l.drop_category||'-')+'</span>'}</td>
     <td style="font-size:11px;color:var(--gray-400)">${fmtD(l.updated_at||l.created_at)}</td>
     <td><div style="display:flex;gap:4px">
       <button class="btn btn-outline btn-xs" onclick="restoreDrop('${l.id}')">복구</button>
       <button class="btn btn-xs" style="background:var(--err);color:#fff;border-color:var(--err)" onclick="openDelete('${l.id}')">삭제</button>
     </div></td>
-  </tr>`).join('');
+  </tr>`;
+  }).join('');
 }
 
 async function restoreDrop(id){
@@ -13147,20 +13188,17 @@ const _origRenderPaging=renderPaging;
 function setPG(n){
   PG = n==='all' ? (filtered.length||99999) : parseInt(n);
   localStorage.setItem('kbmc_pg_size', n);
+  // 상단 select 동기화
+  const sel=document.getElementById('pg-size-sel');
+  if(sel) sel.value=n;
   curPage=1; renderLeadsTable();
 }
 function renderPaging(total){
   if(total===undefined) total=filtered.length;
   const pages=Math.ceil(total/PG);
   const el=document.getElementById('leads-pagination'); if(!el)return;
-  const savedPG=localStorage.getItem('kbmc_pg_size')||'50';
-  const pgSel=`<select onchange="setPG(this.value)" style="padding:2px 6px;border:1px solid var(--g200);border-radius:5px;font-size:11px;font-family:inherit;margin-right:8px">
-    <option value="50" ${savedPG==='50'?'selected':''}>50건</option>
-    <option value="100" ${savedPG==='100'?'selected':''}>100건</option>
-    <option value="all" ${savedPG==='all'?'selected':''}>전체</option>
-  </select>`;
-  if(pages<=1){el.innerHTML=pgSel+`<span style="font-size:12px;color:var(--gray-500)">총 ${total}건</span>`;return;}
-  let h=pgSel;
+  if(pages<=1){el.innerHTML=`<span style="font-size:12px;color:var(--gray-500)">총 ${total}건</span>`;return;}
+  let h='';
   if(curPage>1)h+=`<button class="btn btn-outline btn-xs" onclick="goPage(${curPage-1})">‹</button> `;
   h+=`<span style="font-size:12px;color:var(--gray-500)">${curPage}/${pages} (${total}건)</span>`;
   if(curPage<pages)h+=` <button class="btn btn-outline btn-xs" onclick="goPage(${curPage+1})">›</button>`;
