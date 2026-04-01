@@ -980,8 +980,6 @@ tbody tr.selected td{background:var(--blue-50)!important}
         <div class="stat-card orange click" onclick="quickTab('unassigned',null)"><div class="stat-label">미배정</div><div class="stat-val" id="s-pending">0</div></div>
         <div class="stat-card red click" onclick="filterByStatus('drop')"><div class="stat-label">드랍</div><div class="stat-val" id="s-drop">0</div></div>
       </div>
-      <!-- 지점별 목표 달성률 -->
-      <div id="branch-goals" style="margin-bottom:18px"></div>
       <!-- 2컬럼 그리드: 지점실적 + 월별추이 -->
       <div class="admin-grid-2col" style="display:grid;grid-template-columns:1.2fr 1fr;gap:16px;margin-bottom:16px">
         <div class="card">
@@ -1222,25 +1220,7 @@ tbody tr.selected td{background:var(--blue-50)!important}
     </div>
       </div><!-- /leads-panel-active -->
 
-      <!-- 재배정 DB 패널 (관리자 전용) -->
-      <div id="leads-panel-reassigndb" style="display:none">
-        <div class="page-header" style="margin-bottom:12px">
-          <div class="page-title" style="font-size:16px">🔄 재배정 DB <sub id="reassigndb-sub" style="font-size:13px;color:#7c3aed"></sub></div>
-          <div style="font-size:12px;color:var(--gray-400)">접촉·상담 5영업일 경과 또는 관리 1개월 활동없음 — 자동회수된 DB</div>
-        </div>
-        <div style="overflow-x:auto">
-          <table class="data-table" style="min-width:700px">
-            <thead><tr style="background:var(--navy);color:#fff">
-              <th style="width:32px"><input type="checkbox" onchange="toggleReassignDbAll(this.checked)" style="accent-color:#fff;width:14px;height:14px"></th>
-              <th>회사명</th><th>지점장</th><th>진행단계</th><th>최근활동</th><th style="min-width:130px">회수 사유</th><th>조치</th>
-            </tr></thead>
-            <tbody id="reassigndb-tbody"></tbody>
-          </table>
-        </div>
-        <div style="margin-top:12px;display:flex;gap:8px">
-          <button class="btn btn-primary btn-sm" onclick="reassignDbBulkAssign()">📨 일괄 재배정</button>
-        </div>
-      </div>
+      
 
       <!-- 드랍 DB 패널 -->
       <div id="leads-panel-drop" style="display:none">
@@ -4514,8 +4494,7 @@ async function loadAdmin(){
       <div style="font-size:11px;color:var(--gray-500);margin-top:2px">${atriskLeads.slice(0,3).map(l=>esc(l.company_name)).join(', ')}${atriskLeads.length>3?' 외 '+(atriskLeads.length-3)+'건':''}</div></div>
       <button class="btn btn-sm" style="margin-left:auto;background:var(--err);color:#fff;border-color:var(--err)" onclick="filterByStatus('contacted')">확인하기</button>
     </div>`;
-  }
-  renderBranchGoals(all); await renderMonthlyChart(all);
+  } await renderMonthlyChart(all);
   // 지점별 실적
   let tbl='<div class="tbl-wrap"><table><thead><tr>';
   ['지점','전체','계약','상담중','완료','미접촉','전환율'].forEach(h=>tbl+=`<th style="padding:10px 12px">${h}</th>`);
@@ -4646,28 +4625,6 @@ function renderKpiDashboard(leads){
       }).join('');
     }
   }
-}
-
-function renderBranchGoals(all){
-  const el=document.getElementById('branch-goals'); if(!el)return;
-  const ym=new Date().toISOString().slice(0,7);
-  const goals=JSON.parse(localStorage.getItem(LS.goals)||'{}');
-  const cards=BRANCHES.map(b=>{
-    const goal=goals['br:'+b+':'+ym]||0;
-    const done=all.filter(l=>l.branch_name===b&&l.current_stage==='계약'&&(l.updated_at||'').startsWith(ym)).length;
-    const pct=goal?Math.min(Math.round(done/goal*100),100):0;
-    const clr=pct>=100?'var(--ok)':pct>=70?'var(--warn)':'var(--blue)';
-    return`<div style="flex:1;min-width:160px;background:#fff;border-radius:var(--r);padding:16px 18px;box-shadow:var(--sh)">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <span style="font-size:13px;font-weight:700;color:var(--gray-900)">${b}</span>
-        <button onclick="openGoalM('br','${b}')" style="font-size:11px;padding:2px 8px;background:var(--gray-100);border:none;border-radius:5px;cursor:pointer;color:var(--gray-600)">목표설정</button>
-      </div>
-      <div style="font-size:24px;font-weight:800;color:${clr};letter-spacing:-1px">${pct}%</div>
-      <div style="font-size:12px;color:var(--gray-400);margin-bottom:6px">${done}건 / ${goal||'미설정'}건</div>
-      <div style="height:4px;background:var(--gray-100);border-radius:2px"><div style="height:100%;width:${pct}%;background:${clr};border-radius:2px;transition:width .4s"></div></div>
-    </div>`;
-  }).join('');
-  el.innerHTML=`<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">${cards}</div>`;
 }
 
 function openGoalM(type,name){
@@ -4840,7 +4797,7 @@ async function loadLeads(){
   // activities/next_actions는 위에서 이미 동시 로드 완료
   // active 패널만 직접 표시 (switchLeadsSubTab 호출 시 무한루프 방지)
   _leadsSubTab='active';
-  ['active','drop','trash','recall','reassigndb'].forEach(t=>{
+  ['active','drop','trash','recall'].forEach(t=>{
     const el=document.getElementById('leads-panel-'+t);
     if(el) el.style.display=t==='active'?'':'none';
     const b=document.getElementById('leads-subtab-'+t);
@@ -4902,9 +4859,12 @@ function filterLeads(){
         return !l.team_name||l.team_name.trim()==='';
       });
     } else {
-      // 관리자: branch_name 없는 건 — auto_recalled 제외
+      // 관리자: branch_name 없는 건 + 초도이관 완료(yj_done) 건 — auto_recalled 제외
       filtered=filtered.filter(l=>{
         if(l.auto_recalled===true||l.auto_recalled==='true') return false;
+        const isYjDone=l.yj_done===true||l.yj_done==='true';
+        // 초도이관 완료 건: branch_name 있어도 미배정으로 표시
+        if(isYjDone && (!l.team_name||l.team_name.trim()==='')) return true;
         return !l.branch_name||l.branch_name==='';
       });
     }
@@ -10156,7 +10116,7 @@ function _applyQuickTab(tab, btn){
   _quickTab=tab;
   // active 패널 보장 (다른 서브탭에서 호출 시 패널 숨겨져 있을 수 있음)
   _leadsSubTab='active';
-  ['active','drop','trash','recall','reassigndb'].forEach(t=>{
+  ['active','drop','trash','recall'].forEach(t=>{
     const el=document.getElementById('leads-panel-'+t);
     if(el) el.style.display=t==='active'?'':'none';
   }); // ← 핵심: filterLeads()가 읽는 변수 세팅
@@ -11124,7 +11084,7 @@ let _leadsSubTab='active';
 
 function switchLeadsSubTab(tab, btn){
   _leadsSubTab=tab;
-  ['active','drop','trash','recall','reassigndb'].forEach(t=>{
+  ['active','drop','trash','recall'].forEach(t=>{
     const el=document.getElementById('leads-panel-'+t);
     if(el) el.style.display=t===tab?'':'none';
     const b=document.getElementById('leads-subtab-'+t);
@@ -11139,7 +11099,6 @@ function switchLeadsSubTab(tab, btn){
   if(tab==='drop') renderDropPanel();
   if(tab==='trash') renderTrashInline();
   if(tab==='recall') renderRecallPanel();
-  if(tab==='reassigndb') renderReassignDbPanel();
   // 정렬 컨트롤바: active 탭에서만 표시
   const sortBar=document.getElementById('leads-sort-bar');
   if(sortBar) sortBar.style.display=tab==='active'?'':'none';
