@@ -3855,7 +3855,24 @@ async function logActivity(leadId, type, content, newStatus, stage, actDate){
   else await sbPost('activities',act);
   // 전역 캐시 갱신
   if(Array.isArray(allActivities)) allActivities.unshift(act);
-  // ※ leads 상태 업데이트는 호출자(changeLeadStatus)가 담당 — 여기서 중복 호출 제거
+
+  // ── 자동 접촉 전환: 실질 활동기록(assign/status_change 제외)이 저장되고
+  //    해당 리드가 '배정' 단계일 때 → 사용자가 단계를 직접 선택하지 않은 경우에만 적용
+  const _autoUpTypes=['call','meeting','online','proposal','contract','internal','other','note'];
+  if(_autoUpTypes.includes(type)){
+    const _lead=(allLeads||[]).find(l=>l.id===leadId);
+    // 현재 단계가 '배정'(또는 미설정)이고, stage 파라미터(사용자 선택)가 없고,
+    // 드랍/삭제/보류 상태가 아닐 때만 자동 전환
+    const _safeStatus=_lead?.status;
+    const _safeStage=_lead?.current_stage;
+    const _isDropped=['drop','deleted'].includes(_safeStatus)||['드랍','보류'].includes(_safeStage);
+    if(_lead&&!_isDropped
+       &&(_safeStage==='배정'||_safeStage===''||!_safeStage)
+       &&!stage){
+      await dbU('leads',leadId,{current_stage:'접촉',status:'contacted'});
+      if(allLeads){const _i=allLeads.findIndex(l=>l.id===leadId);if(_i>=0){allLeads[_i].current_stage='접촉';allLeads[_i].status='contacted';}}
+    }
+  }
   return act;
 }
 
@@ -4859,16 +4876,20 @@ function filterLeads(){
   }
   else if(_quickTab==='overdue30'){
     const _now30=Date.now();
-    const _acts30=new Set((allActivities||[])
-      .filter(a=>!['assign','status_change'].includes(a.type)).map(a=>a.lead_id));
+    // 마지막 실질 활동기록 시각 맵 (assign/status_change 제외)
+    const _lastActMap=new Map();
+    (allActivities||[]).filter(a=>!['assign','status_change'].includes(a.type)).forEach(a=>{
+      const prev=_lastActMap.get(a.lead_id);
+      const t=new Date(a.created_at).getTime();
+      if(!prev||t>prev) _lastActMap.set(a.lead_id,t);
+    });
     filtered=filtered.filter(l=>{
-      if(_acts30.has(l.id)) return false;
       if(['drop','deleted'].includes(l.status)) return false;
       if(['계약','관리','드랍','보류'].includes(l.current_stage||'')) return false;
-      if(l.yj_transferred) return false;
-      const t=new Date(l.assigned_at||l.created_at||0).getTime();
-      const e=bizElapsedMs(t,_now30);
-      return e>=30*3600000; // 30h 이상 전체 (48h+ 포함)
+      if(l.yj_transferred||l.tm_transferred) return false;
+      // 마지막 활동기록 있으면 그 시각 기준, 없으면 배정일 기준
+      const _lastT=_lastActMap.get(l.id)||new Date(l.assigned_at||l.created_at||0).getTime();
+      return bizElapsedMs(_lastT,_now30)>=30*3600000;
     });
   }
   curPage=1; renderLeadsTable();
@@ -7671,7 +7692,78 @@ UPDATE leads SET current_stage = '제안'  WHERE current_stage = '제안완료';
 }
 
 async function deleteUser(uid){
-  if(!confirm('삭제?'))return;
+  const accs=getAccs();
+  const target=accs.find(a=>a.id===uid);
+  if(!target) return;
+
+  // 팀장(role=team) 삭제 시 담당 DB 이관 필수
+  if(target.role==='team'){
+    const myLeads=(allLeads||[]).filter(l=>
+      l.status!=='deleted'&&l.status!=='drop'&&
+      (l.team_name===target.name||
+        (()=>{try{return JSON.parse(l.team_names||'[]').includes(target.name);}catch(e){return false;}})())
+    );
+    if(myLeads.length>0){
+      // 같은 지점 다른 팀장 목록
+      const branchName=target.branch||'';
+      const sameTeams=(TEAM_MAP[branchName]||[]).filter(t=>t!==target.name);
+      // 이관 모달 표시
+      let ov=document.getElementById('ov-delete-user-transfer');
+      if(!ov){ov=document.createElement('div');ov.id='ov-delete-user-transfer';ov.className='ov-bg';document.body.appendChild(ov);}
+      ov.innerHTML=`<div class="ov-box" style="width:460px;max-width:96vw">
+        <div style="font-size:17px;font-weight:800;color:var(--err);margin-bottom:8px">🗑 팀원 삭제</div>
+        <div style="font-size:13px;color:var(--gray-600);margin-bottom:16px">
+          <strong>${esc(target.name)}</strong> 담당 DB <strong style="color:var(--err)">${myLeads.length}건</strong>이 있습니다.<br>
+          <span style="font-size:12px;color:var(--warn)">⚠️ 이관 완료 후에만 삭제할 수 있습니다.</span>
+        </div>
+        ${sameTeams.length?`
+        <div class="fg" style="margin-bottom:16px">
+          <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">이관 대상 팀장 선택 *</label>
+          <select id="du-transfer-target" style="width:100%;padding:10px 12px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:14px;font-family:inherit">
+            <option value="">— 이관 대상 팀장 선택 —</option>
+            ${sameTeams.map(t=>`<option value="${t}">${t}</option>`).join('')}
+          </select>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-outline" onclick="closeOv('ov-delete-user-transfer')">취소</button>
+          <button class="btn btn-danger" onclick="doDeleteUserWithTransfer('${uid}','${target.name}')">📤 이관 후 삭제</button>
+        </div>`:`
+        <div style="font-size:12px;color:var(--err);padding:10px;background:rgba(239,68,68,.06);border-radius:6px;margin-bottom:16px">
+          ⚠️ 같은 지점에 이관 가능한 팀장이 없습니다. 관리자에게 문의하세요.
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-outline" onclick="closeOv('ov-delete-user-transfer')">확인</button>
+        </div>`}
+      </div>`;
+      ov.classList.add('open');
+      return;
+    }
+  }
+
+  if(!confirm(`"${target.name}" 계정을 삭제하시겠습니까?`)) return;
+  await _doDeleteUser(uid);
+}
+
+async function doDeleteUserWithTransfer(uid, leaderName){
+  const transferTarget=document.getElementById('du-transfer-target')?.value;
+  if(!transferTarget){showToast('이관 대상 팀장을 선택하세요','error');return;}
+  const myLeads=(allLeads||[]).filter(l=>
+    l.status!=='deleted'&&l.status!=='drop'&&
+    (l.team_name===leaderName||
+      (()=>{try{return JSON.parse(l.team_names||'[]').includes(leaderName);}catch(e){return false;}})())
+  );
+  showToast(`${myLeads.length}건 이관 중...`,'success');
+  for(const l of myLeads){
+    await dbU('leads',l.id,{team_name:transferTarget,team_names:JSON.stringify([transferTarget])});
+    await logActivity(l.id,'assign',`${leaderName} → ${transferTarget} 이관 (팀원 삭제)`,'assigned','');
+    if(allLeads){const i=allLeads.findIndex(r=>r.id===l.id);if(i>=0)allLeads[i]={...allLeads[i],team_name:transferTarget,team_names:JSON.stringify([transferTarget])};}
+  }
+  closeOv('ov-delete-user-transfer');
+  showToast(`${myLeads.length}건 이관 완료`,'success');
+  await _doDeleteUser(uid);
+}
+
+async function _doDeleteUser(uid){
   const accs=getAccs().filter(a=>a.id!==uid);
   saveAccs(accs);
   if(!testMode){
@@ -10071,10 +10163,14 @@ function renderAssignSummary(all){
     const noTeam=bl.filter(l=>!l.team_name).length;
     const done=bl.filter(l=>l.team_name).length;
     const warn30=bl.filter(l=>{
-      if(l.yj_transferred) return false;
-      if(!(!l.current_stage||l.current_stage===''||l.current_stage==='배정')) return false;
-      const t=new Date(l.assigned_at||l.created_at||0).getTime();
-      return bizElapsedMs(t,now)>=H30 && !acts.some(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type));
+      if(l.yj_transferred||l.tm_transferred) return false;
+      if(['계약','관리','드랍','보류'].includes(l.current_stage||'')) return false;
+      if(['drop','deleted'].includes(l.status)) return false;
+      // 마지막 실질 활동기록 기준 (없으면 배정일 기준)
+      const _lastAct=acts.filter(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type))
+        .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];
+      const _base=_lastAct?new Date(_lastAct.created_at).getTime():new Date(l.assigned_at||l.created_at||0).getTime();
+      return bizElapsedMs(_base,now)>=H30;
     }).length;
     const rate=bl.length?Math.round(done/bl.length*100):0;
     const isMissing=b==='미배정';
