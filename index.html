@@ -10999,20 +10999,22 @@ let _rcSel = new Set();
 
 // 실활동기록 맵 생성 (배정·단계변경 제외)
 function rcActMap(acts){
-  const map = new Map();
+  // String 키로 통일 — lead.id와 activity.lead_id 타입 불일치 방지
+  const map = {};
   (acts||[]).forEach(a=>{
     if(['assign','status_change'].includes(a.type)) return;
-    if(!map.has(a.lead_id)) map.set(a.lead_id, []);
-    map.get(a.lead_id).push(a);
+    const key = String(a.lead_id);
+    // 최신 활동만 유지
+    if(!map[key] || new Date(a.created_at) > new Date(map[key].created_at)){
+      map[key] = a;
+    }
   });
   return map;
 }
 
-// 마지막 실활동기록
+// 마지막 실활동기록 — String 키로 조회
 function rcLastAct(map, id){
-  const list = map.get(id)||[];
-  if(!list.length) return null;
-  return list.reduce((a,b)=>new Date(a.created_at)>new Date(b.created_at)?a:b);
+  return map[String(id)] || null;
 }
 
 // 회수대상 여부 판정 → {type, reason} 또는 null
@@ -11028,13 +11030,14 @@ function rcCheck(l, actMap){
   const now = Date.now();
   const H48 = 48*3600000;
   const H120 = 120*3600000;
-  const lastAct = rcLastAct(actMap, l.id);
+  const lastAct = rcLastAct(actMap, String(l.id)); // String 키로 조회
   const lastT = lastAct ? new Date(lastAct.created_at).getTime() : null;
 
-  // A. 미기록 48h
+  // A. 미기록 48h — assigned_at 없으면 created_at fallback
   if(!lastAct){
-    if(!l.assigned_at) return null;
-    const diff = now - new Date(l.assigned_at).getTime();
+    const baseTime = l.assigned_at || l.created_at;
+    if(!baseTime) return null;
+    const diff = now - new Date(baseTime).getTime();
     if(diff >= H48){
       const hh = Math.floor(diff/3600000);
       return {type:'A', reason:'⚠️ 분배 후 '+hh+'h 미기록 (기준: 48h)'};
@@ -11061,8 +11064,8 @@ function rcCheck(l, actMap){
 
 // 회수대상 카운트 (탭 배지용)
 function rcCount(leads, acts){
-  if(!acts?.length) return 0;
-  const map = rcActMap(acts);
+  // A유형(미기록)은 활동기록 없어도 판정 가능
+  const map = rcActMap(acts||[]);
   return (leads||[]).filter(l=>rcCheck(l,map)!==null).length;
 }
 
