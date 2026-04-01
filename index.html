@@ -11075,53 +11075,62 @@ function rcRender(){
   const sub = document.getElementById('recall-sub');
   if(!tbody) return;
 
-  if(!allActivities?.length){
-    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-400)">⏳ 활동기록 로딩 중...</td></tr>';
-    return;
+  try{
+    const leads = allLeads||[];
+    // allActivities 없어도 A유형(미기록) 판정 가능 — 빈 맵으로 처리
+    const actMap = rcActMap(allActivities||[]);
+
+    const list = [];
+    leads.forEach(l=>{
+      try{
+        const r = rcCheck(l, actMap);
+        if(r) list.push({l, ...r});
+      }catch(e){ console.warn('rcCheck 오류:', l.id, e); }
+    });
+
+    // A(미기록) 먼저, 그 다음 배정일 오래된 순
+    list.sort((a,b)=>{
+      if(a.type==='A' && b.type!=='A') return -1;
+      if(a.type!=='A' && b.type==='A') return 1;
+      const aT = new Date(a.l.assigned_at||a.l.created_at||0).getTime();
+      const bT = new Date(b.l.assigned_at||b.l.created_at||0).getTime();
+      return aT - bT;
+    });
+
+    if(sub) sub.textContent = list.length+'건';
+    const cntEl = document.getElementById('leads-subtab-recall-cnt');
+    if(cntEl) cntEl.textContent = list.length ? '('+list.length+')' : '';
+
+    if(!list.length){
+      tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-400)">✅ 회수대상 DB가 없습니다</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = list.map(({l, type, reason})=>{
+      try{
+        const chk = _rcSel.has(l.id)?'checked':'';
+        let assignedDisp = '-';
+        try{ if(l.assigned_at) assignedDisp = String(l.assigned_at).slice(0,16).replace('T',' '); }catch(e){}
+        const rowStyle = type==='A' ? 'background:rgba(239,68,68,.07);' : '';
+        const lid = String(l.id);
+        return `<tr style="border-bottom:1px solid var(--gray-100);cursor:pointer;${rowStyle}" onclick="openPanel('${lid}')">
+          <td style="padding:8px 10px" onclick="event.stopPropagation()"><input type="checkbox" ${chk} onchange="rcToggleSel('${lid}',this.checked)"></td>
+          <td style="padding:8px 12px;font-weight:700;color:var(--navy)">${esc(l.company_name||'-')}</td>
+          <td style="padding:8px 10px;font-size:12px">${esc(l.branch_name||'-')}</td>
+          <td style="padding:8px 10px;font-size:12px">${esc(l.team_name||'-')}</td>
+          <td style="padding:8px 10px;font-size:11px;color:var(--gray-400)">${assignedDisp}</td>
+          <td style="padding:8px 10px;font-size:12px;font-weight:600;color:var(--err)">${reason||''}</td>
+          <td style="padding:8px 10px;white-space:nowrap" onclick="event.stopPropagation()">
+            <button class="btn btn-sm btn-outline" style="color:var(--err);border-color:var(--err)" onclick="rcRecallOne('${lid}')">↩ 회수</button>
+          </td>
+        </tr>`;
+      }catch(e){ console.warn('행 렌더 오류:', l.id, e); return ''; }
+    }).join('');
+
+  }catch(e){
+    console.error('rcRender 오류:', e);
+    if(tbody) tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--err)">오류가 발생했습니다: '+e.message+'</td></tr>';
   }
-
-  const leads = allLeads||[];
-  const actMap = rcActMap(allActivities);
-  const now = Date.now();
-
-  const list = [];
-  leads.forEach(l=>{
-    const r = rcCheck(l, actMap);
-    if(r) list.push({l, ...r});
-  });
-
-  // A(미기록) 먼저, 그 다음 배정일 오래된 순
-  list.sort((a,b)=>{
-    if(a.type==='A' && b.type!=='A') return -1;
-    if(a.type!=='A' && b.type==='A') return 1;
-    return new Date(a.l.assigned_at||a.l.created_at||0) - new Date(b.l.assigned_at||b.l.created_at||0);
-  });
-
-  if(sub) sub.textContent = list.length+'건';
-  setC('leads-subtab-recall-cnt', list.length);
-
-  if(!list.length){
-    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-400)">✅ 회수대상 DB가 없습니다</td></tr>';
-    return;
-  }
-
-  tbody.innerHTML = list.map(({l, type, reason})=>{
-    const chk = _rcSel.has(l.id)?'checked':'';
-    const assignedDisp = l.assigned_at ? l.assigned_at.slice(0,16).replace('T',' ') : '-';
-    // A유형: 붉은 배경
-    const rowStyle = type==='A' ? 'background:rgba(239,68,68,.07);' : '';
-    return `<tr style="border-bottom:1px solid var(--gray-100);cursor:pointer;${rowStyle}" onclick="openPanel('${l.id}')">
-      <td style="padding:8px 10px" onclick="event.stopPropagation()"><input type="checkbox" ${chk} onchange="rcToggleSel('${l.id}',this.checked)"></td>
-      <td style="padding:8px 12px;font-weight:700;color:var(--navy)">${esc(l.company_name||'-')}</td>
-      <td style="padding:8px 10px;font-size:12px">${esc(l.branch_name||'-')}</td>
-      <td style="padding:8px 10px;font-size:12px">${esc(l.team_name||'-')}</td>
-      <td style="padding:8px 10px;font-size:11px;color:var(--gray-400)">${assignedDisp}</td>
-      <td style="padding:8px 10px;font-size:12px;font-weight:600;color:var(--err)">${reason}</td>
-      <td style="padding:8px 10px;white-space:nowrap" onclick="event.stopPropagation()">
-        <button class="btn btn-sm btn-outline" style="color:var(--err);border-color:var(--err)" onclick="rcRecallOne('${l.id}')">↩ 회수</button>
-      </td>
-    </tr>`;
-  }).join('');
 }
 
 function rcToggleAll(checked){
