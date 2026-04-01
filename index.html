@@ -11191,65 +11191,68 @@ function updateLeadsSubTabCounts(){
 let _recallAll=[], _recallSel=new Set();
 let _trashCount=0; // Supabase 모드 휴지통 카운트 캐시
 function renderRecallPanel(){
-  const leads=allLeads?.length?allLeads:lg('leads');
-  // allActivities 미로드 시 회수대상 표시 안 함 (오판 방지)
-  if(!allActivities?.length){ 
-    const tbody=document.getElementById('recall-tbody');
-    if(tbody) tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-400)">⏳ 활동기록 로딩 중...</td></tr>';
+  // allActivities 미로드 시 대기
+  if(!allActivities?.length){
+    const tb=document.getElementById('recall-tbody');
+    if(tb) tb.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-400)">⏳ 활동기록 로딩 중...</td></tr>';
     return;
   }
-  const acts=allActivities;
+  const leads=allLeads?.length?allLeads:lg('leads');
+  const acts=allActivities; // localStorage 폴백 없음
   const now=Date.now();
-  const acts2=allActivities;
-  const _recallElapsed=new Map();
-  const _getBizElapsed=t=>{if(!_recallElapsed.has(t))_recallElapsed.set(t,bizElapsedMs(t,now));return _recallElapsed.get(t);};
-  const H48r=48*3600000;
-  const H120r=120*3600000;
+  const H48=48*3600000;
+  const H120=120*3600000;
+
+  // 실활동기록 (배정·단계변경 제외) — lead_id 기준 맵으로 미리 구성
+  const actMap=new Map();
+  acts.forEach(a=>{
+    if(['assign','status_change'].includes(a.type)) return;
+    if(!actMap.has(a.lead_id)) actMap.set(a.lead_id,[]);
+    actMap.get(a.lead_id).push(a);
+  });
+  const getLastAct=id=>{
+    const list=actMap.get(id)||[];
+    if(!list.length) return null;
+    return list.reduce((a,b)=>new Date(a.created_at)>new Date(b.created_at)?a:b);
+  };
 
   _recallAll=leads.filter(l=>{
     if(l.status==='deleted'||l.status==='drop') return false;
-    if(l.yj_transferred) return false;
+    if(l.yj_transferred||l.yj_done===true||l.yj_done==='true') return false;
 
     const stage=l.current_stage||'';
-    const isAutoRecalled=l.auto_recalled===true||l.auto_recalled==='true';
     const isTmDone=l.tm_done===true||l.tm_done==='true';
 
-    // ── 재배정 대기 건(TM완료·자동회수) → team_name 유무 무관하게 포함
-    if(isTmDone||isAutoRecalled){
+    // D. TM완료 재배정 대기 (팀장 재배정 안 된 건만)
+    if(isTmDone){
       const tn=(l.team_name||'').trim();
-      // TM완료인데 이미 팀장 재배정된 경우 제외
-      if(isTmDone && !isAutoRecalled && tn) return false;
-      return true;
+      return !tn;
     }
 
-    // ── 지점장·팀장 담당 건: 기준 초과 여부
+    // 이하: 지점장·팀장 담당 건
     if(l.tm_transferred===true||l.tm_transferred==='true') return false;
     if(!l.team_name||!l.team_name.trim()) return false;
     if(['계약','제안','보류','드랍'].includes(stage)) return false;
 
-    const rActs=acts2.filter(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type))
-      .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
-    const lastAct=rActs[0];
-    // assigned_at이 있어야 배정 기준 계산 가능 — null이면 created_at 기준 사용하되 활동기록 있으면 제외
-    const assignedAt=l.assigned_at?new Date(l.assigned_at).getTime():null;
-    const assignedT=assignedAt||new Date(l.created_at||0).getTime();
+    const lastAct=getLastAct(l.id);
     const lastActT=lastAct?new Date(lastAct.created_at).getTime():null;
 
+    // A. 분배 후 48h 미기록: assigned_at 반드시 있어야 함
     if(!lastAct){
-      // 활동기록 없음: assigned_at이 있는 경우만 48h 판정
-      if(!assignedAt) return false; // assigned_at 없으면 판정 불가 → 제외
-      return (now-assignedT)>=H48r;
+      if(!l.assigned_at) return false;
+      return (now-new Date(l.assigned_at).getTime())>=H48;
     }
-    if(['접촉','상담'].includes(stage)) return (now-lastActT)>=H120r;
+    // B. 접촉·상담: 마지막 기록으로부터 120h
+    if(['접촉','상담'].includes(stage)) return (now-lastActT)>=H120;
+    // C. 관리: 마지막 기록으로부터 30영업일
     if(stage==='관리') return bizElapsedDays(lastActT,now)>=30;
     return false;
   }).sort((a,b)=>{
-    // 재배정 대기 건(auto_recalled/tm_done/yj_done) 상단 우선
-    const aReassign=(a.auto_recalled||a.tm_done)?1:0;
-    const bReassign=(b.auto_recalled||b.tm_done)?1:0;
-    if(aReassign!==bReassign) return bReassign-aReassign;
+    const aT=a.tm_done?1:0, bT=b.tm_done?1:0;
+    if(aT!==bT) return bT-aT;
     return new Date(a.assigned_at||a.created_at||0)-new Date(b.assigned_at||b.created_at||0);
   });
+
   const sub=document.getElementById('recall-inline-sub');
   if(sub) sub.textContent=_recallAll.length+'건';
   const tbody=document.getElementById('recall-tbody');
@@ -11258,52 +11261,32 @@ function renderRecallPanel(){
     tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-400)">✅ 회수대상 DB가 없습니다</td></tr>';
     return;
   }
+
   tbody.innerHTML=_recallAll.map(l=>{
-    const h=Math.floor((now-new Date(l.assigned_at||l.created_at||0).getTime())/3600000);
     const chk=_recallSel.has(l.id)?'checked':'';
-    // 회수 사유 상세 (기준: 마지막 기록 기준)
-    const _rActs=acts2.filter(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type))
-      .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
-    const _lastR=_rActs[0];
-    const _stageR=l.current_stage||'';
+    const lastAct=getLastAct(l.id);
+    const stage=l.current_stage||'';
+    const isTmDone=l.tm_done===true||l.tm_done==='true';
     let reasonTxt='';
-    const _isAR=l.auto_recalled===true||l.auto_recalled==='true';
-    const _isTD=l.tm_done===true||l.tm_done==='true';
-    if(_isTD&&!_isAR){
+    if(isTmDone){
       reasonTxt='📤 대전TM 완료 → 재배정 필요';
-    } else if(_isAR){
-      const _lT=_lastR?new Date(_lastR.created_at).getTime():null;
-      if(!_lastR){
-        const hh=Math.floor((now-new Date(l.assigned_at||l.created_at||0).getTime())/3600000);
-        reasonTxt='⚠️ 자동회수: 분배 후 '+hh+'h 미기록';
-      } else if(['접촉','상담'].includes(_stageR)){
-        const hh=Math.floor((now-_lT)/3600000);
-        reasonTxt='📞 자동회수: 마지막 기록 '+hh+'h 경과 (기준 120h)';
-      } else if(_stageR==='관리'){
-        const bd=bizElapsedDays(_lT,now);
-        reasonTxt='🏢 자동회수: 마지막 기록 '+bd+'영업일 경과 (기준 30일)';
-      } else {
-        reasonTxt=l.auto_recall_reason||('자동회수 ('+_stageR+')');
-      }
-    } else if(!_lastR){
-      const hh=Math.floor((now-new Date(l.assigned_at||l.created_at||0).getTime())/3600000);
+    } else if(!lastAct){
+      const hh=Math.floor((now-new Date(l.assigned_at).getTime())/3600000);
       reasonTxt='⚠️ 분배 후 '+hh+'h 미기록 (기준: 48h)';
-    } else if(['접촉','상담'].includes(_stageR)){
-      const hh=Math.floor((now-new Date(_lastR.created_at).getTime())/3600000);
-      const over=hh-120;
-      reasonTxt='📞 마지막 기록 '+hh+'h 경과 · '+(over>0?over+'h 초과':'기준 120h');
-    } else if(_stageR==='관리'){
-      const bd=bizElapsedDays(new Date(_lastR.created_at).getTime(),now);
-      reasonTxt='🏢 마지막 기록 '+bd+'영업일 경과 (기준 30영업일)';
-    } else {
-      reasonTxt=h+'h 경과';
+    } else if(['접촉','상담'].includes(stage)){
+      const hh=Math.floor((now-new Date(lastAct.created_at).getTime())/3600000);
+      reasonTxt='📞 마지막 기록 '+hh+'h 경과 (기준 120h)';
+    } else if(stage==='관리'){
+      const bd=bizElapsedDays(new Date(lastAct.created_at).getTime(),now);
+      reasonTxt='🏢 마지막 기록 '+bd+'영업일 경과 (기준 30일)';
     }
+    const assignedDisp=l.assigned_at?(l.assigned_at||'').slice(0,16).replace('T',' '):'-';
     return`<tr style="border-bottom:1px solid var(--gray-100);cursor:pointer" onclick="openPanel('${l.id}')">
       <td style="padding:8px 10px" onclick="event.stopPropagation()"><input type="checkbox" ${chk} onchange="toggleRecallSel('${l.id}',this.checked)"></td>
-      <td style="padding:8px 12px;font-weight:700;color:var(--navy);cursor:pointer;text-decoration:underline" onclick="openPanel('${l.id}');event.stopPropagation()" title="클릭: 활동기록·히스토리 조회">${esc(l.company_name||'-')}</td>
+      <td style="padding:8px 12px;font-weight:700;color:var(--navy)">${esc(l.company_name||'-')}</td>
       <td style="padding:8px 10px;font-size:12px">${esc(l.branch_name||'-')}</td>
       <td style="padding:8px 10px;font-size:12px">${esc(l.team_name||'미배정')}</td>
-      <td style="padding:8px 10px;font-size:11px;color:var(--gray-400)">${l.assigned_at?(l.assigned_at||'').slice(0,16).replace('T',' '):'미기록'}</td>
+      <td style="padding:8px 10px;font-size:11px;color:var(--gray-400)">${assignedDisp}</td>
       <td style="padding:8px 10px;font-size:12px;font-weight:700;color:var(--err)">${reasonTxt}</td>
       <td style="padding:8px 10px;white-space:nowrap" onclick="event.stopPropagation()">
         <button class="btn btn-sm btn-outline" onclick="recallOne('${l.id}')">↩ 회수</button>
