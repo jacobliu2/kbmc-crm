@@ -727,15 +727,8 @@ input[type=date],input[type=time]{color-scheme:light}
 }
 
 /* ══ 미기록 배너 ══ */
-.unrecorded-banner{
-  display:flex;align-items:center;gap:12px;
-  padding:12px 16px;background:#fff0f0;
-  border:1px solid #ffd0d0;border-radius:var(--r);margin-bottom:14px;
-}
-.unrecorded-badge{
-  background:var(--err);color:#fff;font-size:12px;font-weight:700;
-  padding:4px 10px;border-radius:6px;white-space:nowrap;flex-shrink:0;
-}
+
+
 .overdue-48h-row td{background:#fff0f0!important}
 .overdue-48h-row td:first-child{border-left:3px solid var(--err)!important;font-weight:700}
 .overdue-48h-row:hover td{background:#ffe8e8!important}
@@ -1321,17 +1314,7 @@ tbody tr.selected td{background:var(--blue-50)!important}
         </div>
       </div>
       <!-- 첫 활동 미기록 알림 배너 -->
-      <div id="unrecorded-banner" style="display:none" class="unrecorded-banner">
-        <div class="unrecorded-badge" id="unrecorded-count">0건</div>
-        <div>
-          <div style="font-size:13px;font-weight:700;color:#991b1b">활동 기록 없는 고객이 있습니다</div>
-          <div style="font-size:11px;color:#b91c1c;margin-top:1px">배정 후 한 번도 기록되지 않은 고객 — 회사명을 클릭해서 바로 기록하세요</div>
-        </div>
-        <button onclick="scrollToUnrecorded()" class="btn btn-sm"
-          style="margin-left:auto;background:var(--err);color:#fff;border:none;flex-shrink:0">
-          확인하기 ↓
-        </button>
-      </div>
+      
       <!-- 목표 위젯 -->
       <div id="my-goal-widget" style="margin-bottom:14px"></div>
       <!-- Next Action 위젯 -->
@@ -3439,7 +3422,7 @@ function renderLeadCards(){
     if(q && !(l.company_name||'').toLowerCase().includes(q)) return false;
     if(st && l.status !== st) return false;
     if(_myLeadsFilter === 'unrecorded'){
-      const isUnrec = isRecallTarget(l) && !recorded.has(l.id);
+      const isUnrec = false && !recorded.has(l.id);
       return isUnrec;
     }
     if(_myLeadsFilter === 'contacted') return l.status === 'contacted';
@@ -3458,7 +3441,7 @@ function renderLeadCards(){
   const SC2 = {assigned:'var(--blue)',contacted:'var(--ok)',no_answer:'var(--warn)',drop:'var(--err)',consulting:'var(--blue)'};
 
   grid.innerHTML = data.map(l=>{
-    const isUnrec = isRecallTarget(l) && !recorded.has(l.id);
+    const isUnrec = false && !recorded.has(l.id);
     const assignedAt = new Date(l.assigned_at||l.created_at||0).getTime();
     const isOverdue = isUnrec && bizElapsedMs(assignedAt,now) >= H30;
     const leadActs = acts.filter(a=>a.lead_id===l.id && a.type!=='assign')
@@ -4147,7 +4130,7 @@ function startApp(){
   const first=(NAV_CFG[curUser.role]||[])[0];
   if(first) showScreen(first.id,nav.querySelector('.nb'));
   setInterval(checkAlerts,60000); checkAlerts();
-  if(curUser?.role==='team') setInterval(()=>checkUnrecorded(),300000); // 5분마다 미기록 상태 갱신
+  if(curUser?.role==='team')  // 5분마다 미기록 상태 갱신
   loadSbUi();
 }
 
@@ -4856,17 +4839,10 @@ function filterLeads(){
   if(_stageFilter) filtered=filtered.filter(l=>l.current_stage===_stageFilter);
   if(_quickTab==='unassigned'){
     if(curUser.role==='branch'){
-      // 지점장: 팀장 기준 미배정 — auto_recalled 건은 재배정DB로, 여기선 제외
-      filtered=filtered.filter(l=>{
-        if(l.auto_recalled===true||l.auto_recalled==='true') return false;
-        return !l.team_name||l.team_name.trim()==='';
-      });
+      // 지점장: 팀장 기준 미배정
+      filtered=filtered.filter(l=>!l.team_name||l.team_name.trim()==='');
     } else {
-      // 관리자: branch_name 없는 건 — auto_recalled 제외
-      filtered=filtered.filter(l=>{
-        if(l.auto_recalled===true||l.auto_recalled==='true') return false;
-        return !l.branch_name||l.branch_name==='';
-      });
+      filtered=filtered.filter(l=>!l.branch_name||l.branch_name==='');
     }
   } else if(_quickTab==='assigned'){
     if(curUser.role==='branch'){
@@ -6440,7 +6416,7 @@ function renderBrTodayTodo(targetId){
   const H30=30*3600*1000; const now=Date.now();
   const acts=allActivities?.length?allActivities:lg('activities');
   const warn30=(brAllLeads||[]).filter(l=>{
-    if(!isRecallTarget(l)) return false;
+    if(!false) return false;
     const t=new Date(l.assigned_at||l.created_at||0).getTime();
     return bizElapsedMs(t,now)>=H30;
   });
@@ -6843,84 +6819,10 @@ async function loadMyLeads(){
   ls('next_actions', nas);
   (document.getElementById('my-leads-sub')||{}).textContent=myLeads.length+'건';
   renderMyGoal(); renderNAWidget(); renderTodayTodo(); filterMyLeads();
-  checkUnrecorded();
 }
 
 // 배정 후 활동 기록 없는 고객 감지
 // 회수대상 여부 판단 (진행단계가 배정이거나 미설정인 경우만)
-function isRecallTarget(l){
-  // ① 진행단계가 배정/미설정이 아니면 제외
-  const stage=l.current_stage||'';
-  const ACTIVE_STAGES=['접촉','상담','제안','계약','관리','보류','드랍'];
-  if(ACTIVE_STAGES.includes(stage)) return false;
-  // ② status 기반 제외
-  if(['contacted','drop','deleted'].includes(l.status)) return false;
-  // ③ 이관 건 제외
-  if(l.yj_transferred) return false;
-  // ④ 진행 흔적 있으면 제외 (last_activity=진행내용 포함)
-  if(l.last_activity||l.proposal||l.doc_received||l.contract_date||l.drop_reason||l.hold_reason) return false;
-  // ⑤ 실질 활동기록 체크 (getUnrecordedLeads에서 recorded Set으로도 처리하지만 이중 보호)
-  const acts=allActivities?.length?allActivities:[];
-  if(acts.some(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type))) return false;
-  return true;
-}
-
-function getUnrecordedLeads(){
-  if(!myLeads?.length) return [];
-  const acts=allActivities?.length?allActivities:lg('activities');
-  // assign/status_change 제외한 실질 활동기록이 있는 lead id 집합
-  const recorded=new Set(acts.filter(a=>!['assign','status_change'].includes(a.type)).map(a=>a.lead_id));
-  // isRecallTarget(단계/상태 기준) + recorded(실질 활동기록 기준) 모두 통과해야 회수대상
-  return myLeads.filter(l=> isRecallTarget(l) && !recorded.has(l.id));
-}
-
-async function checkUnrecorded(){
-  const unrecorded=getUnrecordedLeads();
-  const banner=document.getElementById('unrecorded-banner');
-  const countEl=document.getElementById('unrecorded-count');
-  const now=Date.now();
-  const H24=24*3600*1000, H30=30*3600*1000, H48=48*3600*1000;
-  const warn24=unrecorded.filter(l=>{const t=new Date(l.assigned_at||l.created_at||0).getTime();const e=bizElapsedMs(t,now);return e>=H24&&e<H30;});
-  const warn30=unrecorded.filter(l=>{if(!isRecallTarget(l))return false;const t=new Date(l.assigned_at||l.created_at||0).getTime();const e=bizElapsedMs(t,now);return e>=H30&&e<H48;});
-  const warn48=unrecorded.filter(l=>{if(!isRecallTarget(l))return false;const t=new Date(l.assigned_at||l.created_at||0).getTime();return bizElapsedMs(t,now)>=H48;});
-  if(banner){
-    if(unrecorded.length>0){
-      banner.style.display='flex';
-      if(countEl){const parts=[];if(warn48.length)parts.push(`⛔ 48h+ ${warn48.length}건`);if(warn30.length)parts.push(`🔴 30h+ ${warn30.length}건`);if(warn24.length)parts.push(`🟠 24h+ ${warn24.length}건`);countEl.textContent=`${unrecorded.length}건 미기록${parts.length?' ('+parts.join(' / ')+')':''}`;}
-    } else { banner.style.display='none'; }
-  }
-  if(curUser.role==='team'){
-    if(warn30.length>0&&!sessionStorage.getItem('warn30_shown')){
-      sessionStorage.setItem('warn30_shown','1');
-      let wov=document.getElementById('ov-warn30');
-      if(!wov){wov=document.createElement('div');wov.id='ov-warn30';wov.className='ov-bg';document.body.appendChild(wov);}
-      wov.innerHTML=`<div class="ov-box" style="width:420px;max-width:96vw;text-align:center"><div style="font-size:36px;margin-bottom:10px">🚨</div><div style="font-size:17px;font-weight:800;color:var(--err);margin-bottom:6px">30시간 미기록 경고</div><div style="font-size:13px;color:var(--gray-600);margin-bottom:16px"><strong>${warn30.length}건</strong> 고객에게 30시간 이상 활동 기록이 없습니다.</div><div style="display:flex;flex-direction:column;gap:5px;max-height:200px;overflow-y:auto;margin-bottom:16px">${warn30.map(l=>{const h=Math.floor((now-new Date(l.assigned_at||l.created_at||0).getTime())/3600000);return`<div style="padding:8px 12px;background:rgba(239,68,68,.06);border-radius:8px;font-size:13px;display:flex;justify-content:space-between"><strong>${esc(l.company_name)}</strong><span style="color:var(--err)">${h}시간</span></div>`;}).join('')}</div><button class="btn btn-primary" style="width:100%" onclick="closeOv('ov-warn30');showScreen('my-leads',document.querySelector('.nb[data-s=\'my-leads\']'))">📋 내 고객 확인하기</button></div>`;
-      wov?.classList.add('open');
-    } else if(warn24.length>0&&!sessionStorage.getItem('warn24_shown')){
-      sessionStorage.setItem('warn24_shown','1');
-      let wov24=document.getElementById('ov-warn24');
-      if(!wov24){wov24=document.createElement('div');wov24.id='ov-warn24';wov24.className='ov-bg';document.body.appendChild(wov24);}
-      wov24.innerHTML=`<div class="ov-box" style="width:400px;max-width:96vw;text-align:center">
-        <div style="font-size:32px;margin-bottom:8px">🟠</div>
-        <div style="font-size:16px;font-weight:800;color:#f97316;margin-bottom:6px">24시간 미기록 주의</div>
-        <div style="font-size:13px;color:var(--gray-600);margin-bottom:14px"><strong>${warn24.length}건</strong>의 고객에게 24시간 이상 활동 기록이 없습니다.</div>
-        <div style="display:flex;flex-direction:column;gap:4px;max-height:180px;overflow-y:auto;margin-bottom:14px">
-          ${warn24.map(l=>{const h=Math.floor((now-new Date(l.assigned_at||l.created_at||0).getTime())/3600000);return`<div style="padding:7px 12px;background:rgba(249,115,22,.06);border-radius:8px;font-size:13px;display:flex;justify-content:space-between"><strong>${esc(l.company_name)}</strong><span style="color:#f97316">${h}시간</span></div>`;}).join('')}
-        </div>
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-outline" style="flex:1" onclick="closeOv('ov-warn24')">나중에</button>
-          <button class="btn btn-primary" style="flex:1;background:#f97316;border-color:#f97316" onclick="closeOv('ov-warn24');showScreen('my-leads',document.querySelector('.nb[data-s=\'my-leads\']'))">📋 내 고객 확인</button>
-        </div>
-      </div>`;
-      wov24?.classList.add('open');
-    }
-  }
-}
-
-function scrollToUnrecorded(){
-  const first=document.querySelector('.unrecorded-row');
-  if(first) first.scrollIntoView({behavior:'smooth',block:'center'});
-}
 function filterMyLeads(){
   const q=(document.getElementById('my-search')?.value||'').toLowerCase();
   const st=document.getElementById('my-status')?.value||'';
@@ -6944,7 +6846,7 @@ function filterMyLeads(){
     const naL=na?`<span style="font-size:10px;color:${na.due_date<today?'var(--err)':na.due_date===today?'var(--warn)':'var(--blue)'};">${fmtD(na.due_date)} ${esc(na.action_type)}</span>`:'-';
     const lid=l.id, lname=esc(l.company_name||'');
     // 미기록 여부
-    const isUnrecorded=!recorded.has(l.id)&&isRecallTarget(l);
+    const isUnrecorded=!recorded.has(l.id)&&false;
     const assignedAt=new Date(l.assigned_at||l.created_at||0).getTime();
     const _elapsed=bizElapsedMs(assignedAt,Date.now());
     const isOverdue48=isUnrecorded&&_elapsed>=48*3600000;
@@ -8197,7 +8099,7 @@ function showDailyBriefing(){
 
   // ── 미기록 30h+ (팀장만 표시 - 본인 담당 DB) ──
   const unrec=role==='team'?leads.filter(l=>{
-    if(!isRecallTarget(l)) return false;
+    if(!false) return false;
     const t=new Date(l.assigned_at||l.created_at||0).getTime();
     return bizElapsedMs(t,now)>=30*3600*1000;
   }):[];
@@ -8253,7 +8155,7 @@ function showDailyBriefing(){
   if(role==='branch'){
     const myTeams=TEAM_MAP[curUser.name]||[];
     const unassigned=(brAllLeads||[]).filter(l=>!l.team_name&&!['drop','deleted'].includes(l.status));
-    const brUnrec=(brAllLeads||[]).filter(l=>isRecallTarget(l)&&bizElapsedMs(new Date(l.assigned_at||l.created_at||0).getTime(),now)>=30*3600*1000);
+    const brUnrec=(brAllLeads||[]).filter(l=>false&&bizElapsedMs(new Date(l.assigned_at||l.created_at||0).getTime(),now)>=30*3600*1000);
     if(unassigned.length) sections.push(`
       <div style="padding:10px 14px;background:rgba(245,158,11,.07);border-radius:8px;border-left:3px solid var(--warn)">
         <div style="font-size:12px;font-weight:700;color:var(--warn);margin-bottom:4px">📥 팀장 미배정 DB ${unassigned.length}건</div>
@@ -9309,8 +9211,8 @@ async function loadTmPanel(){
 
   const setTQ=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
   // 그룹탭 카운트: 이관DB = tm_transferred, 회수DB = 전체회수 이관, 재배정DB = 관리자 재배정
-  const cntTransfer=tmLeads.filter(l=>l.tm_transferred===true||l.tm_transferred==='true'||(function(){try{const cb=JSON.parse(l.collab_branches||'[]');return cb.includes('대전TM')&&!(l.auto_recalled===true||l.auto_recalled==='true');}catch(e){return false;}})()).length;
-  const cntRecallGrp=tmLeads.filter(l=>(l.auto_recalled===true||l.auto_recalled==='true')||(function(){try{const cb=JSON.parse(l.collab_branches||'[]');return cb.includes('대전TM')&&(l.auto_recalled===true||l.auto_recalled==='true');}catch(e){return false;}})()).length;
+  const cntTransfer=tmLeads.filter(l=>l.tm_transferred===true||l.tm_transferred==='true').length;
+  const cntRecallGrp=0; // 대전TM 회수그룹 카운트 (미사용)
   const cntReassignGrp=tmLeads.filter(l=>l.tm_done===true||l.tm_done==='true').length;
   setTQ('tgq-transfer',cntTransfer);
   setTQ('tgq-recall',cntRecallGrp);
@@ -9768,9 +9670,7 @@ function renderTmTable(){
       <td style="font-size:12px">${esc(l.phone||'-')}</td>
       <td style="font-size:11px">${esc((l.consult_type||'-').slice(0,18))}</td>
       <td>${(()=>{
-      const isRecalled=l.auto_recalled===true||l.auto_recalled==='true';
       const assigned=l.team_name&&l.team_name.trim();
-      if(isRecalled) return '<span class="badge" style="font-size:10px;background:#f3e8ff;color:#7c3aed">재배정대기</span>';
       return assigned?'<span class="badge badge-stage-green" style="font-size:10px">배정</span>':'<span class="badge badge-pending" style="font-size:10px">미배정</span>';
     })()}</td>
       <td style="font-size:11px;color:var(--gray-400)">${l.branch_name?'<span class="badge badge-navy" style="font-size:9px">'+esc(l.branch_name)+'</span> ':''}${l.team_name?'<span class="badge badge-blue" style="font-size:9px">'+esc(l.team_name)+'</span>':''}</td>
@@ -10461,7 +10361,7 @@ function brFilterStat(type){
   const contacted=type==='contacted';
   const contract=type==='contract';
   brFiltered=(brAllLeads||[]).filter(l=>{
-    if(unassigned) return (!l.team_name||l.team_name.trim()==='')&&!(l.auto_recalled===true||l.auto_recalled==='true');
+    if(unassigned) return !l.team_name||l.team_name.trim()==='';
     if(assigned) return l.team_name&&l.team_name.trim()!==''&&l.current_stage!=='계약'&&l.current_stage!=='관리';
     if(contacted) return l.status==='contacted'||l.current_stage==='접촉';
     if(contract) return l.current_stage==='계약';
@@ -11222,7 +11122,7 @@ function renderRecallPanel(){
 
   _recallList=[];
   leads.forEach(l=>{
-    const result=_isRecallTarget(l,actMap);
+    const result=_false;
     if(result) _recallList.push({lead:l, ...result});
   });
   // A(미기록) 먼저, 그 다음 B·C 최신순
