@@ -1090,10 +1090,7 @@ tbody tr.selected td{background:var(--blue-50)!important}
           ❌ 드랍·보류 DB <span id="leads-subtab-drop-cnt" style="font-size:11px;font-weight:400;color:var(--gray-400)"></span>
         </button>
 
-        <button id="leads-subtab-recall" onclick="switchLeadsSubTab('recall',this)"
-          style="display:none;padding:9px 18px;border:none;outline:none;background:transparent;cursor:pointer;font-size:14px;font-weight:600;color:var(--err);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">
-          ⛔ 회수대상 <span id="leads-subtab-recall-cnt" style="font-size:11px;font-weight:400;color:var(--gray-400)"></span>
-        </button>
+<!-- 회수대상 탭 제거됨 -->
         <button id="leads-subtab-trash" onclick="switchLeadsSubTab('trash',this)"
           style="display:none;padding:9px 18px;border:none;outline:none;background:transparent;cursor:pointer;font-size:14px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">
           🗑️ 휴지통 <span id="leads-subtab-trash-cnt" style="font-size:11px;font-weight:400;color:var(--gray-400)"></span>
@@ -1219,36 +1216,8 @@ tbody tr.selected td{background:var(--blue-50)!important}
       <!-- 드랍 DB 패널 -->
       
 
-      <!-- ── 회수대상 패널 ── -->
-      <div id="leads-panel-recall" style="display:none">
-        <div class="page-header" style="margin-bottom:12px">
-          <div class="page-title" style="font-size:16px">⛔ 회수대상 <sub id="recall-sub" style="font-size:13px;color:var(--err)"></sub></div>
-          <div style="display:flex;gap:6px">
-            <button class="btn btn-danger btn-sm" onclick="recallSelected()">↩ 선택 회수 → 대전TM</button>
-          </div>
-        </div>
-        <div style="font-size:12px;color:var(--gray-500);margin-bottom:10px;padding:8px 12px;background:rgba(239,68,68,.06);border-radius:6px;border-left:3px solid var(--err)">
-          배정 후 48h 미기록 / 접촉·상담 120h / 관리 30영업일 기준 초과 DB. 회수 시 대전TM으로 자동이관됩니다.
-        </div>
-        <div class="card" style="padding:0">
-          <div class="db-wrap">
-            <table class="db-table">
-              <thead><tr>
-                <th style="width:32px"><input type="checkbox" id="recall-chk-all" onchange="rcToggleAll(this.checked)"></th>
-                <th style="width:160px">회사명</th>
-                <th style="width:80px">지점장</th>
-                <th style="width:80px">팀장</th>
-                <th style="width:110px">배정일시</th>
-                <th>회수 사유</th>
-                <th style="width:70px">액션</th>
-              </tr></thead>
-              <tbody id="recall-tbody"><tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-400)">로딩 중...</td></tr></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      <div id="leads-panel-drop" style="display:none">
+      <!-- 회수대상 패널 제거됨 -->
+            <div id="leads-panel-drop" style="display:none">
         <div class="page-header" style="margin-bottom:12px">
           <div class="page-title" style="font-size:16px">드랍·보류 DB <sub id="drop-sub"></sub></div>
           <div style="display:flex;gap:8px">
@@ -4666,12 +4635,12 @@ async function loadLeads(){
   const _abarDel  = document.querySelector('#leads-abar .abar-btn.err');
   const _isDbMgr  = curUser?.role==='dbmanager';
   const _isTeam   = curUser?.role==='team';
-  // 관리자만 휴지통·회수대상 탭 표시, 지점장·팀장 숨김
+  // 관리자만 휴지통 탭 표시, 지점장·팀장 숨김 (회수대상 탭 제거됨)
   const _showAdminTabs = curUser?.role==='admin';
   // 30h+ 버튼 관리자에게만 표시
   const _o30btn=document.getElementById('qtab-overdue30');
   if(_o30btn) _o30btn.style.display=_showAdminTabs?'':'none';  // trash 탭
-  ['leads-subtab-recall','leads-subtab-trash'].forEach(id=>{
+  ['leads-subtab-trash'].forEach(id=>{
     const el=document.getElementById(id);
     if(el){ el.style.removeProperty('display'); if(!_showAdminTabs) el.style.display='none'; }
   });
@@ -4787,8 +4756,6 @@ async function loadLeads(){
     }
   });
   updateLeadsSubTabCounts?.();
-  // 회수대상 탭 열려있으면 재렌더
-  if(_leadsSubTab==='recall' && typeof rcRender==='function') rcRender();
 
 }
 
@@ -4972,7 +4939,7 @@ function colVal(l, key, acts){
   switch(key){
     case 'company_name': {
       const isRecall=l.tm_transferred&&l.tm_done;
-      const isTmDone=!l.tm_transferred&&l.tm_done&&l.status==='pending'; // 이관완료 → 관리자 대기
+      const isTmDone=(!l.tm_transferred)&&(l.tm_done===true||l.tm_done==='true')&&(l.status==='pending')&&(!l.team_name||!l.team_name.trim()); // 이관완료 → 관리자 대기 (팀 미배정 상태만)
       const clr=isRecall?'#7c3aed':isTmDone?'var(--ok)':'var(--navy)';
       const tag=isRecall
         ?'<span style="font-size:9px;font-weight:700;color:#7c3aed;background:rgba(124,58,237,.08);padding:1px 5px;border-radius:6px;margin-left:4px">재콜</span>'
@@ -7073,7 +7040,8 @@ async function importTmExcel(event){
 
 async function openTmExport(){
   if(!window.XLSX){await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
-  const data=tmLeads.length?tmLeads:(allLeads?.filter(l=>l.tm_transferred)||[]);
+  // tm_done=true(이관완료)된 건은 tmLeads에서 제외 → allLeads 관리자뷰로만 이동
+  const data=tmLeads.filter(l=>!(l.tm_done===true||l.tm_done==='true'));
   if(!data.length){showToast('내보낼 데이터가 없습니다.','error');return;}
   const rows=[['회사명','신청자','연락처','지점','팀장','상태','TM결과','TM날짜','1차미팅일','TM내용','해피콜내용','분배날짜']];
   data.forEach(l=>rows.push([
@@ -9857,16 +9825,20 @@ async function tmToAdmin(lid){
   const lead=tmLeads.find(l=>l.id===lid)||allCache.find(l=>l.id===lid);
   if(!lead){showToast('리드를 찾을 수 없습니다','error');return;}
   if(!confirm(`"${lead.company_name}" 를 관리자 신규배정 풀로 이관하시겠습니까?\n(TM 활동기록은 유지됩니다)`)) return;
-  await dbU('leads', lid, {
+  const patch = {
     branch_name: '',
     team_name: '',
     team_names: JSON.stringify([]),
     tm_transferred: false,
     tm_done: true,
-    assigned_at: '',
-    status: 'pending',   // 미배정으로 → 관리자 화면에서 강조 표시
+    assigned_at: new Date().toISOString(),
+    status: 'pending',
     collab_branches: null
-  });
+  };
+  await dbU('leads', lid, patch);
+  // 로컬 캐시 즉시 반영 — 중복 표시 방지
+  if(allLeads){ const i=allLeads.findIndex(x=>x.id===lid); if(i>=0) allLeads[i]={...allLeads[i],...patch}; }
+  if(tmLeads){ const i=tmLeads.findIndex(x=>x.id===lid); if(i>=0) tmLeads.splice(i,1); }
   await logActivity(lid, 'assign', '대전TM 완료 → 관리자 신규배정 풀 이관 (미배정)', 'pending', '');
   closePanel();
   // 이관 완료 확인 팝업
@@ -9923,10 +9895,13 @@ function pickTmStatus(el,s){
 }
 async function saveTmRecord(){
   const lid=document.getElementById('tm-lead-id').value;
+  if(!lid){showToast('리드 정보가 없습니다. 다시 열어주세요.','error');return;}
   const cont=document.getElementById('tm-content').value.trim();
   const mdate=document.getElementById('tm-meeting-date').value;
   const hcDate=document.getElementById('tm-hc-date')?.value||'';
   if(!cont){showToast('TM 내용을 입력하세요.','error');return;}
+  // curTmStatus 안전 기본값
+  if(!curTmStatus) curTmStatus='contacted';
 
   // 1. 상태 변경 (autoLog:false — 아래서 통화내용과 함께 기록)
   if(curTmStatus) await changeLeadStatus(lid, {status:curTmStatus, autoLog:false});
@@ -9974,6 +9949,11 @@ async function saveTmRecord(){
   }
   closeM('modal-tm-input');
   showToast('TM 기록 저장','success');
+  // 로컬 캐시 즉시 갱신 — TM 기록 반영
+  if(allLeads){
+    const idx=allLeads.findIndex(x=>x.id===lid);
+    if(idx>=0) allLeads[idx]={...allLeads[idx],...tmFieldUpdate};
+  }
   await loadTmPanel();
 }
 
@@ -10534,14 +10514,7 @@ function switchBranchTab(tab, btn){
   if(tab==='dashboard') renderBrDashboard();
   if(tab==='leaders'){renderBrLeaders();}
   if(tab==='drop') renderBrDrop();
-  if(tab==='recall'){
-    // allLeads 로드 안됐으면 loadLeads 먼저 실행
-    if(!allLeads?.length && typeof loadLeads==='function'){
-      loadLeads().then(()=>rcRender()).catch(()=>rcRender());
-    } else {
-      rcRender();
-    }
-  }
+  // recall 탭 제거됨
 }
 
 // 지점관리 대시보드 — 계약·관리 건 렌더
@@ -10995,279 +10968,7 @@ function switchLeadsSubTab(tab, btn){
 
 
 
-// ━━ 회수대상 모듈 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-let _rcTargets = [];
-let _rcSelected = new Set();
-
-/* 유틸 */
-function rcSafeDate(v){
-  if(!v) return null;
-  const d = new Date(v);
-  return isNaN(d.getTime()) ? null : d;
-}
-function rcFmtDateTime(v){
-  const d = rcSafeDate(v);
-  if(!d) return '-';
-  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
-}
-function rcHoursBetween(start, end){
-  return Math.floor((end.getTime()-start.getTime())/3600000);
-}
-function rcBusinessDaysBetween(startDate, endDate){
-  const s=rcSafeDate(startDate), e=rcSafeDate(endDate);
-  if(!s||!e||s>e) return 0;
-  const cur=new Date(s); cur.setHours(0,0,0,0); cur.setDate(cur.getDate()+1);
-  const end2=new Date(e); end2.setHours(0,0,0,0);
-  let count=0;
-  while(cur<=end2){ const d=cur.getDay(); if(d!==0&&d!==6) count++; cur.setDate(cur.getDate()+1); }
-  return count;
-}
-
-/* 활동 맵 — String(lead_id) 키로 통일 */
-function rcBuildActivityMap(){
-  const map = new Map();
-  const acts = Array.isArray(allActivities) ? allActivities : [];
-  for(const a of acts){
-    if(!a||!a.lead_id) continue;
-    const key = String(a.lead_id); // 타입 통일
-    if(!map.has(key)) map.set(key,[]);
-    map.get(key).push(a);
-  }
-  for(const arr of map.values()){
-    arr.sort((a,b)=>{
-      return (rcSafeDate(b.created_at)?.getTime()||0)-(rcSafeDate(a.created_at)?.getTime()||0);
-    });
-  }
-  return map;
-}
-
-/* 제외 판정 */
-function rcIsExcluded(l){
-  if(!l) return true;
-  if(l.tm_transferred===true||l.tm_transferred==='true') return true;
-  if(l.yj_transferred===true||l.yj_transferred==='true') return true;
-  if(l.yj_done===true||l.yj_done==='true') return true;
-  if(!l.team_name||!l.team_name.trim()) return true;
-  const stage=String(l.current_stage||'').trim();
-  const status=String(l.status||'').trim();
-  if(['계약','제안','보류','드랍'].includes(stage)) return true;
-  if(['drop','deleted'].includes(status)) return true;
-  return false;
-}
-
-/* 회수 사유 판정 */
-function rcGetReason(lead, actMap){
-  if(rcIsExcluded(lead)) return null;
-  if(!Array.isArray(allActivities)) return null;
-  const now = new Date();
-  const baseTime = rcSafeDate(lead.assigned_at)||rcSafeDate(lead.created_at);
-  if(!baseTime) return null;
-
-  // String 키로 조회 — 타입 불일치 방지
-  const rawActs = actMap.get(String(lead.id))||[];
-  const realActs = rawActs.filter(a=>!['assign','status_change'].includes(String(a.type||'').trim()));
-  const stage = String(lead.current_stage||'').trim();
-
-  // A. 배정 후 아무 기록 없음 — 48h
-  if(realActs.length===0){
-    const h = rcHoursBetween(baseTime, now);
-    if(h>48) return {code:'A',sortWeight:1,text:'⚠️ 분배 후 '+h+'h 미기록 (기준: 48h)',bg:'rgba(239,68,68,.07)'};
-    return null;
-  }
-
-  const lastAt = rcSafeDate(realActs[0].created_at);
-  if(!lastAt) return null;
-
-  // C. 관리 단계 — 30영업일
-  if(stage==='관리'){
-    const bd = rcBusinessDaysBetween(lastAt, now);
-    if(bd>30) return {code:'C',sortWeight:3,text:'🏢 마지막 기록 '+bd+'영업일 경과 (기준 30일)',bg:''};
-    return null;
-  }
-
-  // B. 접촉·상담 등 — 120h
-  const h = rcHoursBetween(lastAt, now);
-  if(h>120) return {code:'B',sortWeight:2,text:'📞 마지막 기록 '+h+'h 경과 (기준 120h)',bg:''};
-  return null;
-}
-
-/* 대상 계산 */
-function rcComputeTargets(){
-  if(!Array.isArray(allLeads)||!allLeads.length) return [];
-  if(!Array.isArray(allActivities)) return [];
-  const actMap = rcBuildActivityMap();
-  const targets = [];
-  for(const lead of allLeads){
-    try{
-      const reason = rcGetReason(lead, actMap);
-      if(reason) targets.push({...lead, rc_reason:reason});
-    }catch(e){ console.warn('rcCompute err:',lead?.id,e); }
-  }
-  targets.sort((a,b)=>{
-    const w = (a.rc_reason.sortWeight||9)-(b.rc_reason.sortWeight||9);
-    if(w!==0) return w;
-    return (rcSafeDate(a.assigned_at)?.getTime()||0)-(rcSafeDate(b.assigned_at)?.getTime()||0);
-  });
-  return targets;
-}
-
-/* 렌더 — 기존 recall-tbody ID 사용 */
-function rcRender(){
-  const tbody = document.getElementById('recall-tbody');
-  const sub = document.getElementById('recall-sub');
-  if(!tbody) return;
-
-  if(!Array.isArray(allActivities)){
-    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-400)">⏳ 활동기록 로딩 중...</td></tr>';
-    return;
-  }
-
-  try{
-    _rcTargets = rcComputeTargets();
-    const cnt = _rcTargets.length;
-    if(sub) sub.textContent=cnt+'건';
-    const cntEl=document.getElementById('leads-subtab-recall-cnt');
-    if(cntEl) cntEl.textContent=cnt?'('+cnt+')':'';
-
-    if(!cnt){
-      tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-400)">✅ 회수대상 DB가 없습니다</td></tr>';
-      return;
-    }
-
-    tbody.innerHTML=_rcTargets.map(t=>{
-      const chk=_rcSelected.has(t.id)?'checked':'';
-      const rowBg=t.rc_reason.bg?'background:'+t.rc_reason.bg+';':'';
-      let assignedDisp='-';
-      try{ assignedDisp=rcFmtDateTime(t.assigned_at); }catch(e){}
-      return `<tr style="border-bottom:1px solid var(--gray-100);cursor:pointer;${rowBg}" onclick="openPanel('${t.id}')">
-        <td style="padding:8px 10px" onclick="event.stopPropagation()"><input type="checkbox" ${chk} onchange="rcToggleOne('${t.id}',this.checked)"></td>
-        <td style="padding:8px 12px;font-weight:700;color:var(--navy)">${esc(t.company_name||'-')}</td>
-        <td style="padding:8px 10px;font-size:12px">${esc(t.branch_name||'-')}</td>
-        <td style="padding:8px 10px;font-size:12px">${esc(t.team_name||'-')}</td>
-        <td style="padding:8px 10px;font-size:11px;color:var(--gray-400)">${assignedDisp}</td>
-        <td style="padding:8px 10px;font-size:12px;font-weight:600;color:var(--err)">${t.rc_reason.text||''}</td>
-        <td style="padding:8px 10px;white-space:nowrap" onclick="event.stopPropagation()">
-          <button class="btn btn-sm btn-outline" style="color:var(--err);border-color:var(--err)" onclick="rcRecallOne('${t.id}')">↩ 회수</button>
-        </td>
-      </tr>`;
-    }).join('');
-  }catch(e){
-    console.error('rcRender err:',e);
-    tbody.innerHTML='<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--err)">오류: '+e.message+'</td></tr>';
-  }
-}
-
-/* 선택 */
-function rcToggleOne(id,checked){ checked?_rcSelected.add(id):_rcSelected.delete(id); }
-function rcCheckAll(checked){
-  _rcTargets.forEach(t=>checked?_rcSelected.add(t.id):_rcSelected.delete(t.id));
-  document.querySelectorAll('#recall-tbody input[type=checkbox]').forEach(c=>c.checked=checked);
-}
-function rcToggleAll(btn){
-  const all=_rcTargets.every(t=>_rcSelected.has(t.id));
-  rcCheckAll(!all);
-  const chkAll=document.getElementById('recall-chk-all');
-  if(chkAll) chkAll.checked=!all;
-}
-
-/* 회수 공통 패치 */
-function rcBuildPatch(reason){
-  return {
-    auto_recalled:true,
-    auto_recall_reason:reason||'수동 회수',
-    auto_recall_at:new Date().toISOString(),
-    team_name:'',team_names:'[]',assigned_at:null,
-    tm_transferred:true,
-    collab_branches:JSON.stringify(['대전TM'])
-  };
-}
-
-/* 단건 회수 */
-async function rcRecallOne(id){
-  const t=_rcTargets.find(x=>x.id===id);
-  if(!t){showToast('대상 없음','error');return;}
-  if(!confirm((t.company_name||'해당 기업')+'을(를) 회수하고 대전TM으로 이관하시겠습니까?')) return;
-  try{
-    const patch=rcBuildPatch(t.rc_reason?.text);
-    await dbU('leads',id,patch);
-    await logActivity(id,'assign','수동 회수 → 대전TM 이관 ('+(t.rc_reason?.text||'')+')', 'assigned','배정');
-    if(allLeads){const i=allLeads.findIndex(x=>x.id===id);if(i>=0)allLeads[i]={...allLeads[i],...patch};}
-    _rcSelected.delete(id);
-    showToast('회수 완료 → 대전TM 이관','success');
-    rcRender(); updateLeadsSubTabCounts?.();
-  }catch(e){console.error(e);showToast('오류: '+e.message,'error');}
-}
-
-/* 일괄 회수 */
-async function recallSelected(){
-  const ids=[..._rcSelected];
-  if(!ids.length){showToast('선택된 DB가 없습니다','error');return;}
-  if(!confirm(ids.length+'건을 회수하고 대전TM으로 이관하시겠습니까?')) return;
-  try{
-    for(const id of ids){
-      const t=_rcTargets.find(x=>x.id===id);
-      const patch=rcBuildPatch(t?.rc_reason?.text);
-      await dbU('leads',id,patch);
-      await logActivity(id,'assign','수동 회수 → 대전TM 이관 ('+(t?.rc_reason?.text||'')+')', 'assigned','배정');
-      if(allLeads){const i=allLeads.findIndex(x=>x.id===id);if(i>=0)allLeads[i]={...allLeads[i],...patch};}
-    }
-    _rcSelected.clear();
-    showToast(ids.length+'건 회수 완료 → 대전TM 이관','success');
-    rcRender(); updateLeadsSubTabCounts?.();
-  }catch(e){console.error(e);showToast('오류: '+e.message,'error');}
-}
-
-/* 탭 카운트 */
-function rcCount(){
-  if(!Array.isArray(allLeads)||!allLeads.length) return 0;
-  if(!Array.isArray(allActivities)) return 0;
-  return rcComputeTargets().length;
-}
-
-
-function updateLeadsSubTabCounts(){
-  // allLeads/allActivities 미로드 시 카운트 계산 안 함
-  if(!allLeads?.length || !allActivities?.length) return;
-  const leads=allLeads;
-  const acts=allActivities;
-  const now=Date.now();
-  const active=leads.filter(l=>l.status!=='deleted'&&l.status!=='drop').length;
-  const drop=leads.filter(l=>l.status==='drop'||l.current_stage==='보류').length;
-  const trash=_trashCount||getTrash().length;
-  // 회수대상 카운트 (allActivities 로드 후만)
-  const recall = allActivities?.length ? rcCount(allLeads||[], allActivities) : 0;
-  const setC=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v?`(${v})`:'';}
-  setC('leads-subtab-recall-cnt',recall);
-  setC('leads-subtab-active-cnt',active);
-  setC('leads-subtab-drop-cnt',drop);
-  setC('leads-subtab-trash-cnt',trash);
-  // 30h+ 미기록 카운트
-  const _now30=Date.now();
-  const _acts30=new Set(allActivities.filter(a=>!['assign','status_change'].includes(a.type)).map(a=>a.lead_id));
-  const overdue30Cnt=leads.filter(l=>{
-    if(_acts30.has(l.id)) return false;
-    if(['drop','deleted'].includes(l.status)) return false;
-    if(['계약','관리','드랍','보류'].includes(l.current_stage||'')) return false;
-    if(l.yj_transferred) return false;
-    const t=new Date(l.assigned_at||l.created_at||0).getTime();
-    const e=bizElapsedMs(t,_now30);
-    return e>=30*3600000;
-  }).length;
-  const o30Btn=document.getElementById('qtab-overdue30');
-  if(o30Btn){
-    o30Btn.textContent=overdue30Cnt?'⏰ 30h+ 미기록 ('+overdue30Cnt+'건)':'⏰ 30h+ 미기록';
-    o30Btn.style.fontWeight=overdue30Cnt?'700':'600';
-  }
-}
-
-// ── 회수대상 패널 ──────────────────────────────────────
-let _trashCount=0; // Supabase 모드 휴지통 카운트 캐시
-// ━━ 자동회수 체크 (로그인·loadLeads 후 실행) ━━━━━━━━━━━━━━
-// 4: 접촉·상담 영업일 5일 경과 → 자동회수
-// 5: 관리 단계 30일(영업일) 활동없음 → 자동회수
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 회수대상 모듈 제거됨
 
 
 // ━━ 재배정DB 패널 렌더 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
