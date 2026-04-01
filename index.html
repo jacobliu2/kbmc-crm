@@ -1702,6 +1702,9 @@ tbody tr.selected td{background:var(--blue-50)!important}
         </button>
       </div>
 
+      <!-- 탭 설명 -->
+      <div id="tm-tab-desc" style="font-size:12px;color:var(--gray-400);padding:8px 4px 4px;border-bottom:1px solid var(--gray-100);margin-bottom:0"></div>
+
       <!-- 탭별 단(컨테이너) -->
       <div id="tm-tab-all" style="display:none;padding-top:16px">
         <div id="tm-card-grid-all" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px"></div>
@@ -9467,8 +9470,20 @@ function _renderTmGroupTabs(group){
   if(firstTab) firstTab.click();
 }
 
+const _TM_TAB_DESC={
+  all:'대전TM에 이관된 모든 DB (진행 중·완료·드랍 포함)',
+  new:'이관됐지만 아직 첫 통화 기록이 없는 신규 DB',
+  contacted:'통화가 완료된 DB — 지속 팔로업 필요',
+  happycall:'계약 완료 후 만족도 확인을 위한 해피콜 대상 DB',
+  drop:'대전TM 처리 중 드랍 처리된 DB — 추적 보관',
+  recalldone:'팀장이 활동기록을 남긴 재콜 DB',
+  tmdone:'TM 상담 완료 후 본사(팀장)로 이관한 DB — 추적 조회만 가능'
+};
 function switchTmMainTab(tab,btn){
   _tmMainTab=tab; _tmQuickTab=tab;
+  // 탭 설명 업데이트
+  const _descEl=document.getElementById('tm-tab-desc');
+  if(_descEl) _descEl.textContent=_TM_TAB_DESC[tab]||'';
   document.querySelectorAll('.tm-main-tab').forEach(b=>{
     b.style.color='var(--gray-500)';
     b.style.borderBottom='2px solid transparent';
@@ -10704,7 +10719,12 @@ function renderBrTable(){
     <td>${(function(){
       const isCollab=(function(){try{const mySet=new Set([curUser.name,...(TEAM_MAP[curUser.name]||[])]);const arr=JSON.parse(l.team_names||'[]');return arr.some(t=>mySet.has(t))&&arr.some(t=>!mySet.has(t));}catch(e){return false;}})();
       if(!l.team_name) return '<span class="badge badge-no_answer" style="font-size:10px">미배정</span>';
-      const badge='<span class="badge badge-blue" style="font-size:10px">'+esc(l.team_name)+'</span>';
+      // 지점장 직배정 여부 확인 (team_name이 현재 지점장 이름인 경우)
+      const isSelfAssign=l.team_name===curUser.name||
+        (function(){try{const arr=JSON.parse(l.team_names||'[]');return arr.length===1&&arr[0]===curUser.name;}catch(e){return false;}})();
+      const teamDisplay=isSelfAssign?l.team_name+' (직배정)':l.team_name;
+      const badgeStyle=isSelfAssign?'badge-navy':'badge-blue';
+      const badge='<span class="badge '+badgeStyle+'" style="font-size:10px">'+esc(teamDisplay)+'</span>';
       const collabBadge=isCollab?'<span class="badge" style="font-size:9px;background:rgba(49,130,246,.1);color:var(--blue);margin-left:3px">🤝협업</span>':'';
       return badge+collabBadge;
     })()}</td>
@@ -11227,18 +11247,17 @@ async function checkAutoRecall(){
 
   // 자동회수 실행 (경고 없이)
   for(const {id, reason} of toRecall){
+    // team_name 유지 — 히스토리·진행단계 보존, auto_recalled 플래그만 설정
     await dbU('leads', id, {
-      team_name:'', team_names:'[]', assigned_at:null,
       auto_recalled:true, auto_recall_reason:reason,
       auto_recall_at:new Date().toISOString()
     });
-    await logActivity(id,'assign',`자동회수: ${reason}`,'assigned','배정');
+    await logActivity(id,'assign',`자동회수 대상: ${reason}`,'assigned','배정');
     if(allLeads){
       const i=allLeads.findIndex(l=>l.id===id);
       if(i>=0){
-        allLeads[i].team_name='';
-        allLeads[i].team_names='[]';
         allLeads[i].auto_recalled=true;
+        allLeads[i].auto_recall_reason=reason;
       }
     }
   }
@@ -11270,13 +11289,13 @@ function renderReassignDbPanel(){
     // 재배정 완료 여부 판단
     const tn=(l.team_name||'').trim();
     if(isYjDone){
-      // yj_done: team_name이 비어있거나 '유영준' 본인이면 아직 재배정 대기
-      // 다른 팀장으로 배정됐으면 완료
       if(tn && tn!=='유영준') return false;
-    } else {
-      // auto_recalled/tm_done: team_name이 있으면 완료
+    } else if(isTmDone){
+      // TM완료: team_name이 있으면 완료
       if(tn) return false;
     }
+    // auto_recalled: team_name 있어도 재배정DB에 표시 (히스토리 보존 정책)
+    // → 관리자가 재배정 결정 후 auto_recalled=false 처리
     return true;
   }).sort((a,b)=>new Date(b.auto_recall_at||b.updated_at||0)-new Date(a.auto_recall_at||a.updated_at||0));
 
