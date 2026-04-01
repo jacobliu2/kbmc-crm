@@ -1304,7 +1304,7 @@ tbody tr.selected td{background:var(--blue-50)!important}
       <!-- ── 회수대상 패널 ── -->
       <div id="leads-panel-recall" style="display:none">
         <div class="page-header" style="margin-bottom:12px">
-          <div class="page-title" style="font-size:16px">⛔ 회수대상 <sub id="recall-inline-sub" style="font-size:13px;color:var(--err)"></sub></div>
+          <div class="page-title" style="font-size:16px">⛔ 회수대상 · 재배정 <sub id="recall-inline-sub" style="font-size:13px;color:var(--err)"></sub></div>
           <div style="display:flex;gap:6px">
             <button class="btn btn-outline btn-sm" onclick="recallAll()">↩ 전체 회수</button>
             <button class="btn btn-danger btn-sm" onclick="recallSelected()">↩ 선택 회수</button>
@@ -1322,7 +1322,7 @@ tbody tr.selected td{background:var(--blue-50)!important}
                 <th style="width:80px">지점장</th>
                 <th style="width:80px">팀장</th>
                 <th style="width:110px">배정일시</th>
-                <th style="width:70px">경과시간</th>
+                <th style="width:170px">회수·재배정 사유</th>
                 <th style="width:100px">액션</th>
               </tr></thead>
               <tbody id="recall-tbody"></tbody>
@@ -1835,7 +1835,7 @@ tbody tr.selected td{background:var(--blue-50)!important}
       <!-- 오늘 할 일 위젯 (지점장) -->
       <!-- 지점장 탭 -->
       <div style="display:flex;gap:0;border-bottom:2px solid var(--gray-200);margin-bottom:18px" id="branch-tabs">
-        <button class="branch-tab-btn active" onclick="switchBranchTab('assign',this)" style="padding:10px 18px;border:none;background:transparent;font-size:13px;font-weight:700;color:var(--navy);cursor:pointer;border-bottom:2px solid var(--navy);margin-bottom:-2px;font-family:inherit">📥 신규 배정</button>
+        <button class="branch-tab-btn active" onclick="switchBranchTab('dashboard',this)" style="padding:10px 18px;border:none;background:transparent;font-size:13px;font-weight:700;color:var(--navy);cursor:pointer;border-bottom:2px solid var(--navy);margin-bottom:-2px;font-family:inherit">📊 이달 계약·관리</button>
         <button class="branch-tab-btn" onclick="switchBranchTab('leaders',this)" style="padding:10px 18px;border:none;background:transparent;font-size:13px;font-weight:600;color:var(--gray-500);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">👥 소속 팀장</button>
         <button class="branch-tab-btn" onclick="switchBranchTab('drop',this)" style="padding:10px 18px;border:none;background:transparent;font-size:13px;font-weight:600;color:var(--gray-500);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">❌ 드랍 DB</button>
       </div>
@@ -1844,17 +1844,17 @@ tbody tr.selected td{background:var(--blue-50)!important}
       <div id="branch-panel-assign">
         <!-- 미배정 통계 -->
         <div class="stat-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px">
-          <div class="stat-card orange" onclick="brFilterStat('unassigned')" style="cursor:pointer" title="클릭하면 미배정 DB만 표시"><div class="stat-label">미배정</div><div class="stat-val" id="br-unassigned">0</div></div>
-          <div class="stat-card blue" onclick="brFilterStat('assigned')" style="cursor:pointer" title="클릭하면 배정완료 DB만 표시"><div class="stat-label">배정완료</div><div class="stat-val" id="br-assigned">0</div></div>
-          <div class="stat-card green" onclick="brFilterStat('contacted')" style="cursor:pointer" title="클릭하면 접촉 DB만 표시"><div class="stat-label">접촉</div><div class="stat-val" id="br-consulting">0</div></div>
-          <div class="stat-card" onclick="brFilterStat('contract')" style="cursor:pointer" title="클릭하면 계약 DB만 표시"><div class="stat-label">계약</div><div class="stat-val" id="br-contract">0</div></div>
+          <div class="stat-card green" style="cursor:default"><div class="stat-label">이달 계약</div><div class="stat-val" id="br-month-contract">0</div></div>
+          <div class="stat-card blue" style="cursor:default"><div class="stat-label">이달 관리</div><div class="stat-val" id="br-month-manage">0</div></div>
+          <div class="stat-card" style="cursor:default"><div class="stat-label">소속 팀장</div><div class="stat-val" id="br-team-count">0</div></div>
+          <div class="stat-card orange" style="cursor:default"><div class="stat-label">누적 계약</div><div class="stat-val" id="br-contract">0</div></div>
         </div>
         <!-- 팀장 선택 카드 -->
         <div class="card" style="margin-bottom:14px">
           <div style="font-size:12px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">팀장 배정</div>
           <div class="mgr-grid" id="br-leader-cards"></div>
           <div style="display:flex;gap:8px;margin-top:10px">
-            <button class="btn btn-primary btn-sm" onclick="openBrAssignPopup()">📨 배정</button>
+            <!-- 배정버튼 제거 -->
             <button class="btn btn-outline btn-sm" onclick="confirmBrRecall()">↩ 선택 DB 회수</button>
             <button class="btn btn-danger btn-sm" onclick="confirmBrDrop()">🚫 드랍 처리</button>
             <button class="abar-btn cancel btn-sm" onclick="clearBrSel()" style="background:var(--gray-100);color:var(--gray-600);border-radius:6px;padding:5px 11px;border:none;cursor:pointer;font-size:12px;font-weight:700">✕ 선택 해제</button>
@@ -1864,14 +1864,10 @@ tbody tr.selected td{background:var(--blue-50)!important}
         <div class="fbar">
           <input type="text" id="br-search" placeholder="🔍 회사명·연락처" oninput="filterBrLeads()">
           <select id="br-status-filter" onchange="filterBrLeads()">
-            <option value="">전체</option>
-            <option value="">미배정</option>
-            <option value="pending">대기</option>
-            <option value="contacted">연락됨</option>
-            <option value="consulting">상담중</option>
-            <option value="no_answer">부재중</option>
+            <option value="all">계약·관리 전체</option>
+            <option value="계약">계약</option>
+            <option value="관리">관리</option>
           </select>
-          <button class="btn btn-outline btn-sm" onclick="filterBrLeads('unassigned')">🔴 미배정만</button>
         </div>
         <!-- 지점 DB 테이블 -->
         <div class="card" style="padding:0">
@@ -10542,11 +10538,17 @@ async function loadBranchScreen(){
     return false;
   });
   const mine=brAllLeads;
-  (document.getElementById('br-unassigned')||{}).textContent=mine.filter(l=>!l.team_name&&!(l.auto_recalled===true||l.auto_recalled==='true')).length;
-  (document.getElementById('br-assigned')||{}).textContent=mine.filter(l=>l.team_name).length;
-  (document.getElementById('br-consulting')||{}).textContent=mine.filter(l=>l.status==='contacted').length;
-  (document.getElementById('br-contract')||{}).textContent=mine.filter(l=>l.current_stage==='계약').length;
-  (document.getElementById('branch-sub')||{}).textContent=mine.length+'건';
+  // 이달 계약·관리 카운팅
+  const _thisMonth=new Date().toISOString().slice(0,7); // YYYY-MM
+  const _monthContract=mine.filter(l=>l.current_stage==='계약'&&(l.contract_date||l.updated_at||'').startsWith(_thisMonth)).length;
+  const _monthManage=mine.filter(l=>l.current_stage==='관리'&&(l.manage_date||l.updated_at||'').startsWith(_thisMonth)).length;
+  const _totalContract=mine.filter(l=>l.current_stage==='계약'||l.current_stage==='관리').length;
+  const _teamCount=(TEAM_MAP[curUser.name]||[]).length;
+  (document.getElementById('br-month-contract')||{}).textContent=_monthContract;
+  (document.getElementById('br-month-manage')||{}).textContent=_monthManage;
+  (document.getElementById('br-team-count')||{}).textContent=_teamCount;
+  (document.getElementById('br-contract')||{}).textContent=_totalContract;
+  (document.getElementById('branch-sub')||{}).textContent=mine.filter(l=>['계약','관리'].includes(l.current_stage||'')).length+'건';
   // 팀장 카드 생성
   const leaders=TEAM_MAP[curUser.name]||[];
   const grid=document.getElementById('br-leader-cards');
@@ -10566,8 +10568,10 @@ async function loadBranchScreen(){
 
     // 단일 팀장 카드
     const singleCards=leaders.map(t=>{
-      const cnt=mine.filter(l=>l.team_name===t||
-        (function(){try{return JSON.parse(l.team_names||'[]').includes(t);}catch(e){return false;}}())
+      // 팀장 카드: 계약·관리 건만 카운팅
+      const cnt=mine.filter(l=>
+        ['계약','관리'].includes(l.current_stage||'') &&
+        (l.team_name===t||(function(){try{return JSON.parse(l.team_names||'[]').includes(t);}catch(e){return false;}}()))
       ).length;
       return`<div class="mgr-card" onclick="selectBrLeaderCard(this,'${t}')" data-team="${t}" style="min-width:80px">
         <div class="mgr-name" style="font-size:13px">${esc(t)}</div>
@@ -10620,7 +10624,7 @@ async function loadBranchScreen(){
   }
   brSelIds.clear(); brPage=1;
   filterBrLeads();
-  switchBranchTab('assign', document.querySelector('.branch-tab-btn'));
+  switchBranchTab('dashboard', document.querySelector('.branch-tab-btn'));
 }
 
 let _selBrLeader='';
@@ -10685,21 +10689,31 @@ function switchBranchTab(tab, btn){
     b.style.fontWeight='600'; b.style.color='var(--gray-500)'; b.style.borderBottom='2px solid transparent';
   });
   if(btn){btn.style.fontWeight='700';btn.style.color='var(--navy)';btn.style.borderBottom='2px solid var(--navy)';}
+  const tabToPanel = tab==='dashboard'?'assign':tab;
   ['assign','leaders','drop'].forEach(p=>{
-    const el=document.getElementById('branch-panel-'+p); if(el)el.style.display=p===tab?'':'none';
+    const el=document.getElementById('branch-panel-'+p); if(el)el.style.display=p===tabToPanel?'':'none';
   });
+  if(tab==='dashboard') renderBrDashboard();
   if(tab==='leaders'){renderBrLeaders();}
   if(tab==='drop') renderBrDrop();
 }
 
+// 지점관리 대시보드 — 계약·관리 건 렌더
+function renderBrDashboard(){
+  // 상태 필터를 계약·관리 전체로 초기화
+  const sel=document.getElementById('br-status-filter');
+  if(sel&&sel.value!=='계약'&&sel.value!=='관리') sel.value='all';
+  filterBrLeads();
+}
+
 function filterBrLeads(mode){
   const s=(document.getElementById('br-search')?.value||'').toLowerCase();
-  const st=document.getElementById('br-status-filter')?.value||'';
-  brFiltered=brAllLeads.filter(l=>{
-    if(l.status==='drop')return false;
-    if(mode==='unassigned') return !l.team_name;
+  const stVal=document.getElementById('br-status-filter')?.value||'all';
+  // 지점관리: 항상 계약·관리 건만 표시
+  const stageFilter=stVal==='계약'?['계약']:stVal==='관리'?['관리']:['계약','관리'];
+  brFiltered=(brAllLeads||[]).filter(l=>{
+    if(!stageFilter.includes(l.current_stage||'')) return false;
     if(s&&!(l.company_name||'').toLowerCase().includes(s)&&!(l.phone||'').includes(s))return false;
-    if(st&&l.status!==st)return false;
     return true;
   });
   brPage=1; renderBrTable();
@@ -11244,7 +11258,13 @@ function renderRecallPanel(){
 
     // ④ auto_recalled=true (이미 플래그된 건)
     return l.auto_recalled===true||l.auto_recalled==='true';
-  }).sort((a,b)=>new Date(a.assigned_at||a.created_at||0)-new Date(b.assigned_at||b.created_at||0));
+  }).sort((a,b)=>{
+    // 재배정 대기 건(auto_recalled/tm_done/yj_done) 상단 우선
+    const aReassign=(a.auto_recalled||a.tm_done||a.yj_done)?1:0;
+    const bReassign=(b.auto_recalled||b.tm_done||b.yj_done)?1:0;
+    if(aReassign!==bReassign) return bReassign-aReassign;
+    return new Date(a.assigned_at||a.created_at||0)-new Date(b.assigned_at||b.created_at||0);
+  });
   const sub=document.getElementById('recall-inline-sub');
   if(sub) sub.textContent=_recallAll.length+'건';
   const tbody=document.getElementById('recall-tbody');
@@ -11262,24 +11282,43 @@ function renderRecallPanel(){
     const _lastR=_rActs[0];
     const _stageR=l.current_stage||'';
     let reasonTxt='';
-    if(!_lastR){
+    const _isAR=l.auto_recalled===true||l.auto_recalled==='true';
+    const _isTD=l.tm_done===true||l.tm_done==='true';
+    const _isYD=l.yj_done===true||l.yj_done==='true';
+    if(_isYD){
+      reasonTxt='🎯 초도이관 완료 → 재배정 필요';
+    } else if(_isTD&&!_isAR){
+      reasonTxt='📤 대전TM 완료 → 재배정 필요';
+    } else if(_isAR){
+      const _lT=_lastR?new Date(_lastR.created_at).getTime():null;
+      if(!_lastR){
+        const hh=Math.floor((now-new Date(l.assigned_at||l.created_at||0).getTime())/3600000);
+        reasonTxt='⚠️ 자동회수: 분배 후 '+hh+'h 미기록';
+      } else if(['접촉','상담'].includes(_stageR)){
+        const hh=Math.floor((now-_lT)/3600000);
+        reasonTxt='📞 자동회수: 마지막 기록 '+hh+'h 경과 (기준 120h)';
+      } else if(_stageR==='관리'){
+        const bd=bizElapsedDays(_lT,now);
+        reasonTxt='🏢 자동회수: 마지막 기록 '+bd+'영업일 경과 (기준 30일)';
+      } else {
+        reasonTxt=l.auto_recall_reason||('자동회수 ('+_stageR+')');
+      }
+    } else if(!_lastR){
       const hh=Math.floor((now-new Date(l.assigned_at||l.created_at||0).getTime())/3600000);
-      reasonTxt=`⚠️ 분배 후 ${hh}h 미기록 (기준: 48h)`;
+      reasonTxt='⚠️ 분배 후 '+hh+'h 미기록 (기준: 48h)';
     } else if(['접촉','상담'].includes(_stageR)){
       const hh=Math.floor((now-new Date(_lastR.created_at).getTime())/3600000);
       const over=hh-120;
-      reasonTxt=`📞 마지막 기록 ${hh}h 경과 · ${over>0?over+'h 초과':'기준 120h'}`;
+      reasonTxt='📞 마지막 기록 '+hh+'h 경과 · '+(over>0?over+'h 초과':'기준 120h');
     } else if(_stageR==='관리'){
       const bd=bizElapsedDays(new Date(_lastR.created_at).getTime(),now);
-      reasonTxt=`🏢 마지막 기록 ${bd}영업일 경과 (기준: 30영업일)`;
-    } else if(l.auto_recall_reason){
-      reasonTxt=l.auto_recall_reason;
+      reasonTxt='🏢 마지막 기록 '+bd+'영업일 경과 (기준 30영업일)';
     } else {
-      reasonTxt=`${h}h 경과`;
+      reasonTxt=h+'h 경과';
     }
     return`<tr style="border-bottom:1px solid var(--gray-100);cursor:pointer" onclick="openPanel('${l.id}')">
       <td style="padding:8px 10px" onclick="event.stopPropagation()"><input type="checkbox" ${chk} onchange="toggleRecallSel('${l.id}',this.checked)"></td>
-      <td style="padding:8px 12px;font-weight:700;color:var(--navy)">${esc(l.company_name||'-')}</td>
+      <td style="padding:8px 12px;font-weight:700;color:var(--navy);cursor:pointer;text-decoration:underline" onclick="openPanel('${l.id}');event.stopPropagation()" title="클릭: 활동기록·히스토리 조회">${esc(l.company_name||'-')}</td>
       <td style="padding:8px 10px;font-size:12px">${esc(l.branch_name||'-')}</td>
       <td style="padding:8px 10px;font-size:12px">${esc(l.team_name||'미배정')}</td>
       <td style="padding:8px 10px;font-size:11px;color:var(--gray-400)">${(l.assigned_at||l.created_at||'').slice(0,16).replace('T',' ')}</td>
@@ -11429,7 +11468,7 @@ function renderReassignDbPanel(){
       reason.includes('TM')||reason.includes('이관')?'#7c3aed':'var(--blue)';
     return `<tr style="border-bottom:1px solid var(--gray-100);cursor:pointer" onclick="openPanel('${l.id}')">
       <td style="padding:8px 10px" onclick="event.stopPropagation()"><input type="checkbox" ${chk} onchange="toggleReassignDbSel('${l.id}',this.checked)"></td>
-      <td style="padding:8px 12px;font-weight:700;color:var(--navy)">${esc(l.company_name||'-')}</td>
+      <td style="padding:8px 12px;font-weight:700;color:var(--navy);cursor:pointer;text-decoration:underline" onclick="openPanel('${l.id}');event.stopPropagation()" title="클릭: 활동기록·히스토리 조회">${esc(l.company_name||'-')}</td>
       <td style="padding:8px 10px;font-size:12px">${esc(l.branch_name||'-')}</td>
       <td style="padding:8px 10px;font-size:12px">${esc(l.current_stage||'-')}</td>
       <td style="padding:8px 10px;font-size:11px;color:var(--gray-500)">${esc(lastActTxt)}</td>
