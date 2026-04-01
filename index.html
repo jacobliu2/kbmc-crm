@@ -1101,10 +1101,7 @@ tbody tr.selected td{background:var(--blue-50)!important}
           style="display:none;padding:9px 18px;border:none;outline:none;background:transparent;cursor:pointer;font-size:14px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">
           🗑️ 휴지통 <span id="leads-subtab-trash-cnt" style="font-size:11px;font-weight:400;color:var(--gray-400)"></span>
         </button>
-        <button id="leads-subtab-recall" onclick="switchLeadsSubTab('recall',this)"
-          style="display:none;padding:9px 18px;border:none;outline:none;background:transparent;cursor:pointer;font-size:14px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">
-          ⛔ 회수대상 <span id="leads-subtab-recall-cnt" style="font-size:11px;font-weight:400;color:var(--err)"></span>
-        </button>
+        
       </div>
 
       <!-- 전체 DB 패널 -->
@@ -1278,35 +1275,7 @@ tbody tr.selected td{background:var(--blue-50)!important}
         </div>
       </div>
 
-      <!-- ── 회수대상 패널 ── -->
-      <div id="leads-panel-recall" style="display:none">
-        <div class="page-header" style="margin-bottom:12px">
-          <div class="page-title" style="font-size:16px">⛔ 회수대상 · 재배정 <sub id="recall-inline-sub" style="font-size:13px;color:var(--err)"></sub></div>
-          <div style="display:flex;gap:6px">
-            <button class="btn btn-outline btn-sm" onclick="recallAll()">↩ 전체 회수</button>
-            <button class="btn btn-danger btn-sm" onclick="recallSelected()">↩ 선택 회수</button>
-          </div>
-        </div>
-        <div style="font-size:12px;color:var(--gray-500);margin-bottom:10px;padding:8px 12px;background:rgba(239,68,68,.06);border-radius:var(--r-sm);border-left:3px solid var(--err)">
-          배정 후 <strong>48시간 이상 활동 기록이 없는</strong> DB입니다. 회수하여 재배정하거나 팀장에게 경고하세요.
-        </div>
-        <div class="card" style="padding:0">
-          <div class="db-wrap">
-            <table class="db-table">
-              <thead><tr>
-                <th style="width:30px"><input type="checkbox" id="recall-check-all" onchange="toggleRecallAll(this)"></th>
-                <th style="width:140px">회사명</th>
-                <th style="width:80px">지점장</th>
-                <th style="width:80px">팀장</th>
-                <th style="width:110px">배정일시</th>
-                <th style="width:170px">회수·재배정 사유</th>
-                <th style="width:100px">액션</th>
-              </tr></thead>
-              <tbody id="recall-tbody"></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
+      
 
 
     <!-- ── 팀장: 내 고객 ── -->
@@ -4688,14 +4657,9 @@ async function loadLeads(){
   // 30h+ 버튼 관리자에게만 표시
   const _o30btn=document.getElementById('qtab-overdue30');
   if(_o30btn) _o30btn.style.display=_showAdminTabs?'':'none';
-  // leads-subtab-recall, trash만 표시 (reassigndb는 회수대상에 통합됨)
-  ['leads-subtab-recall','leads-subtab-trash'].forEach(id=>{
-    const el=document.getElementById(id);
-    if(el) el.style.removeProperty('display'); if(!_showAdminTabs) el.style.display='none';
-  });
-  // reassigndb 탭 항상 숨김 (회수대상에 통합)
-  const _rdbBtn=document.getElementById('leads-subtab-reassigndb');
-  if(_rdbBtn) _rdbBtn.style.display='none';
+  // trash 탭만 표시
+  const _trashBtn=document.getElementById('leads-subtab-trash');
+  if(_trashBtn){ _trashBtn.style.removeProperty('display'); if(!_showAdminTabs) _trashBtn.style.display='none'; }
   // dbmanager: 배정/드랍/삭제 모두 숨김, team: 배정·드랍 버튼 숨김 (진행단계에서 드랍 선택)
   if(_abarDist) _abarDist.style.display = (_isDbMgr||_isTeam) ? 'none' : '';
   if(_abarDrop) _abarDrop.style.display = (_isDbMgr||_isTeam) ? 'none' : '';
@@ -4797,7 +4761,7 @@ async function loadLeads(){
   // activities/next_actions는 위에서 이미 동시 로드 완료
   // active 패널만 직접 표시 (switchLeadsSubTab 호출 시 무한루프 방지)
   _leadsSubTab='active';
-  ['active','drop','trash','recall'].forEach(t=>{
+  ['active','drop','trash'].forEach(t=>{
     const el=document.getElementById('leads-panel-'+t);
     if(el) el.style.display=t==='active'?'':'none';
     const b=document.getElementById('leads-subtab-'+t);
@@ -4808,14 +4772,7 @@ async function loadLeads(){
     }
   });
   updateLeadsSubTabCounts?.();
-  // 자동회수 체크: allActivities 로드 확인 후 실행
-  if(curUser?.role==='admin'){
-    if(allActivities?.length){
-      setTimeout(()=>checkAutoRecall(), 300);
-    } else {
-      setTimeout(()=>{ if(allActivities?.length) checkAutoRecall(); }, 3000);
-    }
-  }
+
 }
 
 function yjQuickFilter(val){document.querySelectorAll('[id^="qtab-"]').forEach(b=>{b.style.background='';b.style.color='';b.style.borderColor='';});_quickTab='';_stageFilter='';const sel=document.getElementById('leads-yj-filter');if(sel)sel.value=val;filterLeads();}
@@ -10122,7 +10079,7 @@ function _applyQuickTab(tab, btn){
   _quickTab=tab;
   // active 패널 보장 (다른 서브탭에서 호출 시 패널 숨겨져 있을 수 있음)
   _leadsSubTab='active';
-  ['active','drop','trash','recall'].forEach(t=>{
+  ['active','drop','trash'].forEach(t=>{
     const el=document.getElementById('leads-panel-'+t);
     if(el) el.style.display=t==='active'?'':'none';
   }); // ← 핵심: filterLeads()가 읽는 변수 세팅
@@ -11090,7 +11047,7 @@ let _leadsSubTab='active';
 
 function switchLeadsSubTab(tab, btn){
   _leadsSubTab=tab;
-  ['active','drop','trash','recall'].forEach(t=>{
+  ['active','drop','trash'].forEach(t=>{
     const el=document.getElementById('leads-panel-'+t);
     if(el) el.style.display=t===tab?'':'none';
     const b=document.getElementById('leads-subtab-'+t);
@@ -11104,7 +11061,7 @@ function switchLeadsSubTab(tab, btn){
   });
   if(tab==='drop') renderDropPanel();
   if(tab==='trash') renderTrashInline();
-  if(tab==='recall') renderRecallPanel();
+
   // 정렬 컨트롤바: active 탭에서만 표시
   const sortBar=document.getElementById('leads-sort-bar');
   if(sortBar) sortBar.style.display=tab==='active'?'':'none';
@@ -11119,25 +11076,7 @@ function updateLeadsSubTabCounts(){
   const active=leads.filter(l=>l.status!=='deleted'&&l.status!=='drop').length;
   const drop=leads.filter(l=>l.status==='drop'||l.current_stage==='보류').length;
   const trash=_trashCount||getTrash().length; // Supabase 모드에서는 _trashCount 사용
-  const H48c=48*3600000; const H120c=120*3600000;
-  const recall=leads.filter(l=>{
-    if(l.status==='deleted'||l.status==='drop') return false;
-    if(l.tm_transferred===true||l.tm_transferred==='true') return false;
-    if(l.yj_transferred) return false;
-    if(!l.team_name||!l.team_name.trim()) return false;
-    const stage=l.current_stage||'';
-    if(['계약','제안','보류','드랍'].includes(stage)) return false;
-    const rA=acts.filter(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type))
-      .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
-    const lA=rA[0];
-    const _aAt=l.assigned_at?new Date(l.assigned_at).getTime():null;
-    const aT=_aAt||new Date(l.created_at||0).getTime();
-    const lT=lA?new Date(lA.created_at).getTime():null;
-    if(!lA){ if(!_aAt) return false; return (now-aT)>=H48c; }
-    if(['접촉','상담'].includes(stage)) return (now-lT)>=H120c;
-    if(stage==='관리') return bizElapsedDays(lT,now)>=30;
-    return l.auto_recalled===true||l.auto_recalled==='true';
-  }).length;
+  const recall=0; // 회수대상 탭 제거됨
   const setC=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v?`(${v})`:'';}
   setC('leads-subtab-active-cnt',active);
   setC('leads-subtab-drop-cnt',drop);
@@ -11188,198 +11127,10 @@ function updateLeadsSubTabCounts(){
 }
 
 // ── 회수대상 패널 ──────────────────────────────────────
-let _recallAll=[], _recallSel=new Set();
 let _trashCount=0; // Supabase 모드 휴지통 카운트 캐시
-function renderRecallPanel(){
-  // allActivities 미로드 시 대기
-  if(!allActivities?.length){
-    const tb=document.getElementById('recall-tbody');
-    if(tb) tb.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-400)">⏳ 활동기록 로딩 중...</td></tr>';
-    return;
-  }
-  const leads=allLeads?.length?allLeads:lg('leads');
-  const acts=allActivities; // localStorage 폴백 없음
-  const now=Date.now();
-  const H48=48*3600000;
-  const H120=120*3600000;
-
-  // 실활동기록 (배정·단계변경 제외) — lead_id 기준 맵으로 미리 구성
-  const actMap=new Map();
-  acts.forEach(a=>{
-    if(['assign','status_change'].includes(a.type)) return;
-    if(!actMap.has(a.lead_id)) actMap.set(a.lead_id,[]);
-    actMap.get(a.lead_id).push(a);
-  });
-  const getLastAct=id=>{
-    const list=actMap.get(id)||[];
-    if(!list.length) return null;
-    return list.reduce((a,b)=>new Date(a.created_at)>new Date(b.created_at)?a:b);
-  };
-
-  _recallAll=leads.filter(l=>{
-    if(l.status==='deleted'||l.status==='drop') return false;
-    if(l.yj_transferred||l.yj_done===true||l.yj_done==='true') return false;
-
-    const stage=l.current_stage||'';
-    const isTmDone=l.tm_done===true||l.tm_done==='true';
-
-    // D. TM완료 재배정 대기 (팀장 재배정 안 된 건만)
-    if(isTmDone){
-      const tn=(l.team_name||'').trim();
-      return !tn;
-    }
-
-    // 이하: 지점장·팀장 담당 건
-    if(l.tm_transferred===true||l.tm_transferred==='true') return false;
-    if(!l.team_name||!l.team_name.trim()) return false;
-    if(['계약','제안','보류','드랍'].includes(stage)) return false;
-
-    const lastAct=getLastAct(l.id);
-    const lastActT=lastAct?new Date(lastAct.created_at).getTime():null;
-
-    // A. 분배 후 48h 미기록: assigned_at 반드시 있어야 함
-    if(!lastAct){
-      if(!l.assigned_at) return false;
-      return (now-new Date(l.assigned_at).getTime())>=H48;
-    }
-    // B. 접촉·상담: 마지막 기록으로부터 120h
-    if(['접촉','상담'].includes(stage)) return (now-lastActT)>=H120;
-    // C. 관리: 마지막 기록으로부터 30영업일
-    if(stage==='관리') return bizElapsedDays(lastActT,now)>=30;
-    return false;
-  }).sort((a,b)=>{
-    const aT=a.tm_done?1:0, bT=b.tm_done?1:0;
-    if(aT!==bT) return bT-aT;
-    return new Date(a.assigned_at||a.created_at||0)-new Date(b.assigned_at||b.created_at||0);
-  });
-
-  const sub=document.getElementById('recall-inline-sub');
-  if(sub) sub.textContent=_recallAll.length+'건';
-  const tbody=document.getElementById('recall-tbody');
-  if(!tbody) return;
-  if(!_recallAll.length){
-    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-400)">✅ 회수대상 DB가 없습니다</td></tr>';
-    return;
-  }
-
-  tbody.innerHTML=_recallAll.map(l=>{
-    const chk=_recallSel.has(l.id)?'checked':'';
-    const lastAct=getLastAct(l.id);
-    const stage=l.current_stage||'';
-    const isTmDone=l.tm_done===true||l.tm_done==='true';
-    let reasonTxt='';
-    if(isTmDone){
-      reasonTxt='📤 대전TM 완료 → 재배정 필요';
-    } else if(!lastAct){
-      const hh=Math.floor((now-new Date(l.assigned_at).getTime())/3600000);
-      reasonTxt='⚠️ 분배 후 '+hh+'h 미기록 (기준: 48h)';
-    } else if(['접촉','상담'].includes(stage)){
-      const hh=Math.floor((now-new Date(lastAct.created_at).getTime())/3600000);
-      reasonTxt='📞 마지막 기록 '+hh+'h 경과 (기준 120h)';
-    } else if(stage==='관리'){
-      const bd=bizElapsedDays(new Date(lastAct.created_at).getTime(),now);
-      reasonTxt='🏢 마지막 기록 '+bd+'영업일 경과 (기준 30일)';
-    }
-    const assignedDisp=l.assigned_at?(l.assigned_at||'').slice(0,16).replace('T',' '):'-';
-    return`<tr style="border-bottom:1px solid var(--gray-100);cursor:pointer" onclick="openPanel('${l.id}')">
-      <td style="padding:8px 10px" onclick="event.stopPropagation()"><input type="checkbox" ${chk} onchange="toggleRecallSel('${l.id}',this.checked)"></td>
-      <td style="padding:8px 12px;font-weight:700;color:var(--navy)">${esc(l.company_name||'-')}</td>
-      <td style="padding:8px 10px;font-size:12px">${esc(l.branch_name||'-')}</td>
-      <td style="padding:8px 10px;font-size:12px">${esc(l.team_name||'미배정')}</td>
-      <td style="padding:8px 10px;font-size:11px;color:var(--gray-400)">${assignedDisp}</td>
-      <td style="padding:8px 10px;font-size:12px;font-weight:700;color:var(--err)">${reasonTxt}</td>
-      <td style="padding:8px 10px;white-space:nowrap" onclick="event.stopPropagation()">
-        <button class="btn btn-sm btn-outline" onclick="recallOne('${l.id}')">↩ 회수</button>
-      </td>
-    </tr>`;
-  }).join('');
-}
 // ━━ 자동회수 체크 (로그인·loadLeads 후 실행) ━━━━━━━━━━━━━━
 // 4: 접촉·상담 영업일 5일 경과 → 자동회수
 // 5: 관리 단계 30일(영업일) 활동없음 → 자동회수
-async function checkAutoRecall(){
-  // ━━ 자동회수 일시 비활성화 (DB 복원 완료 후 재활성화 예정) ━━
-  console.log('[checkAutoRecall] 비활성화 상태');
-  return;
-  if(curUser?.role!=='admin') return;
-  if(!allLeads?.length) return;
-  if(!allActivities?.length){
-    console.log('[checkAutoRecall] allActivities 미로드, 건너뜀');
-    return;
-  }
-  const now=Date.now();
-  const acts=allActivities;
-  const toRecall=[];
-  const H48=48*3600000;   // 48시간 (ms)
-  const H120=120*3600000; // 120시간 = 5일×24h (ms)
-
-  allLeads.forEach(l=>{
-    if(l.status==='deleted'||l.status==='drop') return;
-    // 대전TM 이관 건 제외 (tm_transferred=true면 대전TM 담당)
-    if(l.tm_transferred===true||l.tm_transferred==='true') return;
-    if(l.yj_transferred) return;
-    // 지점장·팀장 담당 건만 (team_name 있어야 함)
-    if(!l.team_name||!l.team_name.trim()) return;
-    // 이미 auto_recalled 처리된 건 재처리 방지
-    if(l.auto_recalled===true||l.auto_recalled==='true') return;
-
-    const stage=l.current_stage||'';
-    // 계약·제안·보류·드랍은 자동회수 제외
-    if(['계약','제안','보류','드랍'].includes(stage)) return;
-
-    // 실질 활동기록 (배정·단계변경 제외)
-    const realActs=acts.filter(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type))
-      .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
-    const lastAct=realActs[0];
-    const hasAct=realActs.length>0;
-
-    const assignedT=new Date(l.assigned_at||l.created_at||0).getTime();
-    const lastActT=lastAct?new Date(lastAct.created_at).getTime():null;
-
-    if(!hasAct){
-      // 아무 기록 없음 → 분배로부터 48h
-      if(now-assignedT>=H48){
-        toRecall.push({id:l.id, reason:'분배 후 48시간 미기록'});
-      }
-    } else if(['접촉','상담'].includes(stage)){
-      // 접촉·상담 → 마지막 기록으로부터 120h (5일×24h)
-      if(now-lastActT>=H120){
-        const h=Math.floor((now-lastActT)/3600000);
-        toRecall.push({id:l.id, reason:`접촉 마지막 기록 ${h}h 경과 (기준 120h)`});
-      }
-    } else if(stage==='관리'){
-      // 관리고객 → 마지막 기록으로부터 영업일 30일
-      if(bizElapsedDays(lastActT,now)>=30){
-        toRecall.push({id:l.id, reason:'관리 마지막 기록으로부터 30영업일 경과'});
-      }
-    }
-  });
-
-  if(!toRecall.length) return;
-
-  // 자동회수 실행 (경고 없이)
-  for(const {id, reason} of toRecall){
-    // team_name 유지 — 히스토리·진행단계 보존, auto_recalled 플래그만 설정
-    await dbU('leads', id, {
-      auto_recalled:true, auto_recall_reason:reason,
-      auto_recall_at:new Date().toISOString()
-    });
-    await logActivity(id,'assign',`자동회수 대상: ${reason}`,'assigned','배정');
-    if(allLeads){
-      const i=allLeads.findIndex(l=>l.id===id);
-      if(i>=0){
-        allLeads[i].auto_recalled=true;
-        allLeads[i].auto_recall_reason=reason;
-      }
-    }
-  }
-  if(toRecall.length>0){
-    console.log(`[자동회수] ${toRecall.length}건 처리`);
-    filterLeads?.();
-    updateLeadsSubTabCounts?.();
-  }
-}
-
 // ━━ 재배정DB 패널 렌더 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 let _reassignDbAll=[], _reassignDbSel=new Set();
 
@@ -11469,55 +11220,6 @@ async function reassignDbBulkAssign(){
 }
 
 // updateLeadsSubTabCounts에 reassigndb 카운트 추가
-
-function toggleRecallAll(cb){
-  _recallAll.forEach(l=>cb.checked?_recallSel.add(l.id):_recallSel.delete(l.id));
-  renderRecallPanel();
-}
-function toggleRecallSel(id,on){ on?_recallSel.add(id):_recallSel.delete(id); }
-async function recallOne(id){
-  if(!confirm('이 DB를 회수하고 대전TM으로 자동이관 하시겠습니까?')) return;
-  const lead=allLeads?.find(l=>l.id===id);
-  const prevTeam=lead?.team_name||'';
-  await dbU('leads',id,{
-    team_name:'',team_names:'[]',assigned_at:null,
-    tm_transferred:true, collab_branches:JSON.stringify(['대전TM']),
-    auto_recalled:false
-  });
-  await logActivity(id,'assign','수동 회수 → 대전TM 이관'+(prevTeam?' (기존 팀장: '+prevTeam+')':''),'assigned','배정');
-  showToast('회수 + 대전TM 이관 완료','success'); _recallSel.delete(id);
-  renderRecallPanel(); updateLeadsSubTabCounts(); loadTmPanel();
-}
-async function recallAll(){
-  if(!_recallAll.length){showToast('회수대상이 없습니다','error');return;}
-  if(!confirm(`회수대상 ${_recallAll.length}건을 전체 회수 + 대전TM 자동이관 하시겠습니까?`)) return;
-  const now=new Date().toISOString();
-  await Promise.all(_recallAll.flatMap(l=>[
-    dbU('leads',l.id,{
-      team_name:'',team_names:'[]',assigned_at:null,
-      tm_transferred:true, collab_branches:JSON.stringify(['대전TM'])
-    }),
-    logActivity(l.id,'assign','회수대상 전체회수 → 대전TM 자동이관','assigned','배정')
-  ]));
-  showToast(`${_recallAll.length}건 회수 + 대전TM 이관 완료`,'success');
-  _recallSel.clear(); renderRecallPanel(); updateLeadsSubTabCounts(); loadTmPanel();
-}
-async function recallSelected(){
-  const ids=[..._recallSel];
-  if(!ids.length){showToast('선택된 DB가 없습니다','error');return;}
-  if(!confirm(`선택한 ${ids.length}건을 회수하시겠습니까?`)) return;
-  for(const id of ids){
-    const lead=allLeads?.find(l=>l.id===id);
-    const prevTeam=lead?.team_name||'';
-    await dbU('leads',id,{
-      team_name:'',team_names:'[]',assigned_at:null,
-      tm_transferred:true,collab_branches:JSON.stringify(['대전TM']),auto_recalled:false
-    });
-    await logActivity(id,'assign',`수동 회수 → 대전TM 이관${prevTeam?' (기존 팀장: '+prevTeam+')':''}`,'assigned','배정');
-  }
-  showToast(`${ids.length}건 회수 + 대전TM 이관 완료`,'success');
-  _recallSel.clear(); renderRecallPanel(); updateLeadsSubTabCounts();
-}
 
 let _dropAll=[], _dropFiltered=[];
 function renderDropPanel(){
