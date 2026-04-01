@@ -1090,6 +1090,10 @@ tbody tr.selected td{background:var(--blue-50)!important}
           ❌ 드랍·보류 DB <span id="leads-subtab-drop-cnt" style="font-size:11px;font-weight:400;color:var(--gray-400)"></span>
         </button>
 
+        <button id="leads-subtab-recall" onclick="switchLeadsSubTab('recall',this)"
+          style="display:none;padding:9px 18px;border:none;outline:none;background:transparent;cursor:pointer;font-size:14px;font-weight:600;color:var(--err);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">
+          ⛔ 회수대상 <span id="leads-subtab-recall-cnt" style="font-size:11px;font-weight:400;color:var(--gray-400)"></span>
+        </button>
         <button id="leads-subtab-trash" onclick="switchLeadsSubTab('trash',this)"
           style="display:none;padding:9px 18px;border:none;outline:none;background:transparent;cursor:pointer;font-size:14px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">
           🗑️ 휴지통 <span id="leads-subtab-trash-cnt" style="font-size:11px;font-weight:400;color:var(--gray-400)"></span>
@@ -1214,6 +1218,35 @@ tbody tr.selected td{background:var(--blue-50)!important}
 
       <!-- 드랍 DB 패널 -->
       
+
+      <!-- ── 회수대상 패널 ── -->
+      <div id="leads-panel-recall" style="display:none">
+        <div class="page-header" style="margin-bottom:12px">
+          <div class="page-title" style="font-size:16px">⛔ 회수대상 <sub id="recall-sub" style="font-size:13px;color:var(--err)"></sub></div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-danger btn-sm" onclick="recallSelected()">↩ 선택 회수 → 대전TM</button>
+          </div>
+        </div>
+        <div style="font-size:12px;color:var(--gray-500);margin-bottom:10px;padding:8px 12px;background:rgba(239,68,68,.06);border-radius:6px;border-left:3px solid var(--err)">
+          배정 후 48h 미기록 / 접촉·상담 120h / 관리 30영업일 기준 초과 DB. 회수 시 대전TM으로 자동이관됩니다.
+        </div>
+        <div class="card" style="padding:0">
+          <div class="db-wrap">
+            <table class="db-table">
+              <thead><tr>
+                <th style="width:32px"><input type="checkbox" id="recall-chk-all" onchange="rcToggleAll(this.checked)"></th>
+                <th style="width:160px">회사명</th>
+                <th style="width:80px">지점장</th>
+                <th style="width:80px">팀장</th>
+                <th style="width:110px">배정일시</th>
+                <th>회수 사유</th>
+                <th style="width:70px">액션</th>
+              </tr></thead>
+              <tbody id="recall-tbody"><tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-400)">로딩 중...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
 
       <div id="leads-panel-drop" style="display:none">
         <div class="page-header" style="margin-bottom:12px">
@@ -4638,7 +4671,7 @@ async function loadLeads(){
   // 30h+ 버튼 관리자에게만 표시
   const _o30btn=document.getElementById('qtab-overdue30');
   if(_o30btn) _o30btn.style.display=_showAdminTabs?'':'none';  // trash 탭
-  ['leads-subtab-trash'].forEach(id=>{
+  ['leads-subtab-recall','leads-subtab-trash'].forEach(id=>{
     const el=document.getElementById(id);
     if(el){ el.style.removeProperty('display'); if(!_showAdminTabs) el.style.display='none'; }
   });
@@ -4743,7 +4776,7 @@ async function loadLeads(){
   // activities/next_actions는 위에서 이미 동시 로드 완료
   // active 패널만 직접 표시 (switchLeadsSubTab 호출 시 무한루프 방지)
   _leadsSubTab='active';
-  ['active','drop','trash'].forEach(t=>{
+  ['active','drop','trash','recall'].forEach(t=>{
     const el=document.getElementById('leads-panel-'+t);
     if(el) el.style.display=t==='active'?'':'none';
     const b=document.getElementById('leads-subtab-'+t);
@@ -10499,6 +10532,7 @@ function switchBranchTab(tab, btn){
   if(tab==='dashboard') renderBrDashboard();
   if(tab==='leaders'){renderBrLeaders();}
   if(tab==='drop') renderBrDrop();
+  if(tab==='recall') rcRender();
 }
 
 // 지점관리 대시보드 — 계약·관리 건 렌더
@@ -10950,6 +10984,204 @@ function switchLeadsSubTab(tab, btn){
   updateLeadsSubTabCounts();
 }
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ⛔ 회수대상 기능
+// 기준:
+//   A. assigned_at 기준 48h 미기록 (붉은 배경)
+//   B. 접촉·상담 마지막 기록으로부터 120h 초과
+//   C. 관리 마지막 기록으로부터 30영업일 초과
+// 제외: tm_transferred / yj_transferred / yj_done
+//       assigned_at=null / 계약·제안·보류·드랍 / 팀장 미배정
+//       allActivities 미로드 시 판정 안 함
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+let _rcSel = new Set();
+
+// 실활동기록 맵 생성 (배정·단계변경 제외)
+function rcActMap(acts){
+  const map = new Map();
+  (acts||[]).forEach(a=>{
+    if(['assign','status_change'].includes(a.type)) return;
+    if(!map.has(a.lead_id)) map.set(a.lead_id, []);
+    map.get(a.lead_id).push(a);
+  });
+  return map;
+}
+
+// 마지막 실활동기록
+function rcLastAct(map, id){
+  const list = map.get(id)||[];
+  if(!list.length) return null;
+  return list.reduce((a,b)=>new Date(a.created_at)>new Date(b.created_at)?a:b);
+}
+
+// 회수대상 여부 판정 → {type, reason} 또는 null
+function rcCheck(l, actMap){
+  if(l.status==='deleted'||l.status==='drop') return null;
+  if(l.tm_transferred===true||l.tm_transferred==='true') return null;
+  if(l.yj_transferred===true||l.yj_transferred==='true') return null;
+  if(l.yj_done===true||l.yj_done==='true') return null;
+  if(!l.team_name||!l.team_name.trim()) return null;
+  const stage = l.current_stage||'';
+  if(['계약','제안','보류','드랍'].includes(stage)) return null;
+
+  const now = Date.now();
+  const H48 = 48*3600000;
+  const H120 = 120*3600000;
+  const lastAct = rcLastAct(actMap, l.id);
+  const lastT = lastAct ? new Date(lastAct.created_at).getTime() : null;
+
+  // A. 미기록 48h
+  if(!lastAct){
+    if(!l.assigned_at) return null;
+    const diff = now - new Date(l.assigned_at).getTime();
+    if(diff >= H48){
+      const hh = Math.floor(diff/3600000);
+      return {type:'A', reason:'⚠️ 분배 후 '+hh+'h 미기록 (기준: 48h)'};
+    }
+    return null;
+  }
+  // B. 접촉·상담 120h
+  if(['접촉','상담'].includes(stage)){
+    const diff = now - lastT;
+    if(diff >= H120){
+      const hh = Math.floor(diff/3600000);
+      return {type:'B', reason:'📞 마지막 기록 '+hh+'h 경과 (기준 120h)'};
+    }
+    return null;
+  }
+  // C. 관리 30영업일
+  if(stage==='관리'){
+    const bd = bizElapsedDays(lastT, now);
+    if(bd >= 30) return {type:'C', reason:'🏢 마지막 기록 '+bd+'영업일 경과 (기준 30일)'};
+    return null;
+  }
+  return null;
+}
+
+// 회수대상 카운트 (탭 배지용)
+function rcCount(leads, acts){
+  if(!acts?.length) return 0;
+  const map = rcActMap(acts);
+  return (leads||[]).filter(l=>rcCheck(l,map)!==null).length;
+}
+
+// 회수대상 패널 렌더링
+function rcRender(){
+  const tbody = document.getElementById('recall-tbody');
+  const sub = document.getElementById('recall-sub');
+  if(!tbody) return;
+
+  if(!allActivities?.length){
+    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-400)">⏳ 활동기록 로딩 중...</td></tr>';
+    return;
+  }
+
+  const leads = allLeads||[];
+  const actMap = rcActMap(allActivities);
+  const now = Date.now();
+
+  const list = [];
+  leads.forEach(l=>{
+    const r = rcCheck(l, actMap);
+    if(r) list.push({l, ...r});
+  });
+
+  // A(미기록) 먼저, 그 다음 배정일 오래된 순
+  list.sort((a,b)=>{
+    if(a.type==='A' && b.type!=='A') return -1;
+    if(a.type!=='A' && b.type==='A') return 1;
+    return new Date(a.l.assigned_at||a.l.created_at||0) - new Date(b.l.assigned_at||b.l.created_at||0);
+  });
+
+  if(sub) sub.textContent = list.length+'건';
+  setC('leads-subtab-recall-cnt', list.length);
+
+  if(!list.length){
+    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-400)">✅ 회수대상 DB가 없습니다</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = list.map(({l, type, reason})=>{
+    const chk = _rcSel.has(l.id)?'checked':'';
+    const assignedDisp = l.assigned_at ? l.assigned_at.slice(0,16).replace('T',' ') : '-';
+    // A유형: 붉은 배경
+    const rowStyle = type==='A' ? 'background:rgba(239,68,68,.07);' : '';
+    return `<tr style="border-bottom:1px solid var(--gray-100);cursor:pointer;${rowStyle}" onclick="openPanel('${l.id}')">
+      <td style="padding:8px 10px" onclick="event.stopPropagation()"><input type="checkbox" ${chk} onchange="rcToggleSel('${l.id}',this.checked)"></td>
+      <td style="padding:8px 12px;font-weight:700;color:var(--navy)">${esc(l.company_name||'-')}</td>
+      <td style="padding:8px 10px;font-size:12px">${esc(l.branch_name||'-')}</td>
+      <td style="padding:8px 10px;font-size:12px">${esc(l.team_name||'-')}</td>
+      <td style="padding:8px 10px;font-size:11px;color:var(--gray-400)">${assignedDisp}</td>
+      <td style="padding:8px 10px;font-size:12px;font-weight:600;color:var(--err)">${reason}</td>
+      <td style="padding:8px 10px;white-space:nowrap" onclick="event.stopPropagation()">
+        <button class="btn btn-sm btn-outline" style="color:var(--err);border-color:var(--err)" onclick="rcRecallOne('${l.id}')">↩ 회수</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function rcToggleAll(checked){
+  const list = Array.from(document.querySelectorAll('#recall-tbody input[type=checkbox]'));
+  list.forEach(cb=>{ cb.checked=checked; rcToggleSel(cb.closest('tr')?.querySelector('button[onclick*=rcRecallOne]')?.getAttribute('onclick')?.match(/'([^']+)'/)?.[1], checked); });
+  // 더 간단하게: _rcSel 업데이트
+  _rcSel.clear();
+  if(checked){
+    document.querySelectorAll('#recall-tbody tr').forEach(tr=>{
+      const btn=tr.querySelector('button[onclick*=rcRecallOne]');
+      if(btn){ const m=btn.getAttribute('onclick').match(/'([^']+)'/); if(m) _rcSel.add(m[1]); }
+    });
+  }
+}
+function rcToggleSel(id, checked){ if(!id) return; checked ? _rcSel.add(id) : _rcSel.delete(id); }
+
+async function rcRecallOne(id){
+  if(!confirm('이 DB를 회수하고 대전TM으로 이관하시겠습니까?')) return;
+  const lead = (allLeads||[]).find(l=>l.id===id);
+  const prevTeam = lead?.team_name||'';
+  const reason = document.querySelector(`#recall-tbody button[onclick*="${id}"]`)
+    ?.closest('tr')?.querySelector('td:nth-child(6)')?.textContent || '수동 회수';
+  await dbU('leads', id, {
+    auto_recalled: true,
+    auto_recall_reason: reason,
+    auto_recall_at: new Date().toISOString(),
+    team_name: '', team_names: '[]', assigned_at: null,
+    tm_transferred: true,
+    collab_branches: JSON.stringify(['대전TM'])
+  });
+  await logActivity(id,'assign','수동 회수 → 대전TM 이관'+(prevTeam?' (기존 팀장: '+prevTeam+')':''),'assigned','배정');
+  if(allLeads){ const i=allLeads.findIndex(l=>l.id===id); if(i>=0) allLeads[i]={...allLeads[i],auto_recalled:true,tm_transferred:true,team_name:'',assigned_at:null}; }
+  showToast('회수 완료 → 대전TM 이관','success');
+  _rcSel.delete(id);
+  rcRender();
+  updateLeadsSubTabCounts?.();
+}
+
+async function recallSelected(){
+  const ids=[..._rcSel];
+  if(!ids.length){showToast('선택된 DB가 없습니다','error');return;}
+  if(!confirm(`선택한 ${ids.length}건을 회수하고 대전TM으로 이관하시겠습니까?`)) return;
+  for(const id of ids){
+    const lead=(allLeads||[]).find(l=>l.id===id);
+    const prevTeam=lead?.team_name||'';
+    await dbU('leads',id,{
+      auto_recalled:true,
+      auto_recall_reason:'수동 회수',
+      auto_recall_at:new Date().toISOString(),
+      team_name:'',team_names:'[]',assigned_at:null,
+      tm_transferred:true,
+      collab_branches:JSON.stringify(['대전TM'])
+    });
+    await logActivity(id,'assign',`수동 회수 → 대전TM 이관${prevTeam?' (기존 팀장: '+prevTeam+')':''}`,'assigned','배정');
+    if(allLeads){ const i=allLeads.findIndex(l=>l.id===id); if(i>=0) allLeads[i]={...allLeads[i],auto_recalled:true,tm_transferred:true,team_name:'',assigned_at:null}; }
+  }
+  showToast(`${ids.length}건 회수 완료 → 대전TM 이관`,'success');
+  _rcSel.clear();
+  rcRender();
+  updateLeadsSubTabCounts?.();
+}
+
+
 function updateLeadsSubTabCounts(){
   // allLeads/allActivities 미로드 시 카운트 계산 안 함
   if(!allLeads?.length || !allActivities?.length) return;
@@ -10959,8 +11191,10 @@ function updateLeadsSubTabCounts(){
   const active=leads.filter(l=>l.status!=='deleted'&&l.status!=='drop').length;
   const drop=leads.filter(l=>l.status==='drop'||l.current_stage==='보류').length;
   const trash=_trashCount||getTrash().length;
-  const recall=0;
+  // 회수대상 카운트 (allActivities 로드 후만)
+  const recall = allActivities?.length ? rcCount(allLeads||[], allActivities) : 0;
   const setC=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v?`(${v})`:'';}
+  setC('leads-subtab-recall-cnt',recall);
   setC('leads-subtab-active-cnt',active);
   setC('leads-subtab-drop-cnt',drop);
   setC('leads-subtab-trash-cnt',trash);
