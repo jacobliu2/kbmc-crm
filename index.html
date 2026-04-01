@@ -2783,6 +2783,21 @@ function bizElapsedMs(fromMs, toMs){
   }
   return elapsed;
 }
+// 영업일 경과 일수 (날짜 기준, 정수 반환)
+function bizElapsedDays(fromMs, toMs){
+  if(toMs<=fromMs) return 0;
+  const DAY=86400000;
+  let days=0;
+  const fromDate=new Date(fromMs);
+  const startOfDay=new Date(fromDate.getFullYear(),fromDate.getMonth(),fromDate.getDate()).getTime();
+  let cur=startOfDay+DAY; // 다음날부터 카운트
+  while(cur<=toMs){
+    const d=new Date(cur);
+    if(!isHoliday(d)) days++;
+    cur+=DAY;
+  }
+  return days;
+}
 
 // leads-todo-widget 전용 래퍼
 function _todoWidgetId(id){return 'leads-todo-widget-'+id;}
@@ -4884,10 +4899,17 @@ function filterLeads(){
   if(_stageFilter) filtered=filtered.filter(l=>l.current_stage===_stageFilter);
   if(_quickTab==='unassigned'){
     if(curUser.role==='branch'){
-      // 지점장: 팀장 기준 미배정 (team_name 없는 것)
-      filtered=filtered.filter(l=>!l.team_name||l.team_name.trim()==='');
+      // 지점장: 팀장 기준 미배정 — auto_recalled 건은 재배정DB로, 여기선 제외
+      filtered=filtered.filter(l=>{
+        if(l.auto_recalled===true||l.auto_recalled==='true') return false;
+        return !l.team_name||l.team_name.trim()==='';
+      });
     } else {
-      filtered=filtered.filter(l=>!l.branch_name||l.branch_name==='');
+      // 관리자: branch_name 없는 건 — auto_recalled 제외
+      filtered=filtered.filter(l=>{
+        if(l.auto_recalled===true||l.auto_recalled==='true') return false;
+        return !l.branch_name||l.branch_name==='';
+      });
     }
   } else if(_quickTab==='assigned'){
     if(curUser.role==='branch'){
@@ -9803,7 +9825,12 @@ function renderTmTable(){
       <td>${esc(l.contact_name||'-')}</td>
       <td style="font-size:12px">${esc(l.phone||'-')}</td>
       <td style="font-size:11px">${esc((l.consult_type||'-').slice(0,18))}</td>
-      <td>${(()=>{const assigned=l.team_name&&l.team_name.trim();return assigned?'<span class="badge badge-stage-green" style="font-size:10px">배정</span>':'<span class="badge badge-pending" style="font-size:10px">미배정</span>';})()}</td>
+      <td>${(()=>{
+      const isRecalled=l.auto_recalled===true||l.auto_recalled==='true';
+      const assigned=l.team_name&&l.team_name.trim();
+      if(isRecalled) return '<span class="badge" style="font-size:10px;background:#f3e8ff;color:#7c3aed">재배정대기</span>';
+      return assigned?'<span class="badge badge-stage-green" style="font-size:10px">배정</span>':'<span class="badge badge-pending" style="font-size:10px">미배정</span>';
+    })()}</td>
       <td style="font-size:11px;color:var(--gray-400)">${l.branch_name?'<span class="badge badge-navy" style="font-size:9px">'+esc(l.branch_name)+'</span> ':''}${l.team_name?'<span class="badge badge-blue" style="font-size:9px">'+esc(l.team_name)+'</span>':''}</td>
       <td style="font-size:11px;color:var(--gray-400)">${fmtD(l.assigned_at||l.created_at)}</td>
       <td style="font-size:11px;color:var(--gray-500);overflow:visible">${esc(lastAct?.content?.slice(0,40)||'-')}</td>
@@ -10492,7 +10519,7 @@ function brFilterStat(type){
   const contacted=type==='contacted';
   const contract=type==='contract';
   brFiltered=(brAllLeads||[]).filter(l=>{
-    if(unassigned) return !l.team_name||l.team_name.trim()==='';
+    if(unassigned) return (!l.team_name||l.team_name.trim()==='')&&!(l.auto_recalled===true||l.auto_recalled==='true');
     if(assigned) return l.team_name&&l.team_name.trim()!==''&&l.current_stage!=='계약'&&l.current_stage!=='관리';
     if(contacted) return l.status==='contacted'||l.current_stage==='접촉';
     if(contract) return l.current_stage==='계약';
@@ -10515,7 +10542,7 @@ async function loadBranchScreen(){
     return false;
   });
   const mine=brAllLeads;
-  (document.getElementById('br-unassigned')||{}).textContent=mine.filter(l=>!l.team_name).length;
+  (document.getElementById('br-unassigned')||{}).textContent=mine.filter(l=>!l.team_name&&!(l.auto_recalled===true||l.auto_recalled==='true')).length;
   (document.getElementById('br-assigned')||{}).textContent=mine.filter(l=>l.team_name).length;
   (document.getElementById('br-consulting')||{}).textContent=mine.filter(l=>l.status==='contacted').length;
   (document.getElementById('br-contract')||{}).textContent=mine.filter(l=>l.current_stage==='계약').length;
@@ -11109,12 +11136,23 @@ function updateLeadsSubTabCounts(){
   const active=leads.filter(l=>l.status!=='deleted'&&l.status!=='drop').length;
   const drop=leads.filter(l=>l.status==='drop'||l.current_stage==='보류').length;
   const trash=_trashCount||getTrash().length; // Supabase 모드에서는 _trashCount 사용
+  const H48c=48*3600000; const H120c=120*3600000;
   const recall=leads.filter(l=>{
-    if(l.status==='deleted'||l.status==='drop'||l.yj_transferred) return false;
-    if(['계약','관리'].includes(l.current_stage||'')) return false;
-    const t=new Date(l.assigned_at||l.created_at||0).getTime();
-    if(bizElapsedMs(t,now)<48*3600000) return false;
-    return !acts.some(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type));
+    if(l.status==='deleted'||l.status==='drop') return false;
+    if(l.tm_transferred===true||l.tm_transferred==='true') return false;
+    if(l.yj_transferred) return false;
+    if(!l.team_name||!l.team_name.trim()) return false;
+    const stage=l.current_stage||'';
+    if(['계약','제안','보류','드랍'].includes(stage)) return false;
+    const rA=acts.filter(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type))
+      .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+    const lA=rA[0];
+    const aT=new Date(l.assigned_at||l.created_at||0).getTime();
+    const lT=lA?new Date(lA.created_at).getTime():null;
+    if(!lA) return aT>0&&(now-aT)>=H48c;
+    if(['접촉','상담'].includes(stage)) return (now-lT)>=H120c;
+    if(stage==='관리') return bizElapsedDays(lT,now)>=30;
+    return l.auto_recalled===true||l.auto_recalled==='true';
   }).length;
   const setC=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v?`(${v})`:'';}
   setC('leads-subtab-active-cnt',active);
@@ -11172,14 +11210,40 @@ function renderRecallPanel(){
   const leads=allLeads?.length?allLeads:lg('leads');
   const acts=allActivities?.length?allActivities:lg('activities');
   const now=Date.now();
+  const acts2=allActivities?.length?allActivities:lg('activities');
   const _recallElapsed=new Map();
   const _getBizElapsed=t=>{if(!_recallElapsed.has(t))_recallElapsed.set(t,bizElapsedMs(t,now));return _recallElapsed.get(t);};
+  const H48r=48*3600000;
+  const H120r=120*3600000;
+
   _recallAll=leads.filter(l=>{
-    if(l.status==='deleted'||l.status==='drop'||l.yj_transferred) return false;
-    if(['계약','관리'].includes(l.current_stage||'')) return false;
-    const t=new Date(l.assigned_at||l.created_at||0).getTime();
-    if(_getBizElapsed(t)<48*3600000) return false;
-    return !acts.some(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type));
+    if(l.status==='deleted'||l.status==='drop') return false;
+    // ── 지점장·팀장 담당 건만 (대전TM·유영준 이관 제외)
+    if(l.tm_transferred===true||l.tm_transferred==='true') return false;
+    if(l.yj_transferred) return false;
+    if(!l.team_name||!l.team_name.trim()) return false;
+    // 계약·제안·보류·드랍은 제외
+    const stage=l.current_stage||'';
+    if(['계약','제안','보류','드랍'].includes(stage)) return false;
+
+    // 실질 활동기록
+    const rActs=acts2.filter(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type))
+      .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+    const lastAct=rActs[0];
+    const assignedT=new Date(l.assigned_at||l.created_at||0).getTime();
+    const lastActT=lastAct?new Date(lastAct.created_at).getTime():null;
+
+    // ① 아무 기록 없음 → 분배로부터 48h 초과
+    if(!lastAct) return assignedT>0 && (now-assignedT)>=H48r;
+
+    // ② 접촉·상담 → 마지막 기록으로부터 120h 초과
+    if(['접촉','상담'].includes(stage)) return (now-lastActT)>=H120r;
+
+    // ③ 관리 → 마지막 기록으로부터 30영업일 초과
+    if(stage==='관리') return bizElapsedDays(lastActT,now)>=30;
+
+    // ④ auto_recalled=true (이미 플래그된 건)
+    return l.auto_recalled===true||l.auto_recalled==='true';
   }).sort((a,b)=>new Date(a.assigned_at||a.created_at||0)-new Date(b.assigned_at||b.created_at||0));
   const sub=document.getElementById('recall-inline-sub');
   if(sub) sub.textContent=_recallAll.length+'건';
@@ -11192,14 +11256,35 @@ function renderRecallPanel(){
   tbody.innerHTML=_recallAll.map(l=>{
     const h=Math.floor((now-new Date(l.assigned_at||l.created_at||0).getTime())/3600000);
     const chk=_recallSel.has(l.id)?'checked':'';
-    return`<tr style="border-bottom:1px solid var(--gray-100)">
-      <td style="padding:8px 10px"><input type="checkbox" ${chk} onchange="toggleRecallSel('${l.id}',this.checked)"></td>
+    // 회수 사유 상세 (기준: 마지막 기록 기준)
+    const _rActs=acts2.filter(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type))
+      .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+    const _lastR=_rActs[0];
+    const _stageR=l.current_stage||'';
+    let reasonTxt='';
+    if(!_lastR){
+      const hh=Math.floor((now-new Date(l.assigned_at||l.created_at||0).getTime())/3600000);
+      reasonTxt=`⚠️ 분배 후 ${hh}h 미기록 (기준: 48h)`;
+    } else if(['접촉','상담'].includes(_stageR)){
+      const hh=Math.floor((now-new Date(_lastR.created_at).getTime())/3600000);
+      const over=hh-120;
+      reasonTxt=`📞 마지막 기록 ${hh}h 경과 · ${over>0?over+'h 초과':'기준 120h'}`;
+    } else if(_stageR==='관리'){
+      const bd=bizElapsedDays(new Date(_lastR.created_at).getTime(),now);
+      reasonTxt=`🏢 마지막 기록 ${bd}영업일 경과 (기준: 30영업일)`;
+    } else if(l.auto_recall_reason){
+      reasonTxt=l.auto_recall_reason;
+    } else {
+      reasonTxt=`${h}h 경과`;
+    }
+    return`<tr style="border-bottom:1px solid var(--gray-100);cursor:pointer" onclick="openPanel('${l.id}')">
+      <td style="padding:8px 10px" onclick="event.stopPropagation()"><input type="checkbox" ${chk} onchange="toggleRecallSel('${l.id}',this.checked)"></td>
       <td style="padding:8px 12px;font-weight:700;color:var(--navy)">${esc(l.company_name||'-')}</td>
       <td style="padding:8px 10px;font-size:12px">${esc(l.branch_name||'-')}</td>
       <td style="padding:8px 10px;font-size:12px">${esc(l.team_name||'미배정')}</td>
       <td style="padding:8px 10px;font-size:11px;color:var(--gray-400)">${(l.assigned_at||l.created_at||'').slice(0,16).replace('T',' ')}</td>
-      <td style="padding:8px 10px;font-size:12px;font-weight:700;color:var(--err)">${h}시간</td>
-      <td style="padding:8px 10px;white-space:nowrap">
+      <td style="padding:8px 10px;font-size:12px;font-weight:700;color:var(--err)">${reasonTxt}</td>
+      <td style="padding:8px 10px;white-space:nowrap" onclick="event.stopPropagation()">
         <button class="btn btn-sm btn-outline" onclick="recallOne('${l.id}')">↩ 회수</button>
       </td>
     </tr>`;
@@ -11212,33 +11297,49 @@ async function checkAutoRecall(){
   if(curUser?.role!=='admin') return; // 관리자만
   if(!allLeads?.length) return;
   const now=Date.now();
-  const D5=5*8*3600000;  // 영업일 5일 ≈ 5*8h (bizElapsedMs로 정확 계산)
-  const D30=30*8*3600000; // 영업일 30일
   const acts=allActivities?.length?allActivities:lg('activities');
   const toRecall=[];
+  const H48=48*3600000;   // 48시간 (ms)
+  const H120=120*3600000; // 120시간 = 5일×24h (ms)
 
   allLeads.forEach(l=>{
     if(l.status==='deleted'||l.status==='drop') return;
+    // 대전TM 이관 건 제외 (tm_transferred=true면 대전TM 담당)
+    if(l.tm_transferred===true||l.tm_transferred==='true') return;
     if(l.yj_transferred) return;
-    if(!l.team_name) return; // 배정 안 된 건 제외
+    // 지점장·팀장 담당 건만 (team_name 있어야 함)
+    if(!l.team_name||!l.team_name.trim()) return;
+    // 이미 auto_recalled 처리된 건 재처리 방지
+    if(l.auto_recalled===true||l.auto_recalled==='true') return;
 
     const stage=l.current_stage||'';
-    const t=new Date(l.assigned_at||l.created_at||0).getTime();
-    // 실질 활동기록
-    const lastAct=acts.filter(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type))
-      .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];
-    const lastT=lastAct?new Date(lastAct.created_at).getTime():t;
+    // 계약·제안·보류·드랍은 자동회수 제외
+    if(['계약','제안','보류','드랍'].includes(stage)) return;
 
-    // 4: 접촉·상담 → 영업일 5일 경과
-    if(['접촉','상담'].includes(stage)){
-      if(bizElapsedMs(lastT,now)>=D5){
-        toRecall.push({id:l.id, reason:'접촉·상담 5영업일 경과'});
+    // 실질 활동기록 (배정·단계변경 제외)
+    const realActs=acts.filter(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type))
+      .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+    const lastAct=realActs[0];
+    const hasAct=realActs.length>0;
+
+    const assignedT=new Date(l.assigned_at||l.created_at||0).getTime();
+    const lastActT=lastAct?new Date(lastAct.created_at).getTime():null;
+
+    if(!hasAct){
+      // 아무 기록 없음 → 분배로부터 48h
+      if(now-assignedT>=H48){
+        toRecall.push({id:l.id, reason:'분배 후 48시간 미기록'});
       }
-    }
-    // 5: 관리 → 영업일 30일 활동없음
-    if(stage==='관리'){
-      if(bizElapsedMs(lastT,now)>=D30){
-        toRecall.push({id:l.id, reason:'관리 30영업일 활동없음'});
+    } else if(['접촉','상담'].includes(stage)){
+      // 접촉·상담 → 마지막 기록으로부터 120h (5일×24h)
+      if(now-lastActT>=H120){
+        const h=Math.floor((now-lastActT)/3600000);
+        toRecall.push({id:l.id, reason:`접촉 마지막 기록 ${h}h 경과 (기준 120h)`});
+      }
+    } else if(stage==='관리'){
+      // 관리고객 → 마지막 기록으로부터 영업일 30일
+      if(bizElapsedDays(lastActT,now)>=30){
+        toRecall.push({id:l.id, reason:'관리 마지막 기록으로부터 30영업일 경과'});
       }
     }
   });
@@ -11326,8 +11427,8 @@ function renderReassignDbPanel(){
     }
     const reasonColor=reason.includes('경과')||reason.includes('활동없음')?'var(--err)':
       reason.includes('TM')||reason.includes('이관')?'#7c3aed':'var(--blue)';
-    return `<tr style="border-bottom:1px solid var(--gray-100)">
-      <td style="padding:8px 10px"><input type="checkbox" ${chk} onchange="toggleReassignDbSel('${l.id}',this.checked)"></td>
+    return `<tr style="border-bottom:1px solid var(--gray-100);cursor:pointer" onclick="openPanel('${l.id}')">
+      <td style="padding:8px 10px" onclick="event.stopPropagation()"><input type="checkbox" ${chk} onchange="toggleReassignDbSel('${l.id}',this.checked)"></td>
       <td style="padding:8px 12px;font-weight:700;color:var(--navy)">${esc(l.company_name||'-')}</td>
       <td style="padding:8px 10px;font-size:12px">${esc(l.branch_name||'-')}</td>
       <td style="padding:8px 10px;font-size:12px">${esc(l.current_stage||'-')}</td>
@@ -11365,10 +11466,17 @@ function toggleRecallAll(cb){
 }
 function toggleRecallSel(id,on){ on?_recallSel.add(id):_recallSel.delete(id); }
 async function recallOne(id){
-  if(!confirm('이 DB를 회수하시겠습니까? (팀장 배정 해제)')) return;
-  await dbU('leads',id,{team_name:'',team_names:'[]',assigned_at:null});
-  showToast('회수 완료','success'); _recallSel.delete(id);
-  renderRecallPanel(); updateLeadsSubTabCounts();
+  if(!confirm('이 DB를 회수하고 대전TM으로 자동이관 하시겠습니까?')) return;
+  const lead=allLeads?.find(l=>l.id===id);
+  const prevTeam=lead?.team_name||'';
+  await dbU('leads',id,{
+    team_name:'',team_names:'[]',assigned_at:null,
+    tm_transferred:true, collab_branches:JSON.stringify(['대전TM']),
+    auto_recalled:false
+  });
+  await logActivity(id,'assign','수동 회수 → 대전TM 이관'+(prevTeam?' (기존 팀장: '+prevTeam+')':''),'assigned','배정');
+  showToast('회수 + 대전TM 이관 완료','success'); _recallSel.delete(id);
+  renderRecallPanel(); updateLeadsSubTabCounts(); loadTmPanel();
 }
 async function recallAll(){
   if(!_recallAll.length){showToast('회수대상이 없습니다','error');return;}
@@ -11388,8 +11496,16 @@ async function recallSelected(){
   const ids=[..._recallSel];
   if(!ids.length){showToast('선택된 DB가 없습니다','error');return;}
   if(!confirm(`선택한 ${ids.length}건을 회수하시겠습니까?`)) return;
-  for(const id of ids) await dbU('leads',id,{team_name:'',team_names:'[]',assigned_at:null});
-  showToast(`${ids.length}건 회수 완료`,'success');
+  for(const id of ids){
+    const lead=allLeads?.find(l=>l.id===id);
+    const prevTeam=lead?.team_name||'';
+    await dbU('leads',id,{
+      team_name:'',team_names:'[]',assigned_at:null,
+      tm_transferred:true,collab_branches:JSON.stringify(['대전TM']),auto_recalled:false
+    });
+    await logActivity(id,'assign',`수동 회수 → 대전TM 이관${prevTeam?' (기존 팀장: '+prevTeam+')':''}`,'assigned','배정');
+  }
+  showToast(`${ids.length}건 회수 + 대전TM 이관 완료`,'success');
   _recallSel.clear(); renderRecallPanel(); updateLeadsSubTabCounts();
 }
 
