@@ -1098,10 +1098,7 @@ tbody tr.selected td{background:var(--blue-50)!important}
           style="padding:9px 18px;border:none;background:transparent;cursor:pointer;font-size:14px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">
           ❌ 드랍·보류 DB <span id="leads-subtab-drop-cnt" style="font-size:11px;font-weight:400;color:var(--gray-400)"></span>
         </button>
-        <button id="leads-subtab-reassigndb" onclick="switchLeadsSubTab('reassigndb',this)"
-          style="display:none;padding:9px 18px;border:none;outline:none;background:transparent;cursor:pointer;font-size:14px;font-weight:600;color:#7c3aed;border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">
-          🔄 재배정 DB <span id="leads-subtab-reassigndb-cnt" style="font-size:11px;font-weight:400;color:#7c3aed"></span>
-        </button>
+<!-- 재배정DB 탭 제거 (회수대상에 통합) -->
         <button id="leads-subtab-trash" onclick="switchLeadsSubTab('trash',this)"
           style="display:none;padding:9px 18px;border:none;outline:none;background:transparent;cursor:pointer;font-size:14px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">
           🗑️ 휴지통 <span id="leads-subtab-trash-cnt" style="font-size:11px;font-weight:400;color:var(--gray-400)"></span>
@@ -1843,11 +1840,11 @@ tbody tr.selected td{background:var(--blue-50)!important}
       <!-- 탭: 신규 배정 -->
       <div id="branch-panel-assign">
         <!-- 미배정 통계 -->
-        <div class="stat-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px">
+        <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">
           <div class="stat-card green" style="cursor:default"><div class="stat-label">이달 계약</div><div class="stat-val" id="br-month-contract">0</div></div>
           <div class="stat-card blue" style="cursor:default"><div class="stat-label">이달 관리</div><div class="stat-val" id="br-month-manage">0</div></div>
           <div class="stat-card" style="cursor:default"><div class="stat-label">소속 팀장</div><div class="stat-val" id="br-team-count">0</div></div>
-          <div class="stat-card orange" style="cursor:default"><div class="stat-label">누적 계약</div><div class="stat-val" id="br-contract">0</div></div>
+
         </div>
         <!-- 팀장 선택 카드 -->
         <div class="card" style="margin-bottom:14px">
@@ -4734,10 +4731,14 @@ async function loadLeads(){
   // 30h+ 버튼 관리자에게만 표시
   const _o30btn=document.getElementById('qtab-overdue30');
   if(_o30btn) _o30btn.style.display=_showAdminTabs?'':'none';
+  // leads-subtab-recall, trash만 표시 (reassigndb는 회수대상에 통합됨)
   ['leads-subtab-recall','leads-subtab-trash'].forEach(id=>{
     const el=document.getElementById(id);
     if(el) el.style.removeProperty('display'); if(!_showAdminTabs) el.style.display='none';
   });
+  // reassigndb 탭 항상 숨김 (회수대상에 통합)
+  const _rdbBtn=document.getElementById('leads-subtab-reassigndb');
+  if(_rdbBtn) _rdbBtn.style.display='none';
   // dbmanager: 배정/드랍/삭제 모두 숨김, team: 배정·드랍 버튼 숨김 (진행단계에서 드랍 선택)
   if(_abarDist) _abarDist.style.display = (_isDbMgr||_isTeam) ? 'none' : '';
   if(_abarDrop) _abarDrop.style.display = (_isDbMgr||_isTeam) ? 'none' : '';
@@ -10542,12 +10543,10 @@ async function loadBranchScreen(){
   const _thisMonth=new Date().toISOString().slice(0,7); // YYYY-MM
   const _monthContract=mine.filter(l=>l.current_stage==='계약'&&(l.contract_date||l.updated_at||'').startsWith(_thisMonth)).length;
   const _monthManage=mine.filter(l=>l.current_stage==='관리'&&(l.manage_date||l.updated_at||'').startsWith(_thisMonth)).length;
-  const _totalContract=mine.filter(l=>l.current_stage==='계약'||l.current_stage==='관리').length;
   const _teamCount=(TEAM_MAP[curUser.name]||[]).length;
   (document.getElementById('br-month-contract')||{}).textContent=_monthContract;
   (document.getElementById('br-month-manage')||{}).textContent=_monthManage;
   (document.getElementById('br-team-count')||{}).textContent=_teamCount;
-  (document.getElementById('br-contract')||{}).textContent=_totalContract;
   (document.getElementById('branch-sub')||{}).textContent=mine.filter(l=>['계약','관리'].includes(l.current_stage||'')).length+'건';
   // 팀장 카드 생성
   const leaders=TEAM_MAP[curUser.name]||[];
@@ -10756,7 +10755,12 @@ function renderBrTable(){
     <td style="font-size:11px">${esc(l.region||'-')}</td>
     <td style="font-size:11px">${esc(l.revenue||'-')}</td>
     <td style="font-size:11px">${esc((l.consult_type||'').slice(0,18))}</td>
-    <td>${(()=>{const assigned=l.team_name&&l.team_name.trim();return assigned?'<span class="badge badge-stage-green" style="font-size:10px">배정</span>':'<span class="badge badge-pending" style="font-size:10px">미배정</span>';})()}</td>
+    <td>${(()=>{
+      const st=l.current_stage||'';
+      if(st==='계약') return '<span class="badge badge-stage-green" style="font-size:10px">계약</span>';
+      if(st==='관리') return '<span class="badge" style="font-size:10px;background:#dbeafe;color:#1d4ed8">관리</span>';
+      return '<span class="badge badge-pending" style="font-size:10px">'+esc(st||'배정')+'</span>';
+    })()}</td>
     <td>${(function(){
       const isCollab=(function(){try{const mySet=new Set([curUser.name,...(TEAM_MAP[curUser.name]||[])]);const arr=JSON.parse(l.team_names||'[]');return arr.some(t=>mySet.has(t))&&arr.some(t=>!mySet.has(t));}catch(e){return false;}})();
       if(!l.team_name) return '<span class="badge badge-no_answer" style="font-size:10px">미배정</span>';
@@ -11232,36 +11236,41 @@ function renderRecallPanel(){
 
   _recallAll=leads.filter(l=>{
     if(l.status==='deleted'||l.status==='drop') return false;
-    // ── 지점장·팀장 담당 건만 (대전TM·유영준 이관 제외)
-    if(l.tm_transferred===true||l.tm_transferred==='true') return false;
     if(l.yj_transferred) return false;
-    if(!l.team_name||!l.team_name.trim()) return false;
-    // 계약·제안·보류·드랍은 제외
+    // 초도이관 완료 건(yj_done) → 미배정으로만 표시, 회수대상 제외
+    if(l.yj_done===true||l.yj_done==='true') return false;
+
     const stage=l.current_stage||'';
+    const isAutoRecalled=l.auto_recalled===true||l.auto_recalled==='true';
+    const isTmDone=l.tm_done===true||l.tm_done==='true';
+
+    // ── 재배정 대기 건(TM완료·자동회수) → team_name 유무 무관하게 포함
+    if(isTmDone||isAutoRecalled){
+      const tn=(l.team_name||'').trim();
+      // TM완료인데 이미 팀장 재배정된 경우 제외
+      if(isTmDone && !isAutoRecalled && tn) return false;
+      return true;
+    }
+
+    // ── 지점장·팀장 담당 건: 기준 초과 여부
+    if(l.tm_transferred===true||l.tm_transferred==='true') return false;
+    if(!l.team_name||!l.team_name.trim()) return false;
     if(['계약','제안','보류','드랍'].includes(stage)) return false;
 
-    // 실질 활동기록
     const rActs=acts2.filter(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type))
       .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
     const lastAct=rActs[0];
     const assignedT=new Date(l.assigned_at||l.created_at||0).getTime();
     const lastActT=lastAct?new Date(lastAct.created_at).getTime():null;
 
-    // ① 아무 기록 없음 → 분배로부터 48h 초과
     if(!lastAct) return assignedT>0 && (now-assignedT)>=H48r;
-
-    // ② 접촉·상담 → 마지막 기록으로부터 120h 초과
     if(['접촉','상담'].includes(stage)) return (now-lastActT)>=H120r;
-
-    // ③ 관리 → 마지막 기록으로부터 30영업일 초과
     if(stage==='관리') return bizElapsedDays(lastActT,now)>=30;
-
-    // ④ auto_recalled=true (이미 플래그된 건)
-    return l.auto_recalled===true||l.auto_recalled==='true';
+    return false;
   }).sort((a,b)=>{
     // 재배정 대기 건(auto_recalled/tm_done/yj_done) 상단 우선
-    const aReassign=(a.auto_recalled||a.tm_done||a.yj_done)?1:0;
-    const bReassign=(b.auto_recalled||b.tm_done||b.yj_done)?1:0;
+    const aReassign=(a.auto_recalled||a.tm_done)?1:0;
+    const bReassign=(b.auto_recalled||b.tm_done)?1:0;
     if(aReassign!==bReassign) return bReassign-aReassign;
     return new Date(a.assigned_at||a.created_at||0)-new Date(b.assigned_at||b.created_at||0);
   });
@@ -11284,10 +11293,7 @@ function renderRecallPanel(){
     let reasonTxt='';
     const _isAR=l.auto_recalled===true||l.auto_recalled==='true';
     const _isTD=l.tm_done===true||l.tm_done==='true';
-    const _isYD=l.yj_done===true||l.yj_done==='true';
-    if(_isYD){
-      reasonTxt='🎯 초도이관 완료 → 재배정 필요';
-    } else if(_isTD&&!_isAR){
+    if(_isTD&&!_isAR){
       reasonTxt='📤 대전TM 완료 → 재배정 필요';
     } else if(_isAR){
       const _lT=_lastR?new Date(_lastR.created_at).getTime():null;
@@ -11424,13 +11430,12 @@ function renderReassignDbPanel(){
     // 자동회수 or TM완료 재배정대기
     const isAutoRecalled=l.auto_recalled===true||l.auto_recalled==='true';
     const isTmDone=(l.tm_done===true||l.tm_done==='true');
-    const isYjDone=(l.yj_done===true||l.yj_done==='true');
-    if(!isAutoRecalled&&!isTmDone&&!isYjDone) return false;
+    // 초도이관(yj_done) 완료 건 제외 → 미배정 탭에서 처리
+    if(l.yj_done===true||l.yj_done==='true') return false;
+    if(!isAutoRecalled&&!isTmDone) return false;
     // 재배정 완료 여부 판단
     const tn=(l.team_name||'').trim();
-    if(isYjDone){
-      if(tn && tn!=='유영준') return false;
-    } else if(isTmDone){
+    if(isTmDone){
       // TM완료: team_name이 있으면 완료
       if(tn) return false;
     }
