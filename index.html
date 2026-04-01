@@ -6074,7 +6074,10 @@ function renderTodayTodo(targetId){
   try{todos=JSON.parse(localStorage.getItem(TODO_KEY)||'[]');}catch(e){}
 
   // Next Action — 본인 것만 (team_leader 필터)
-  const allNas=(allNextActions?.length?allNextActions:lg('next_actions')).filter(a=>a.status==='예정'&&a.team_leader===curUser.name);
+  const _myLeadIds=new Set((myLeads||[]).map(l=>l.id));
+  const allNas=(allNextActions?.length?allNextActions:lg('next_actions')).filter(a=>
+    a.status==='예정' && a.team_leader===curUser.name && _myLeadIds.has(a.lead_id)
+  );
   const todayNas=allNas.filter(a=>a.due_date===today);
   const overdueNas=allNas.filter(a=>a.due_date&&a.due_date<today);
   const tomorrowNas=allNas.filter(a=>a.due_date===tomorrow);
@@ -9669,7 +9672,7 @@ function renderTmTable(){
       <td>${esc(l.contact_name||'-')}</td>
       <td style="font-size:12px">${esc(l.phone||'-')}</td>
       <td style="font-size:11px">${esc((l.consult_type||'-').slice(0,18))}</td>
-      <td>${sBadge(l.status)}</td>
+      <td>${(()=>{const assigned=l.team_name&&l.team_name.trim();return assigned?'<span class="badge badge-stage-green" style="font-size:10px">배정</span>':'<span class="badge badge-pending" style="font-size:10px">미배정</span>';})()}</td>
       <td style="font-size:11px;color:var(--gray-400)">${l.branch_name?'<span class="badge badge-navy" style="font-size:9px">'+esc(l.branch_name)+'</span> ':''}${l.team_name?'<span class="badge badge-blue" style="font-size:9px">'+esc(l.team_name)+'</span>':''}</td>
       <td style="font-size:11px;color:var(--gray-400)">${fmtD(l.assigned_at||l.created_at)}</td>
       <td style="font-size:11px;color:var(--gray-500);overflow:visible">${esc(lastAct?.content?.slice(0,40)||'-')}</td>
@@ -10541,7 +10544,7 @@ function renderBrTable(){
     <td style="font-size:11px">${esc(l.region||'-')}</td>
     <td style="font-size:11px">${esc(l.revenue||'-')}</td>
     <td style="font-size:11px">${esc((l.consult_type||'').slice(0,18))}</td>
-    <td>${sBadge(l.status)}</td>
+    <td>${(()=>{const assigned=l.team_name&&l.team_name.trim();return assigned?'<span class="badge badge-stage-green" style="font-size:10px">배정</span>':'<span class="badge badge-pending" style="font-size:10px">미배정</span>';})()}</td>
     <td>${(function(){
       const isCollab=(function(){try{const mySet=new Set([curUser.name,...(TEAM_MAP[curUser.name]||[])]);const arr=JSON.parse(l.team_names||'[]');return arr.some(t=>mySet.has(t))&&arr.some(t=>!mySet.has(t));}catch(e){return false;}})();
       if(!l.team_name) return '<span class="badge badge-no_answer" style="font-size:10px">미배정</span>';
