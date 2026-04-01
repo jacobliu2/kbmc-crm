@@ -4749,7 +4749,7 @@ async function loadLeads(){
   // activities/next_actions는 위에서 이미 동시 로드 완료
   // active 패널만 직접 표시 (switchLeadsSubTab 호출 시 무한루프 방지)
   _leadsSubTab='active';
-  ['active','drop','trash','recall'].forEach(t=>{
+  ['active','drop','trash'].forEach(t=>{
     const el=document.getElementById('leads-panel-'+t);
     if(el) el.style.display=t==='active'?'':'none';
     const b=document.getElementById('leads-subtab-'+t);
@@ -5024,11 +5024,24 @@ function colVal(l, key, acts){
       const la=acts?.[l.id];
       const latest=la?.latest;
       const cnt=la?.count||0;
-      if(!latest) return`<td style="font-size:11px;color:var(--gray-300);cursor:pointer" onclick="event.stopPropagation();openActMHistory('${l.id}','${esc(l.company_name||'')}')">-</td>`;
+      // activities 캐시 없으면 leads.tm_content 로 fallback (대전TM 기록)
+      if(!latest){
+        const _tmFb=l.tm_content?('[TM] '+l.tm_content).slice(0,40):'';
+        if(_tmFb) return`<td style="font-size:11px;max-width:220px;color:var(--gray-600);cursor:pointer;overflow:visible;font-style:italic" onclick="event.stopPropagation();openActMHistory('${l.id}','${esc(l.company_name||'')}')">${esc(_tmFb)}</td>`;
+        return`<td style="font-size:11px;color:var(--gray-300);cursor:pointer" onclick="event.stopPropagation();openActMHistory('${l.id}','${esc(l.company_name||'')}')">-</td>`;
+      }
       const preview=esc((latest.content||'').slice(0,40));
       const extra=cnt>1?` <span style="font-size:10px;color:var(--gray-400);white-space:nowrap">+${cnt-1}</span>`:'';
+      // tm_date가 최신 활동보다 더 최근이면 tm_content 우선 표시
+      const _tmD=l.tm_date?new Date(l.tm_date+'T23:59:59').getTime():0;
+      const _acD=latest.created_at?new Date(latest.created_at).getTime():0;
+      if(_tmD>_acD&&l.tm_content){
+        const _tmPv=esc(('[TM] '+l.tm_content).slice(0,40));
+        return`<td style="font-size:11px;max-width:220px;color:var(--gray-700);cursor:pointer;overflow:visible" onclick="event.stopPropagation();openActMHistory('${l.id}','${esc(l.company_name||'')}')">${_tmPv}${extra}</td>`;
+      }
       return`<td style="font-size:11px;max-width:220px;color:var(--gray-700);cursor:pointer;overflow:visible" onclick="event.stopPropagation();openActMHistory('${l.id}','${esc(l.company_name||'')}')">${preview}${extra}</td>`;
     }
+
     default: return`<td>-</td>`;
   }
 }
@@ -6806,7 +6819,6 @@ async function loadMyLeads(){
 }
 
 // 배정 후 활동 기록 없는 고객 감지
-// 회수대상 여부 판단 (진행단계가 배정이거나 미설정인 경우만)
 function filterMyLeads(){
   const q=(document.getElementById('my-search')?.value||'').toLowerCase();
   const st=document.getElementById('my-status')?.value||'';
@@ -9972,11 +9984,13 @@ async function saveTmRecord(){
   }
   closeM('modal-tm-input');
   showToast('TM 기록 저장','success');
-  // 로컬 캐시 즉시 갱신 — TM 기록 반영
+  // 로컬 캐시 즉시 갱신 — TM 기록 반영 (진행내용 컬럼 즉시 표시용)
   if(allLeads){
-    const idx=allLeads.findIndex(x=>x.id===lid);
-    if(idx>=0) allLeads[idx]={...allLeads[idx],...tmFieldUpdate};
+    const _tIdx=allLeads.findIndex(x=>x.id===lid);
+    if(_tIdx>=0) allLeads[_tIdx]={...allLeads[_tIdx],...tmFieldUpdate};
   }
+  // 관리자/지점장 전체DB 진행내용 즉시 갱신
+  if(typeof filterLeads==='function') filterLeads();
   await loadTmPanel();
 }
 
@@ -10967,16 +10981,15 @@ let _leadsSubTab='active';
 
 function switchLeadsSubTab(tab, btn){
   _leadsSubTab=tab;
-  ['active','drop','trash','recall'].forEach(t=>{
+  ['active','drop','trash'].forEach(t=>{
     const el=document.getElementById('leads-panel-'+t);
     if(el) el.style.display=t===tab?'':'none';
     const b=document.getElementById('leads-subtab-'+t);
     if(b){
       const isActive=t===tab;
-      const activeColor=t==='recall'?'var(--err)':'var(--navy)';
-      b.style.color=isActive?activeColor:'var(--gray-500)';
+      b.style.color=isActive?'var(--navy)':'var(--gray-500)';
       b.style.fontWeight=isActive?'700':'600';
-      b.style.borderBottom=isActive?`2px solid ${activeColor}`:'2px solid transparent';
+      b.style.borderBottom=isActive?'2px solid var(--navy)':'2px solid transparent';
     }
   });
   if(tab==='drop') renderDropPanel();
