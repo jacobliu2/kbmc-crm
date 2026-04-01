@@ -4808,8 +4808,14 @@ async function loadLeads(){
     }
   });
   updateLeadsSubTabCounts?.();
-  // 자동회수 체크 (관리자만)
-  if(curUser?.role==='admin') setTimeout(()=>checkAutoRecall(), 500);
+  // 자동회수 체크: allActivities 로드 확인 후 실행
+  if(curUser?.role==='admin'){
+    if(allActivities?.length){
+      setTimeout(()=>checkAutoRecall(), 300);
+    } else {
+      setTimeout(()=>{ if(allActivities?.length) checkAutoRecall(); }, 3000);
+    }
+  }
 }
 
 function yjQuickFilter(val){document.querySelectorAll('[id^="qtab-"]').forEach(b=>{b.style.background='';b.style.color='';b.style.borderColor='';});_quickTab='';_stageFilter='';const sel=document.getElementById('leads-yj-filter');if(sel)sel.value=val;filterLeads();}
@@ -4859,12 +4865,9 @@ function filterLeads(){
         return !l.team_name||l.team_name.trim()==='';
       });
     } else {
-      // 관리자: branch_name 없는 건 + 초도이관 완료(yj_done) 건 — auto_recalled 제외
+      // 관리자: branch_name 없는 건 — auto_recalled 제외
       filtered=filtered.filter(l=>{
         if(l.auto_recalled===true||l.auto_recalled==='true') return false;
-        const isYjDone=l.yj_done===true||l.yj_done==='true';
-        // 초도이관 완료 건: branch_name 있어도 미배정으로 표시
-        if(isYjDone && (!l.team_name||l.team_name.trim()==='')) return true;
         return !l.branch_name||l.branch_name==='';
       });
     }
@@ -6068,16 +6071,19 @@ async function yjReassign(){
   if(!confirm(`초도상담 완료 처리합니다.
 활동기록을 유지한 채 ${returnTarget}으로 자동 이관됩니다.`))return;
 
+  // 초도이관 완료: 모든 yj 플래그 초기화, 일반 미배정 DB로 전환
   const updateData={
     team_name:'',
     team_names:'[]',
     yj_transferred:false,
-    yj_done:true,
-    assigned_at:new Date().toISOString(),
+    yj_done:false,
+    yj_from_role:'',
+    yj_from_branch:'',
     status:'assigned'
   };
   if(fromRole==='branch'&&fromBranch){
     updateData.branch_name=fromBranch;
+    updateData.assigned_at=new Date().toISOString();
   } else {
     updateData.branch_name='';
     updateData.assigned_at='';
@@ -11196,8 +11202,6 @@ function renderRecallPanel(){
   _recallAll=leads.filter(l=>{
     if(l.status==='deleted'||l.status==='drop') return false;
     if(l.yj_transferred) return false;
-    // 초도이관 완료 건(yj_done) → 미배정으로만 표시, 회수대상 제외
-    if(l.yj_done===true||l.yj_done==='true') return false;
 
     const stage=l.current_stage||'';
     const isAutoRecalled=l.auto_recalled===true||l.auto_recalled==='true';
@@ -11300,8 +11304,13 @@ function renderRecallPanel(){
 async function checkAutoRecall(){
   if(curUser?.role!=='admin') return; // 관리자만
   if(!allLeads?.length) return;
+  // allActivities 미로드 시 실행 중단 — 빈 배열로 판단하면 오판
+  if(!allActivities?.length){
+    console.log('[checkAutoRecall] allActivities 미로드, 건너뜀');
+    return;
+  }
   const now=Date.now();
-  const acts=allActivities?.length?allActivities:lg('activities');
+  const acts=allActivities;
   const toRecall=[];
   const H48=48*3600000;   // 48시간 (ms)
   const H120=120*3600000; // 120시간 = 5일×24h (ms)
@@ -11936,7 +11945,7 @@ async function confirmDistribute(){
   }).filter(Boolean))];
 
   const teamDisplay=teamOnly.length===0?'':teamOnly.length===1?teamOnly[0]:teamOnly[0]+' 외 '+(teamOnly.length-1)+'명';
-  const assignData={branch_name:_selBranch,assigned_at:new Date().toISOString(),status:'assigned',yj_transferred:false,yj_from_role:'',yj_from_branch:''};
+  const assignData={branch_name:_selBranch,assigned_at:new Date().toISOString(),status:'assigned',yj_transferred:false,yj_done:false,yj_from_role:'',yj_from_branch:''};
   if(teamOnly.length>0){
     assignData.team_name=teamDisplay;
     assignData.team_names=JSON.stringify(teamOnly);
