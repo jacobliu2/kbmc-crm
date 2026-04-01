@@ -11130,9 +11130,10 @@ function updateLeadsSubTabCounts(){
     const rA=acts.filter(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type))
       .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
     const lA=rA[0];
-    const aT=new Date(l.assigned_at||l.created_at||0).getTime();
+    const _aAt=l.assigned_at?new Date(l.assigned_at).getTime():null;
+    const aT=_aAt||new Date(l.created_at||0).getTime();
     const lT=lA?new Date(lA.created_at).getTime():null;
-    if(!lA) return aT>0&&(now-aT)>=H48c;
+    if(!lA){ if(!_aAt) return false; return (now-aT)>=H48c; }
     if(['접촉','상담'].includes(stage)) return (now-lT)>=H120c;
     if(stage==='관리') return bizElapsedDays(lT,now)>=30;
     return l.auto_recalled===true||l.auto_recalled==='true';
@@ -11191,9 +11192,15 @@ let _recallAll=[], _recallSel=new Set();
 let _trashCount=0; // Supabase 모드 휴지통 카운트 캐시
 function renderRecallPanel(){
   const leads=allLeads?.length?allLeads:lg('leads');
-  const acts=allActivities?.length?allActivities:lg('activities');
+  // allActivities 미로드 시 회수대상 표시 안 함 (오판 방지)
+  if(!allActivities?.length){ 
+    const tbody=document.getElementById('recall-tbody');
+    if(tbody) tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-400)">⏳ 활동기록 로딩 중...</td></tr>';
+    return;
+  }
+  const acts=allActivities;
   const now=Date.now();
-  const acts2=allActivities?.length?allActivities:lg('activities');
+  const acts2=allActivities;
   const _recallElapsed=new Map();
   const _getBizElapsed=t=>{if(!_recallElapsed.has(t))_recallElapsed.set(t,bizElapsedMs(t,now));return _recallElapsed.get(t);};
   const H48r=48*3600000;
@@ -11223,10 +11230,16 @@ function renderRecallPanel(){
     const rActs=acts2.filter(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type))
       .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
     const lastAct=rActs[0];
-    const assignedT=new Date(l.assigned_at||l.created_at||0).getTime();
+    // assigned_at이 있어야 배정 기준 계산 가능 — null이면 created_at 기준 사용하되 활동기록 있으면 제외
+    const assignedAt=l.assigned_at?new Date(l.assigned_at).getTime():null;
+    const assignedT=assignedAt||new Date(l.created_at||0).getTime();
     const lastActT=lastAct?new Date(lastAct.created_at).getTime():null;
 
-    if(!lastAct) return assignedT>0 && (now-assignedT)>=H48r;
+    if(!lastAct){
+      // 활동기록 없음: assigned_at이 있는 경우만 48h 판정
+      if(!assignedAt) return false; // assigned_at 없으면 판정 불가 → 제외
+      return (now-assignedT)>=H48r;
+    }
     if(['접촉','상담'].includes(stage)) return (now-lastActT)>=H120r;
     if(stage==='관리') return bizElapsedDays(lastActT,now)>=30;
     return false;
@@ -11290,7 +11303,7 @@ function renderRecallPanel(){
       <td style="padding:8px 12px;font-weight:700;color:var(--navy);cursor:pointer;text-decoration:underline" onclick="openPanel('${l.id}');event.stopPropagation()" title="클릭: 활동기록·히스토리 조회">${esc(l.company_name||'-')}</td>
       <td style="padding:8px 10px;font-size:12px">${esc(l.branch_name||'-')}</td>
       <td style="padding:8px 10px;font-size:12px">${esc(l.team_name||'미배정')}</td>
-      <td style="padding:8px 10px;font-size:11px;color:var(--gray-400)">${(l.assigned_at||l.created_at||'').slice(0,16).replace('T',' ')}</td>
+      <td style="padding:8px 10px;font-size:11px;color:var(--gray-400)">${l.assigned_at?(l.assigned_at||'').slice(0,16).replace('T',' '):'미기록'}</td>
       <td style="padding:8px 10px;font-size:12px;font-weight:700;color:var(--err)">${reasonTxt}</td>
       <td style="padding:8px 10px;white-space:nowrap" onclick="event.stopPropagation()">
         <button class="btn btn-sm btn-outline" onclick="recallOne('${l.id}')">↩ 회수</button>
