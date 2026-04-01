@@ -1649,8 +1649,24 @@ tbody tr.selected td{background:var(--blue-50)!important}
         </div>
       </div>
 
-      <!-- TM 탭 네비게이션 -->
-      <div style="display:flex;gap:0;border-bottom:2px solid var(--gray-200);margin-bottom:0;overflow-x:auto">
+      <!-- TM 상단 그룹탭 -->
+      <div style="display:flex;gap:6px;padding:10px 0 8px;border-bottom:2px solid var(--gray-200);margin-bottom:0">
+        <button id="tmgrp-transfer" onclick="switchTmGroup('transfer',this)"
+          style="padding:7px 16px;border:1.5px solid var(--navy);background:var(--navy);color:#fff;border-radius:20px;cursor:pointer;font-size:13px;font-weight:700;font-family:inherit;transition:.15s">
+          📥 이관DB <span id="tgq-transfer" style="font-size:11px;background:rgba(255,255,255,.2);padding:1px 6px;border-radius:8px;margin-left:3px">0</span>
+        </button>
+        <button id="tmgrp-recall" onclick="switchTmGroup('recall',this)"
+          style="padding:7px 16px;border:1.5px solid var(--gray-200);background:transparent;color:var(--gray-600);border-radius:20px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;transition:.15s">
+          ↩ 회수DB <span id="tgq-recall" style="font-size:11px;background:var(--gray-100);padding:1px 6px;border-radius:8px;margin-left:3px">0</span>
+        </button>
+        <button id="tmgrp-reassign" onclick="switchTmGroup('reassign',this)"
+          style="padding:7px 16px;border:1.5px solid var(--gray-200);background:transparent;color:var(--gray-600);border-radius:20px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;transition:.15s">
+          🔄 재배정DB <span id="tgq-reassign" style="font-size:11px;background:var(--gray-100);padding:1px 6px;border-radius:8px;margin-left:3px">0</span>
+        </button>
+      </div>
+
+      <!-- TM 서브탭 네비게이션 -->
+      <div id="tm-subtab-wrap" style="display:flex;gap:0;border-bottom:2px solid var(--gray-200);margin-bottom:0;overflow-x:auto">
         <button class="tm-main-tab" id="tmt-all" onclick="switchTmMainTab('all',this)"
           style="padding:10px 18px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit;white-space:nowrap">
           전체 <span id="tq-all" style="font-size:11px;padding:1px 5px;background:var(--gray-100);color:var(--gray-500);border-radius:8px;margin-left:3px">0</span>
@@ -4834,10 +4850,20 @@ function filterLeads(){
   });
   // 빠른탭 추가 필터
   if(_stageFilter) filtered=filtered.filter(l=>l.current_stage===_stageFilter);
-  if(_quickTab==='unassigned') filtered=filtered.filter(l=>!l.branch_name||l.branch_name==='');
-  else if(_quickTab==='assigned'){
-    if(curUser.role==='branch') filtered=filtered.filter(l=>l.branch_name&&l.team_name&&l.team_name!=='');
-    else filtered=filtered.filter(l=>l.branch_name&&l.branch_name!=='');
+  if(_quickTab==='unassigned'){
+    if(curUser.role==='branch'){
+      // 지점장: 팀장 기준 미배정 (team_name 없는 것)
+      filtered=filtered.filter(l=>!l.team_name||l.team_name.trim()==='');
+    } else {
+      filtered=filtered.filter(l=>!l.branch_name||l.branch_name==='');
+    }
+  } else if(_quickTab==='assigned'){
+    if(curUser.role==='branch'){
+      // 지점장: 팀장 기준 배정완료
+      filtered=filtered.filter(l=>l.team_name&&l.team_name.trim()!=='');
+    } else {
+      filtered=filtered.filter(l=>l.branch_name&&l.branch_name!=='');
+    }
   }
   else if(_quickTab==='new_db'){
     // 신규DB: 배정됐지만 활동기록 없는 것
@@ -4992,7 +5018,11 @@ function colVal(l, key, acts){
     case 'note':         return`<td style="font-size:11px;color:var(--gray-400)">${esc(l.note||'-')}</td>`;
     case 'branch_name': return(function(){
       if(l.yj_transferred) return '<td><span class="badge" style="font-size:10px;background:rgba(124,58,237,.1);color:#7c3aed">초도이관</span></td>';
-      const hasTm=(function(){try{return JSON.parse(l.collab_branches||'[]').includes('대전TM');}catch(e){return false;}})();
+      // tm_transferred=true OR collab_branches에 대전TM 포함 → 대전 배지 표시
+      const hasTm=(function(){
+        if(l.tm_transferred===true||l.tm_transferred==='true') return true;
+        try{return JSON.parse(l.collab_branches||'[]').includes('대전TM');}catch(e){return false;}
+      })();
       const brBadge=l.branch_name?'<span class="badge badge-navy" style="font-size:10px">'+esc(l.branch_name)+'</span>':'';
       const tmBadge=hasTm?'<span class="badge" style="font-size:10px;background:rgba(124,58,237,.1);color:#7c3aed;margin-left:3px">대전</span>':'';
       return '<td>'+(brBadge||tmBadge?brBadge+tmBadge:'-')+'</td>';
@@ -9279,6 +9309,13 @@ async function loadTmPanel(){
   });
 
   const setTQ=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+  // 그룹탭 카운트: 이관DB = tm_transferred, 회수DB = 전체회수 이관, 재배정DB = 관리자 재배정
+  const cntTransfer=tmLeads.filter(l=>l.tm_transferred===true||l.tm_transferred==='true'||(function(){try{const cb=JSON.parse(l.collab_branches||'[]');return cb.includes('대전TM')&&!(l.auto_recalled===true||l.auto_recalled==='true');}catch(e){return false;}})()).length;
+  const cntRecallGrp=tmLeads.filter(l=>(l.auto_recalled===true||l.auto_recalled==='true')||(function(){try{const cb=JSON.parse(l.collab_branches||'[]');return cb.includes('대전TM')&&(l.auto_recalled===true||l.auto_recalled==='true');}catch(e){return false;}})()).length;
+  const cntReassignGrp=tmLeads.filter(l=>l.tm_done===true||l.tm_done==='true').length;
+  setTQ('tgq-transfer',cntTransfer);
+  setTQ('tgq-recall',cntRecallGrp);
+  setTQ('tgq-reassign',cntReassignGrp);
   setTQ('tq-all',cntAll);
   setTQ('tq-new',cntNew+(overdue48.length>0?` ⚠️${overdue48.length}`:''));
   setTQ('tq-scheduled',cntScheduled);
@@ -9352,6 +9389,40 @@ async function loadTmPanel(){
 
 // tmQuickTab 하위호환
 function tmQuickTab(tab,btn){ switchTmMainTab(tab,btn); }
+
+// TM 그룹탭 전환 — 이관DB / 회수DB / 재배정DB
+let _tmGroup='transfer';
+function switchTmGroup(group, btn){
+  _tmGroup=group;
+  document.querySelectorAll('[id^="tmgrp-"]').forEach(b=>{
+    const on=b.id==='tmgrp-'+group;
+    b.style.background=on?'var(--navy)':'transparent';
+    b.style.color=on?'#fff':'var(--gray-600)';
+    b.style.borderColor=on?'var(--navy)':'var(--gray-200)';
+    b.style.fontWeight=on?'700':'600';
+  });
+  // 그룹별 기본 탭 전환
+  const defaultTab=group==='transfer'?'new':group==='recall'?'recall_list':'reassign_list';
+  // 그룹별 탭 구성 변경
+  _renderTmGroupTabs(group);
+}
+function _renderTmGroupTabs(group){
+  const wrap=document.getElementById('tm-subtab-wrap');
+  if(!wrap) return;
+  // 그룹별 탭 보이기/숨기기
+  const tabMap={
+    transfer:['all','new','contacted','happycall','drop','recalldone'],
+    recall:['tm_recall','tm_recall_drop'],
+    reassign:['tm_reassign']
+  };
+  document.querySelectorAll('.tm-main-tab').forEach(b=>{
+    const tid=b.id.replace('tmt-','');
+    b.style.display=(tabMap[group]||[]).includes(tid)?'':'none';
+  });
+  // 그룹 기본 탭 클릭
+  const firstTab=document.querySelector(`.tm-main-tab[style*="display: "]`)||document.querySelector('.tm-main-tab:not([style*="display: none"])');
+  if(firstTab) firstTab.click();
+}
 
 function switchTmMainTab(tab,btn){
   _tmMainTab=tab; _tmQuickTab=tab;
@@ -10704,11 +10775,14 @@ async function confirmBrAssignPopup(){
       collab_branches:isCollab?JSON.stringify(collabBranches):null
     };
     if(selfIncluded && !teamOnly.length){
-      updateData.team_name='';
-      updateData.team_names=JSON.stringify([]);
+      // 지점장 본인만 선택 → team_name에 지점장 이름 명시
+      updateData.team_name=curUser.name;
+      updateData.team_names=JSON.stringify([curUser.name]);
     } else if(selfIncluded){
-      updateData.team_name=teamOnly.join(', ');
-      updateData.team_names=JSON.stringify(teamOnly);
+      // 지점장 본인 + 팀장 선택 → 팀장 목록에 지점장 포함
+      const allTeams=[curUser.name,...teamOnly];
+      updateData.team_name=allTeams.join(', ');
+      updateData.team_names=JSON.stringify(allTeams);
     }
     // 재배정DB에서 배정됐으면 auto_recalled 초기화
     if(allLeads?.find(l=>l.id===id)?.auto_recalled){
@@ -11194,10 +11268,17 @@ async function recallOne(id){
 }
 async function recallAll(){
   if(!_recallAll.length){showToast('회수대상이 없습니다','error');return;}
-  if(!confirm(`회수대상 ${_recallAll.length}건을 전체 회수하시겠습니까?`)) return;
-  for(const l of _recallAll) await dbU('leads',l.id,{team_name:'',team_names:'[]',assigned_at:null});
-  showToast(`${_recallAll.length}건 회수 완료`,'success');
-  _recallSel.clear(); renderRecallPanel(); updateLeadsSubTabCounts();
+  if(!confirm(`회수대상 ${_recallAll.length}건을 전체 회수 + 대전TM 자동이관 하시겠습니까?`)) return;
+  const now=new Date().toISOString();
+  await Promise.all(_recallAll.flatMap(l=>[
+    dbU('leads',l.id,{
+      team_name:'',team_names:'[]',assigned_at:null,
+      tm_transferred:true, collab_branches:JSON.stringify(['대전TM'])
+    }),
+    logActivity(l.id,'assign','회수대상 전체회수 → 대전TM 자동이관','assigned','배정')
+  ]));
+  showToast(`${_recallAll.length}건 회수 + 대전TM 이관 완료`,'success');
+  _recallSel.clear(); renderRecallPanel(); updateLeadsSubTabCounts(); loadTmPanel();
 }
 async function recallSelected(){
   const ids=[..._recallSel];
