@@ -4120,8 +4120,7 @@ const NAV_CFG = {
 const RL={admin:'관리자',dbmanager:'DB관리자',branch:'지점장',team:'팀장',tm:'대전TM'};
 
 function startApp(){
-  // 관리자 회수대상 팝업은 매 로그인마다 새로 표시
-  if(sessionStorage.getItem('warn48_admin_shown')) sessionStorage.removeItem('warn48_admin_shown');
+
   syncBranchTeamMap(); // 사용자 목록 기반 동기화
   // Supabase Realtime 구독 시작
   if(!testMode){ initSupabaseClient(); setTimeout(subscribeRealtime, 1500); }
@@ -4521,7 +4520,7 @@ async function loadAdmin(){
   renderAssignSummary(all);
   // KPI 렌더
   renderKpiDashboard(all);
-  setTimeout(()=>checkUnrecordedAdmin(),500);
+  
 }
 
 function renderKpiDashboard(leads){
@@ -6909,24 +6908,6 @@ async function checkUnrecorded(){
       wov24?.classList.add('open');
     }
   }
-}
-
-async function checkUnrecordedAdmin(){
-  if((curUser?.role!=='admin'&&curUser?.role!=='dbmanager')||sessionStorage.getItem('warn48_admin_shown')) return;
-  const leads=await dbQ('leads');
-  const acts=allActivities?.length?allActivities:lg('activities'); const now=Date.now();
-  const warn48=leads.filter(l=>{
-    if(!isRecallTarget(l)) return false;
-    const t=new Date(l.assigned_at||l.created_at||0).getTime();
-    if(bizElapsedMs(t,now)<48*3600000) return false;
-    return !acts.some(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type));
-  });
-  if(!warn48.length) return;
-  sessionStorage.setItem('warn48_admin_shown','1');
-  let wov=document.getElementById('ov-warn48-admin');
-  if(!wov){wov=document.createElement('div');wov.id='ov-warn48-admin';wov.className='ov-bg';document.body.appendChild(wov);}
-  wov.innerHTML=`<div class="ov-box" style="width:480px;max-width:96vw"><div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><span style="font-size:28px">⛔</span><div><div style="font-size:16px;font-weight:800;color:var(--err)">회수 대상 ${warn48.length}건</div><div style="font-size:12px;color:var(--gray-400)">배정 후 48시간 이상 미기록</div></div></div><div style="display:flex;flex-direction:column;gap:5px;max-height:280px;overflow-y:auto;margin-bottom:16px">${warn48.map(l=>{const h=Math.floor((now-new Date(l.assigned_at||l.created_at||0).getTime())/3600000);return`<div style="display:flex;justify-content:space-between;padding:9px 12px;background:#fff5f5;border-radius:8px;border-left:3px solid var(--err)"><div><div style="font-size:13px;font-weight:700">${esc(l.company_name)}</div><div style="font-size:11px;color:var(--gray-400)">${esc(l.team_name||'미배정')}</div></div><span style="font-size:12px;font-weight:700;color:var(--err)">${h}시간</span></div>`;}).join('')}</div><div style="display:flex;gap:8px"><button class="btn btn-outline" style="flex:1" onclick="closeOv('ov-warn48-admin')">나중에</button><button class="btn btn-danger" style="flex:1" onclick="closeOv('ov-warn48-admin');quickTab('all',null)">📋 DB 목록 확인</button></div></div>`;
-  wov?.classList.add('open');
 }
 
 function scrollToUnrecorded(){
@@ -10113,7 +10094,7 @@ function _applyQuickTab(tab, btn){
   _quickTab=tab;
   // active 패널 보장 (다른 서브탭에서 호출 시 패널 숨겨져 있을 수 있음)
   _leadsSubTab='active';
-  ['active','drop','trash'].forEach(t=>{
+  ['active','drop','trash','recall'].forEach(t=>{
     const el=document.getElementById('leads-panel-'+t);
     if(el) el.style.display=t==='active'?'':'none';
   }); // ← 핵심: filterLeads()가 읽는 변수 세팅
@@ -11082,7 +11063,7 @@ let _leadsSubTab='active';
 
 function switchLeadsSubTab(tab, btn){
   _leadsSubTab=tab;
-  ['active','drop','trash'].forEach(t=>{
+  ['active','drop','trash','recall'].forEach(t=>{
     const el=document.getElementById('leads-panel-'+t);
     if(el) el.style.display=t===tab?'':'none';
     const b=document.getElementById('leads-subtab-'+t);
