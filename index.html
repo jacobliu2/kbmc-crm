@@ -1653,7 +1653,11 @@ tbody tr.selected td{background:var(--blue-50)!important}
       <div style="display:flex;gap:6px;padding:10px 0 8px;border-bottom:2px solid var(--gray-200);margin-bottom:0">
         <button id="tmgrp-transfer" onclick="switchTmGroup('transfer',this)"
           style="padding:7px 16px;border:1.5px solid var(--navy);background:var(--navy);color:#fff;border-radius:20px;cursor:pointer;font-size:13px;font-weight:700;font-family:inherit;transition:.15s">
-          📥 이관DB <span id="tgq-transfer" style="font-size:11px;background:rgba(255,255,255,.2);padding:1px 6px;border-radius:8px;margin-left:3px">0</span>
+          📋 관리DB <span id="tgq-transfer" style="font-size:11px;background:rgba(255,255,255,.2);padding:1px 6px;border-radius:8px;margin-left:3px">0</span>
+        </button>
+        <button id="tmgrp-done" onclick="switchTmGroup('done',this)"
+          style="padding:7px 16px;border:1.5px solid var(--gray-200);background:transparent;color:var(--gray-600);border-radius:20px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;transition:.15s">
+          📤 이관DB <span id="tgq-done" style="font-size:11px;background:var(--gray-100);padding:1px 6px;border-radius:8px;margin-left:3px">0</span>
         </button>
         <button id="tmgrp-recall" onclick="switchTmGroup('recall',this)"
           style="padding:7px 16px;border:1.5px solid var(--gray-200);background:transparent;color:var(--gray-600);border-radius:20px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;transition:.15s">
@@ -1692,6 +1696,10 @@ tbody tr.selected td{background:var(--blue-50)!important}
           style="padding:10px 18px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit;white-space:nowrap">
           🔄 재콜 <span id="tq-recalldone" style="font-size:11px;padding:1px 5px;background:var(--gray-100);color:var(--gray-500);border-radius:8px;margin-left:3px">0</span>
         </button>
+        <button class="tm-main-tab" id="tmt-tmdone" onclick="switchTmMainTab('tmdone',this)"
+          style="padding:10px 18px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:600;color:var(--ok);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit;white-space:nowrap">
+          📤 이관완료 <span id="tq-tmdone" style="font-size:11px;padding:1px 5px;background:rgba(0,192,115,.1);color:var(--ok);border-radius:8px;margin-left:3px">0</span>
+        </button>
       </div>
 
       <!-- 탭별 단(컨테이너) -->
@@ -1722,6 +1730,10 @@ tbody tr.selected td{background:var(--blue-50)!important}
       <div id="tm-tab-recalldone" style="display:none;padding-top:16px">
         <div id="tm-card-grid-recalldone" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px"></div>
       </div>
+      <div id="tm-tab-tmdone" style="display:none;padding-top:16px">
+        <div style="font-size:13px;color:var(--gray-400);margin-bottom:12px">TM 상담 완료 후 본사(팀장)로 이관한 건입니다. 추적 조회만 가능합니다.</div>
+        <div id="tm-card-grid-tmdone" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px"></div>
+      </div>
 
       <!-- ⑤ 목록뷰 전환 버튼 -->
       <div style="position:fixed;bottom:24px;right:24px;z-index:200">
@@ -1748,6 +1760,17 @@ tbody tr.selected td{background:var(--blue-50)!important}
         <div style="margin-bottom:14px">
           <div style="font-size:12px;font-weight:700;color:var(--gray-600);margin-bottom:8px">TM 결과</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap" id="tm-status-wrap"></div>
+        </div>
+        <!-- 드랍 사유 (드랍 선택 시 표시) -->
+        <div id="tm-drop-reason-wrap" style="display:none;margin-bottom:10px;padding:12px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);border-radius:8px">
+          <label style="font-size:12px;font-weight:700;color:var(--err)">드랍 사유 (필수)</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0">
+            <button type="button" class="tm-drop-btn" onclick="setTmDropReason(this,'연락두절')" style="padding:5px 11px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:12px;background:#fff;cursor:pointer;font-family:inherit">연락두절</button>
+            <button type="button" class="tm-drop-btn" onclick="setTmDropReason(this,'관심없음')" style="padding:5px 11px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:12px;background:#fff;cursor:pointer;font-family:inherit">관심없음</button>
+            <button type="button" class="tm-drop-btn" onclick="setTmDropReason(this,'요건미달')" style="padding:5px 11px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:12px;background:#fff;cursor:pointer;font-family:inherit">요건미달</button>
+            <button type="button" class="tm-drop-btn" onclick="setTmDropReason(this,'이미타사')" style="padding:5px 11px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:12px;background:#fff;cursor:pointer;font-family:inherit">이미 타사 진행</button>
+          </div>
+          <input type="text" id="tm-drop-reason" placeholder="또는 직접 입력..." style="width:100%;padding:7px 10px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px;font-family:inherit">
         </div>
         <div class="fg" style="margin-bottom:10px"><label>TM 내용</label>
           <textarea id="tm-content" rows="4" placeholder="통화 내용을 상세히 입력하세요"></textarea></div>
@@ -1818,10 +1841,10 @@ tbody tr.selected td{background:var(--blue-50)!important}
       <div id="branch-panel-assign">
         <!-- 미배정 통계 -->
         <div class="stat-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px">
-          <div class="stat-card orange"><div class="stat-label">미배정</div><div class="stat-val" id="br-unassigned">0</div></div>
-          <div class="stat-card blue"><div class="stat-label">배정완료</div><div class="stat-val" id="br-assigned">0</div></div>
-          <div class="stat-card green"><div class="stat-label">접촉</div><div class="stat-val" id="br-consulting">0</div></div>
-          <div class="stat-card"><div class="stat-label">계약</div><div class="stat-val" id="br-contract">0</div></div>
+          <div class="stat-card orange" onclick="brFilterStat('unassigned')" style="cursor:pointer" title="클릭하면 미배정 DB만 표시"><div class="stat-label">미배정</div><div class="stat-val" id="br-unassigned">0</div></div>
+          <div class="stat-card blue" onclick="brFilterStat('assigned')" style="cursor:pointer" title="클릭하면 배정완료 DB만 표시"><div class="stat-label">배정완료</div><div class="stat-val" id="br-assigned">0</div></div>
+          <div class="stat-card green" onclick="brFilterStat('contacted')" style="cursor:pointer" title="클릭하면 접촉 DB만 표시"><div class="stat-label">접촉</div><div class="stat-val" id="br-consulting">0</div></div>
+          <div class="stat-card" onclick="brFilterStat('contract')" style="cursor:pointer" title="클릭하면 계약 DB만 표시"><div class="stat-label">계약</div><div class="stat-val" id="br-contract">0</div></div>
         </div>
         <!-- 팀장 선택 카드 -->
         <div class="card" style="margin-bottom:14px">
@@ -4100,7 +4123,7 @@ const NAV_CFG = {
   dbmanager:[{id:'leads',l:'🗄️ DB관리'},{id:'activity',l:'📅 활동'}],
   branch:[{id:'branch',l:'🏢 지점관리'},{id:'leads',l:'🗄️ DB관리'},{id:'my-clients',l:'🏆 고객관리'},{id:'activity',l:'📅 활동'}],
   team:[{id:'leads',l:'🗄️ DB관리'},{id:'my-clients',l:'🏆 고객관리'},{id:'activity',l:'📅 활동'}],
-  tm:[{id:'tm-panel',l:'📞 이관 DB'}],
+  tm:[{id:'tm-panel',l:'📞 관리 DB'}],
 };
 const RL={admin:'관리자',dbmanager:'DB관리자',branch:'지점장',team:'팀장',tm:'대전TM'};
 
@@ -4742,11 +4765,17 @@ async function loadLeads(){
   if(curUser.role==='admin'||curUser.role==='dbmanager'){
     // 관리자/DB관리자: 모든 DB 열람 — 필터 없음
   } else if(curUser.role==='branch'){
-    // 지점장: 자기 지점 + 자신이 업로드한 DB
-    allLeads=allLeads.filter(l=>
-      (l.branch_name===curUser.name || l.registered_by===curUser.name) &&
-      !l.yj_transferred
-    );
+    // 지점장: 자기 지점 + 내 팀원에게 배정된 DB + 자신이 업로드한 DB
+    const _brMyTeams=new Set(TEAM_MAP[curUser.name]||[]);
+    allLeads=allLeads.filter(l=>{
+      if(l.yj_transferred) return false;
+      if(l.branch_name===curUser.name) return true;
+      if(l.registered_by===curUser.name) return true;
+      // 팀원이 배정된 건 (branch_name 없어도 포함)
+      try{const arr=JSON.parse(l.team_names||'[]');if(arr.length&&arr.some(t=>_brMyTeams.has(t)))return true;}catch(e){}
+      if(l.team_name){const names=l.team_name.split(', ').map(s=>s.trim());if(names.some(n=>_brMyTeams.has(n)))return true;}
+      return false;
+    });
   }
   if(curUser.role==='team'){
     allLeads=allLeads.filter(l=>{
@@ -8177,9 +8206,13 @@ function showDailyBriefing(){
   const today=new Date().toISOString().slice(0,10);
   const tomorrow=new Date(Date.now()+86400000).toISOString().slice(0,10);
   const now=Date.now();
-  const nas=(allNextActions?.length?allNextActions:lg('next_actions')).filter(a=>a.status==='예정');
   const acts=allActivities?.length?allActivities:lg('activities');
   const leads=role==='team'?(myLeads||[]):(brAllLeads||[]);
+  // 본인 소속 lead_id Set — 더미/타인 next_actions 차단
+  const _briefLeadIds=new Set(leads.map(l=>l.id));
+  const nas=(allNextActions?.length?allNextActions:lg('next_actions')).filter(a=>
+    a.status==='예정' && a.team_leader===curUser.name && _briefLeadIds.has(a.lead_id)
+  );
 
   // ── 미확인 알림 ──
   const notifs=getNs().filter(n=>!n.read).slice(0,5);
@@ -9262,10 +9295,9 @@ async function loadTmPanel(){
   const todayStart=today+'T00:00:00';
   tmLeads=all.filter(l=>{
     if(l.status==='deleted') return false;
+    // TM이 담당한 모든 건 (드랍 포함 추적)
     if(l.tm_transferred===true||l.tm_transferred==='true') return true;
-    // 이관완료 건: tm_done=true인 건도 TM 화면에 표시
     if(l.tm_done===true||l.tm_done==='true') return true;
-    // 협업 추적: collab_branches에 '대전TM' 포함된 건
     try{ const cb=JSON.parse(l.collab_branches||'[]'); if(cb.includes('대전TM')) return true; }catch(e){}
     return false;
   });
@@ -9321,8 +9353,11 @@ async function loadTmPanel(){
   setTQ('tq-scheduled',cntScheduled);
   setTQ('tq-done',cntDone);
   setTQ('tq-hc',cntHC+(cntHCPending>0?` (+${cntHCPending}예정)`:''));
+  const cntTmDone=tmLeads.filter(l=>l.tm_done===true||l.tm_done==='true').length;
   setTQ('tq-drop',cntDrop);
   setTQ('tq-recalldone',cntRecallDone);
+  setTQ('tq-tmdone',cntTmDone);
+  setTQ('tgq-done',cntTmDone);
 
   const tmSub=document.getElementById('tm-sub');
   if(tmSub) tmSub.textContent=cntAll+'건';
@@ -9349,7 +9384,7 @@ async function loadTmPanel(){
   }
 
   // 모든 카드 그리드 초기화 (이전 렌더 잔재 제거)
-  ['all','new','contacted','happycall','drop','recalldone'].forEach(t=>{
+  ['all','new','contacted','happycall','drop','recalldone','tmdone'].forEach(t=>{
     const g=document.getElementById('tm-card-grid-'+t);
     if(g) g.innerHTML='';
   });
@@ -9368,7 +9403,7 @@ async function loadTmPanel(){
     _activeBtn.style.color='var(--blue)';_activeBtn.style.borderBottom='2px solid var(--blue)';_activeBtn.style.fontWeight='700';
     const sp=_activeBtn.querySelector('span');if(sp){sp.style.background='rgba(49,130,246,.12)';sp.style.color='var(--blue)';}
   }
-  ['all','new','contacted','happycall','drop','recalldone'].forEach(t=>{
+  ['all','new','contacted','happycall','drop','recalldone','tmdone'].forEach(t=>{
     const el=document.getElementById('tm-tab-'+t);
     if(el) el.style.display=(t===defaultTab&&_tmViewMode==='card'?'':'none');
   });
@@ -9400,7 +9435,15 @@ function switchTmGroup(group, btn){
     b.style.color=on?'#fff':'var(--gray-600)';
     b.style.borderColor=on?'var(--navy)':'var(--gray-200)';
     b.style.fontWeight=on?'700':'600';
+    b.querySelector('span') && (b.querySelector('span').style.background=on?'rgba(255,255,255,.2)':'var(--gray-100)');
+    b.querySelector('span') && (b.querySelector('span').style.color=on?'#fff':'var(--gray-500)');
   });
+  if(group==='done'){
+    // 이관DB 탭: tmdone 서브탭으로 바로 이동
+    const tmdoneBtn=document.getElementById('tmt-tmdone');
+    if(tmdoneBtn) tmdoneBtn.click();
+    return;
+  }
   // 그룹별 기본 탭 전환
   const defaultTab=group==='transfer'?'new':group==='recall'?'recall_list':'reassign_list';
   // 그룹별 탭 구성 변경
@@ -9443,7 +9486,7 @@ function switchTmMainTab(tab,btn){
   }
   // 목록뷰 상태면 카드탭 숨기고 목록뷰 업데이트
   if(_tmViewMode==='list'){
-    ['all','new','contacted','happycall','drop','recalldone'].forEach(t=>{
+    ['all','new','contacted','happycall','drop','recalldone','tmdone'].forEach(t=>{
       const el=document.getElementById('tm-tab-'+t);
       if(el) el.style.display='none';
     });
@@ -9455,7 +9498,7 @@ function switchTmMainTab(tab,btn){
     renderTmListView();
     return;
   }
-  ['all','new','contacted','happycall','drop','recalldone'].forEach(t=>{
+  ['all','new','contacted','happycall','drop','recalldone','tmdone'].forEach(t=>{
     const el=document.getElementById('tm-tab-'+t);
     if(el) el.style.display=(t===tab?'':'none');
   });
@@ -9578,6 +9621,8 @@ function _filterForTab(tab,s,br){
       return !l.happycall_date||l.happycall_date<=today;
     }
     if(tab==='drop') return l.status==='drop';
+    // 이관완료: TM이 완료 처리 후 본사로 보낸 건
+    if(tab==='tmdone') return l.tm_done===true||l.tm_done==='true';
     // 재콜: 팀장 활동기록이 있는 건 + tm_transferred=true (팀장→대전TM 재이관)
     if(tab==='recalldone'){
       if(!(l.tm_transferred===true||l.tm_transferred==='true')) return false;
@@ -9761,6 +9806,11 @@ function openTmInput(lid,cname){
   (document.getElementById('tm-content')||{}).value='';
   (document.getElementById('tm-meeting-date')||{}).value='';
   curTmStatus='contacted';
+  // 드랍 사유 초기화
+  const _drWrap=document.getElementById('tm-drop-reason-wrap');
+  if(_drWrap) _drWrap.style.display='none';
+  const _drInp=document.getElementById('tm-drop-reason');
+  if(_drInp) _drInp.value='';
   (document.getElementById('tm-status-wrap')||document.createElement('div')).innerHTML=TM_STATUS.map(o=>
     `<div class="status-opt${o.v==='contacted'?' active':''}" onclick="pickTmStatus(this,'${o.v}')">${o.l}</div>`
   ).join('');
@@ -9981,9 +10031,17 @@ async function setHcDone(){
   loadTmPanel();
 }
 
+function setTmDropReason(btn,val){
+  document.querySelectorAll('.tm-drop-btn').forEach(b=>{b.style.background='#fff';b.style.color='';b.style.borderColor='var(--gray-200)';b.style.fontWeight='400';});
+  btn.style.background='var(--err)';btn.style.color='#fff';btn.style.borderColor='var(--err)';btn.style.fontWeight='700';
+  const inp=document.getElementById('tm-drop-reason');if(inp)inp.value=val;
+}
 function pickTmStatus(el,s){
   document.querySelectorAll('#tm-status-wrap .status-opt').forEach(e=>e.classList.remove('active'));
   el.classList.add('active'); curTmStatus=s;
+  // 드랍 선택 시 사유 입력란 표시
+  const dw=document.getElementById('tm-drop-reason-wrap');
+  if(dw) dw.style.display=s==='drop'?'block':'none';
 }
 async function saveTmRecord(){
   const lid=document.getElementById('tm-lead-id').value;
@@ -9994,6 +10052,13 @@ async function saveTmRecord(){
 
   // 1. 상태 변경 (autoLog:false — 아래서 통화내용과 함께 기록)
   if(curTmStatus) await changeLeadStatus(lid, {status:curTmStatus, autoLog:false});
+
+  // 드랍 시 current_stage, drop_reason 추가 저장
+  if(curTmStatus==='drop'){
+    const dropReason=document.getElementById('tm-drop-reason')?.value.trim()||'TM 드랍';
+    await dbU('leads',lid,{current_stage:'드랍',drop_reason:dropReason,drop_date:new Date().toISOString().slice(0,10)});
+    await logActivity(lid,'status_change','TM 드랍 처리: '+dropReason,'drop','드랍');
+  }
 
   // 2. TM 필드 DB 저장 (tm_result, tm_content, tm_date, tm_meeting)
   const tmFieldUpdate={
@@ -10404,6 +10469,26 @@ function openDistribute(){
 
 // ── 지점장 화면 JS ────────────────────────────────────────
 
+// 지점관리 stat 카드 클릭 → 필터
+function brFilterStat(type){
+  // brFiltered 갱신 후 테이블 이동
+  const unassigned=type==='unassigned';
+  const assigned=type==='assigned';
+  const contacted=type==='contacted';
+  const contract=type==='contract';
+  brFiltered=(brAllLeads||[]).filter(l=>{
+    if(unassigned) return !l.team_name||l.team_name.trim()==='';
+    if(assigned) return l.team_name&&l.team_name.trim()!==''&&l.current_stage!=='계약'&&l.current_stage!=='관리';
+    if(contacted) return l.status==='contacted'||l.current_stage==='접촉';
+    if(contract) return l.current_stage==='계약';
+    return true;
+  });
+  brPage=1;
+  renderBrTable();
+  // 테이블 위치로 스크롤
+  const tbl=document.getElementById('br-tbody');
+  if(tbl) tbl.closest('table')?.scrollIntoView({behavior:'smooth',block:'start'});
+}
 async function loadBranchScreen(){
   const all=await dbQ('leads');
   const myTeams=new Set(TEAM_MAP[curUser.name]||[]);
@@ -11291,7 +11376,11 @@ async function recallSelected(){
 
 let _dropAll=[], _dropFiltered=[];
 function renderDropPanel(){
-  _dropAll=(allLeads?.length ? allLeads : lg('leads')).filter(l=>l.status==='drop'||l.current_stage==='보류');
+  // TM 역할이면 TM 이관 건 중 드랍만 표시 (타 지점 드랍 차단)
+  const _baseLeads = curUser?.role==='tm'
+    ? (tmLeads||[])
+    : (allLeads?.length ? allLeads : lg('leads'));
+  _dropAll=_baseLeads.filter(l=>l.status==='drop'||l.current_stage==='보류');
   (document.getElementById('drop-sub')||{}).textContent=_dropAll.length+'건';
   filterDropLeads();
 }
