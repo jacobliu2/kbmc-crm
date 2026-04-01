@@ -4730,6 +4730,11 @@ async function loadLeads(){
   allActivities = _actsRaw;
   allNextActions = _nasRaw;
   allLeads = _leadsRaw;
+  // allActivities 로드 완료 → 회수대상 탭 즉시 갱신
+  if(typeof renderRecallPanel==='function'){
+    updateLeadsSubTabCounts?.();
+    if(_leadsSubTab==='recall') renderRecallPanel();
+  }
   allLeads=allLeads.filter(l=>l.status!=='deleted');
   if(curUser.role==='admin'||curUser.role==='dbmanager'){
     // 관리자/DB관리자: 모든 DB 열람 — 필터 없음
@@ -11208,6 +11213,8 @@ function renderRecallPanel(){
   if(!allActivities?.length){
     const tb=document.getElementById('recall-tbody');
     if(tb) tb.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-400)">⏳ 활동기록 로딩 중...</td></tr>';
+    // 1초 후 재시도
+    setTimeout(()=>{ if(_leadsSubTab==='recall') renderRecallPanel(); }, 1000);
     return;
   }
   const leads=allLeads?.length?allLeads:lg('leads');
@@ -11302,13 +11309,6 @@ async function recallSelected(){
 }
 
 // ━━ 재배정DB 패널 렌더 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-async function reassignDbBulkAssign(){
-  if(!_reassignDbSel.size){showToast('선택된 DB가 없습니다','error');return;}
-  selIds=_reassignDbSel;
-  switchLeadsSubTab('active', document.getElementById('leads-subtab-active'));
-  showToast(_reassignDbSel.size+'건 선택됨 — 배정 버튼을 눌러주세요','success');
-}
-
 // updateLeadsSubTabCounts에 reassigndb 카운트 추가
 
 let _dropAll=[], _dropFiltered=[];
