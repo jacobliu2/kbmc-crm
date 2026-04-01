@@ -4792,6 +4792,11 @@ function filterLeads(){
   filtered=allLeads.filter(l=>{
     // 팀장: 드랍·보류 DB 숨김 (드랍DB탭/보류는 관리자·지점장만 봄)
     if(curUser.role==='team'&&(l.status==='drop'||l.current_stage==='보류'||l.current_stage==='드랍')) return false;
+    // TM이관완료(tm_done=true, tm_transferred=false) 건 — 전체DB 목록에서 제외
+    // reassign 빠른탭에서 별도 표시됨. 관리자는 전체DB에서도 숨김(배정전 풀로 이동됐으므로)
+    if((l.tm_done===true||l.tm_done==='true')&&!(l.tm_transferred===true||l.tm_transferred==='true')) return false;
+    // YJ초도상담완료(yj_done=true) 건 — 재배정 탭에서 별도 표시 (전체DB 숨김)
+    if((l.yj_done===true||l.yj_done==='true')&&!(l.tm_transferred===true||l.tm_transferred==='true')&&!(l.tm_done===true||l.tm_done==='true')) return false;
     if(s&&!(l.company_name||'').toLowerCase().includes(s)&&!(l.contact_name||'').toLowerCase().includes(s)&&!(l.phone||'').includes(s))return false;
     if(br&&l.branch_name!==br)return false;
     if(tm){
