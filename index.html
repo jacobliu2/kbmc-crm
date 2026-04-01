@@ -10993,18 +10993,17 @@ function switchLeadsSubTab(tab, btn){
 }
 
 function updateLeadsSubTabCounts(){
-  const leads=allLeads?.length?allLeads:lg('leads');
-  const acts=allActivities?.length?allActivities:lg('activities');
+  // allLeads/allActivities 미로드 시 카운트 계산 안 함
+  if(!allLeads?.length || !allActivities?.length) return;
+  const leads=allLeads;
+  const acts=allActivities;
   const now=Date.now();
   const active=leads.filter(l=>l.status!=='deleted'&&l.status!=='drop').length;
   const drop=leads.filter(l=>l.status==='drop'||l.current_stage==='보류').length;
-  const trash=_trashCount||getTrash().length; // Supabase 모드에서는 _trashCount 사용
-  // 회수대상 카운트 — allActivities 로드된 경우만
-  let recall=0;
-  if(allActivities?.length){
-    const _am=_buildActMap();
-    recall=leads.filter(l=>_isRecallTarget(l,_am)!==null).length;
-  }
+  const trash=_trashCount||getTrash().length;
+  // 회수대상 카운트
+  const _am=_buildActMap();
+  const recall=leads.filter(l=>_isRecallTarget(l,_am)!==null).length;
   const setC=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v?`(${v})`:'';}
   setC('leads-subtab-recall-cnt',recall);
   setC('leads-subtab-active-cnt',active);
@@ -11012,9 +11011,8 @@ function updateLeadsSubTabCounts(){
   setC('leads-subtab-trash-cnt',trash);
   // 30h+ 미기록 카운트
   const _now30=Date.now();
-  const _acts30=new Set((allActivities?.length?allActivities:lg('activities'))
-    .filter(a=>!['assign','status_change'].includes(a.type)).map(a=>a.lead_id));
-  const overdue30Cnt=(allLeads?.length?allLeads:lg('leads')).filter(l=>{
+  const _acts30=new Set(allActivities.filter(a=>!['assign','status_change'].includes(a.type)).map(a=>a.lead_id));
+  const overdue30Cnt=leads.filter(l=>{
     if(_acts30.has(l.id)) return false;
     if(['drop','deleted'].includes(l.status)) return false;
     if(['계약','관리','드랍','보류'].includes(l.current_stage||'')) return false;
