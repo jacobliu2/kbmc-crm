@@ -11302,9 +11302,11 @@ function renderRecallPanel(){
 // 4: 접촉·상담 영업일 5일 경과 → 자동회수
 // 5: 관리 단계 30일(영업일) 활동없음 → 자동회수
 async function checkAutoRecall(){
-  if(curUser?.role!=='admin') return; // 관리자만
+  // ━━ 자동회수 일시 비활성화 (DB 복원 완료 후 재활성화 예정) ━━
+  console.log('[checkAutoRecall] 비활성화 상태');
+  return;
+  if(curUser?.role!=='admin') return;
   if(!allLeads?.length) return;
-  // allActivities 미로드 시 실행 중단 — 빈 배열로 판단하면 오판
   if(!allActivities?.length){
     console.log('[checkAutoRecall] allActivities 미로드, 건너뜀');
     return;
