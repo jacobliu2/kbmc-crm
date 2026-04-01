@@ -3948,7 +3948,7 @@ async function changeStatus(leadId, status, stage, note, silent){
 // ── 계정 ─────────────────────────────────────────────────
 let BRANCHES = ['신상국','정명구','정혜윤','최종길'];
 let TEAM_MAP = {
-  '신상국':['강정희','김관형','김두한','박상혁','백두진','서도겸','신인균','유인수','이동혁','이현준','최택호','이희용'],
+  '신상국':['강정희','김관형','김두한','박상혁','백두진','배한두','서도겸','신인균','유인수','이동혁','이현준','최택호','이희용'],
   '정명구':['김철희','문범모','문성희','박성훈','안대승','조재완','최회수'],
   '정혜윤':['강정환','김봉필','김연한','김용희','김종빈','박문수','서갑기','양은모','양환기','유동관','임석중','정우성','차만희','추정한','형주영'],
   '최종길':['박상욱','박승규','이성원','유영준','전용준'],
@@ -4717,9 +4717,13 @@ async function loadLeads(){
     // 관리자/DB관리자: 전체 지점 선택 가능
     if(branchEl) branchEl.innerHTML='<option value="">전체 지점</option>'+BRANCHES.map(b=>`<option>${b}</option>`).join('');
     if(branchEl) branchEl.style.display='';
-    // 팀장 필터: 선택 지점에 따라 동적
-    const teams=[...new Set(allLeads.map(l=>l.team_name).filter(Boolean))].sort();
-    if(teamEl){ teamEl.innerHTML='<option value="">전체 팀장</option>'+teams.map(t=>`<option>${esc(t)}</option>`).join(''); teamEl.style.display='';}
+    // 팀장 필터: TEAM_MAP 기준 (삭제 계정 제외), 지점 선택에 따라 연동
+    const _branchSel=document.getElementById('leads-branch')?.value||'';
+    const _validTeams=new Set(Object.values(TEAM_MAP).flat());
+    const teams=_branchSel
+      ? (TEAM_MAP[_branchSel]||[]).slice().sort()
+      : Object.values(TEAM_MAP).flat().sort();
+    if(teamEl){ teamEl.innerHTML='<option value="">전체 팀장</option>'+teams.filter(t=>_validTeams.has(t)).map(t=>`<option>${esc(t)}</option>`).join(''); teamEl.style.display='';}
   } else if(curUser.role === 'branch'){
     // 지점장: 지점 필터 숨김(본인 지점 고정), 소속 팀장만 표시
     if(branchEl) branchEl.style.display='none';
@@ -4765,6 +4769,20 @@ function filterLeads(){
   // 역할에 따라 지점/팀장 필터 적용 여부 결정
   const br=(curUser.role==='admin'||curUser.role==='dbmanager')?(document.getElementById('leads-branch')?.value||'')
           :curUser.role==='branch'?curUser.name:'';
+
+  // 관리자/DB관리자: 지점 선택 시 팀장 드롭다운 연동
+  if(curUser.role==='admin'||curUser.role==='dbmanager'){
+    const teamEl=document.getElementById('leads-team');
+    if(teamEl){
+      const prevTm=teamEl.value;
+      const _validTeams=new Set(Object.values(TEAM_MAP).flat());
+      const filteredTeams=br?(TEAM_MAP[br]||[]).slice().sort():Object.values(TEAM_MAP).flat().sort();
+      teamEl.innerHTML='<option value="">전체 팀장</option>'+filteredTeams.filter(t=>_validTeams.has(t)).map(t=>`<option>${esc(t)}</option>`).join('');
+      // 이전 선택값 유지 (해당 지점에 속하면)
+      if(prevTm&&filteredTeams.includes(prevTm)) teamEl.value=prevTm;
+    }
+  }
+
   const tm=curUser.role==='team'?curUser.name:(document.getElementById('leads-team')?.value||'');
   const st=document.getElementById('leads-status')?.value||'';
   const tp=document.getElementById('leads-type')?.value||'';
