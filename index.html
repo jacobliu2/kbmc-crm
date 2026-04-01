@@ -6175,6 +6175,30 @@ function renderTodayTodo(targetId){
       <div style="flex:1"><div style="font-size:12px;font-weight:700;color:var(--err)">미기록 ${unrec.length}건</div></div>
       <button class="btn btn-xs" style="background:var(--err);color:#fff;border-color:var(--err)" onclick="scrollToUnrecorded()">확인</button>
     </div>`);
+
+  // 📞 최초 활동기록 2일 경과 — 재연락 필요 고객
+  const _now2=Date.now();
+  const _2dayMs=2*24*3600000;
+  const recontactLeads=(myLeads||[]).filter(l=>{
+    if(['드랍','보류','계약','관리'].includes(l.current_stage||'')) return false;
+    if(!['접촉','상담'].includes(l.current_stage||'')) return false;
+    const acts=(allActivities||[]).filter(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type));
+    if(!acts.length) return false;
+    acts.sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+    const firstAct=acts[0];
+    const elapsed=_now2-new Date(firstAct.created_at).getTime();
+    return elapsed>=_2dayMs;
+  });
+  if(recontactLeads.length>0) sysItems.push(`
+    <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:rgba(124,58,237,.06);border-radius:8px;border-left:3px solid #7c3aed">
+      <span style="font-size:18px;flex-shrink:0">📞</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:700;color:#7c3aed">재연락 필요 ${recontactLeads.length}건</div>
+        <div style="font-size:11px;color:var(--gray-500)">${recontactLeads.slice(0,3).map(l=>esc(l.company_name||'-')).join(', ')}${recontactLeads.length>3?' 외 '+(recontactLeads.length-3)+'건':''}</div>
+      </div>
+      <button class="btn btn-xs" style="background:#7c3aed;color:#fff;border-color:#7c3aed;flex-shrink:0" onclick="filterMyLeadsCard('contacted')">확인</button>
+    </div>`);
+
   todayNas.forEach(a=>sysItems.push(`
     <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:rgba(37,99,235,.05);border-radius:6px;border-left:3px solid var(--blue)">
       <span style="font-size:14px">${a.action_type==='미팅'?'🤝':'📅'}</span>
@@ -6911,7 +6935,12 @@ function filterMyLeads(){
       <td>${esc(l.contact_name||'-')}</td>
       <td style="font-size:12px">${esc(l.phone||'-')}</td>
       <td style="font-size:11px">${esc((l.consult_type||'-').slice(0,18))}</td>
-      <td>${sBadge(l.status)}</td>
+      <td>${(()=>{
+      const assigned=l.team_name&&l.team_name.trim();
+      return assigned
+        ? '<span class="badge badge-stage-green" style="font-size:10px">배정</span>'
+        : '<span class="badge badge-pending" style="font-size:10px">미배정</span>';
+    })()}</td>
       <td style="font-size:11px;color:var(--gray-500)">${esc(l.current_stage||'-')}</td>
       <td style="font-size:11px">${naL}</td>
       <td style="font-size:11px;color:var(--gray-400)">${fmtD(l.distributed_at||l.created_at)}</td>
