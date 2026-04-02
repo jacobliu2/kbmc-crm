@@ -3718,6 +3718,23 @@ function _trackLocalId(id){
 })();
 
 // ── Supabase REST ─────────────────────────────────────────
+// ── TM 완료 판정 헬퍼 (tm_done + tm_completed_at 병행) ──────────────────
+// 공명의 순서 원칙: 코드가 먼저 대응, SQL은 이후
+function isTmCompleted(lead){
+  if(!lead) return false;
+  // tm_completed_at: Supabase 컬럼 추가 후 활성화 예정
+  // if(lead.tm_completed_at) return true;
+  // 현재는 tm_done만 사용
+  return lead.tm_done===true||lead.tm_done==='true';
+}
+// TM 이관완료 조건: 완료 + 미전환 + 재배정 대기
+function isTmDoneLead(lead){
+  if(!lead) return false;
+  return isTmCompleted(lead)
+    &&!(lead.tm_transferred===true||lead.tm_transferred==='true')
+    &&(!lead.team_name||!lead.team_name.trim());
+}
+
 function sbH(){ return {'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Prefer':'return=representation'}; }
 // ── activities 전체 페이지네이션 로드 (Supabase max_rows 우회) ──────────
 async function _loadAllActivities(){
@@ -4520,7 +4537,7 @@ async function loadAdmin(){
     &&!(l.yj_transferred===true||l.yj_transferred==='true')
     &&!(l.tm_transferred===true||l.tm_transferred==='true')
     &&!(l.yj_done===true||l.yj_done==='true')
-    &&!(l.tm_done===true||l.tm_done==='true')
+    &&!isTmCompleted(l)
     &&l.status!=='drop'
   ).length;
   const dropEl=document.getElementById('s-drop');if(dropEl)dropEl.textContent=all.filter(l=>l.status==='drop').length;
@@ -4885,9 +4902,9 @@ function filterLeads(){
     if(curUser.role==='team'&&(l.status==='drop'||l.current_stage==='보류'||l.current_stage==='드랍')) return false;
     // TM이관완료(tm_done=true, tm_transferred=false) 건 — 전체DB 목록에서 제외
     // reassign 빠른탭에서 별도 표시됨. 관리자는 전체DB에서도 숨김(배정전 풀로 이동됐으므로)
-    if((l.tm_done===true||l.tm_done==='true')&&!(l.tm_transferred===true||l.tm_transferred==='true')) return false;
+    if(isTmCompleted(l)&&!(l.tm_transferred===true||l.tm_transferred==='true')) return false;
     // YJ초도상담완료(yj_done=true) 건 — 재배정 탭에서 별도 표시 (전체DB 숨김)
-    if((l.yj_done===true||l.yj_done==='true')&&!(l.tm_transferred===true||l.tm_transferred==='true')&&!(l.tm_done===true||l.tm_done==='true')) return false;
+    if((l.yj_done===true||l.yj_done==='true')&&!(l.tm_transferred===true||l.tm_transferred==='true')&&!isTmCompleted(l)) return false;
     if(s&&!(l.company_name||'').toLowerCase().includes(s)&&!(l.contact_name||'').toLowerCase().includes(s)&&!(l.phone||'').includes(s))return false;
     if(br&&l.branch_name!==br)return false;
     if(tm){
@@ -4944,7 +4961,7 @@ function filterLeads(){
   }
   else if(_quickTab==='reassign'){
     filtered=filtered.filter(l=>
-      (l.tm_done===true||l.tm_done==='true') ||
+      isTmCompleted(l) ||
       (l.yj_done===true||l.yj_done==='true')
     );
   }
@@ -5064,8 +5081,8 @@ let _visCols=getVisibleCols();
 function colVal(l, key, acts){
   switch(key){
     case 'company_name': {
-      const isRecall=l.tm_transferred&&l.tm_done;
-      const isTmDone=(!l.tm_transferred)&&(l.tm_done===true||l.tm_done==='true')&&(l.status==='pending')&&(!l.team_name||!l.team_name.trim()); // 이관완료 → 관리자 대기 (팀 미배정 상태만)
+      const isRecall=l.tm_transferred&&isTmCompleted(l);
+      const isTmDone=isTmDoneLead(l); // 이관완료 → 관리자 대기
       const clr=isRecall?'#7c3aed':isTmDone?'var(--ok)':'var(--navy)';
       const tag=isRecall
         ?'<span style="font-size:9px;font-weight:700;color:#7c3aed;background:rgba(124,58,237,.08);padding:1px 5px;border-radius:6px;margin-left:4px">재콜</span>'
@@ -5611,12 +5628,20 @@ function _renderLDetailHistory(acts, leadId){
     return;
   }
   const isAdminDH=curUser?.role==='admin';
-  el.innerHTML = dateBanner + acts.map(a=>`
-    <div style="display:flex;gap:10px;padding:11px 0;border-bottom:1px solid var(--gray-100)">
+  el.innerHTML = dateBanner + acts.map(a=>{
+    // 대전TM 기록 판별: author가 대전센터이거나 대전TM 계정
+    const _isTmAct = ['대전센터','대전'].includes(String(a.author||'').trim());
+    const _rowBg   = _isTmAct ? 'background:rgba(0,192,115,.06);border-left:3px solid var(--ok);padding-left:8px;border-radius:4px;' : '';
+    const _authorColor = _isTmAct ? 'color:#00a86b;' : 'color:var(--navy);';
+    return `
+    <div style="display:flex;gap:10px;padding:11px 0;border-bottom:1px solid var(--gray-100);${_rowBg}">
       <span style="font-size:16px;flex-shrink:0;margin-top:1px">${ICON[a.type]||'📌'}</span>
       <div style="flex:1;min-width:0">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
-          <span style="font-size:12px;font-weight:700;color:var(--navy)">${esc(a.author||'-')}</span>
+          <div style="display:flex;align-items:center;gap:5px">
+            <span style="font-size:12px;font-weight:700;${_authorColor}">${esc(a.author||'-')}</span>
+            ${_isTmAct?'<span style="font-size:9px;font-weight:700;color:#fff;background:#00a86b;padding:1px 5px;border-radius:8px">TM</span>':''}
+          </div>
           <div style="display:flex;align-items:center;gap:6px">
             <span style="font-size:10px;color:var(--gray-400)">${(a.date||a.created_at||'').slice(0,10)}</span>
             ${isAdminDH?`<button onclick="event.stopPropagation();openEditActivity('${a.id}')" style="padding:1px 7px;font-size:10px;font-weight:700;color:var(--blue);background:rgba(49,130,246,.08);border:1px solid rgba(49,130,246,.2);border-radius:4px;cursor:pointer;line-height:1.6">수정</button>
@@ -5626,7 +5651,8 @@ function _renderLDetailHistory(acts, leadId){
         ${a.stage?`<span style="font-size:10px;padding:1px 6px;background:var(--blue-50);color:var(--blue);border-radius:8px;margin-bottom:4px;display:inline-block">${esc(a.stage)}</span>`:''}
         <div style="font-size:12px;color:var(--gray-700);line-height:1.6;white-space:pre-wrap;word-break:break-all">${esc(a.content||'')}</div>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 // ── 기념일 탭 렌더 ─────────────────────────────────────────
@@ -7135,14 +7161,62 @@ async function importTmExcel(event){
   const ALIAS={company_name:['회사명','기업명','업체명'],contact_name:['신청자','담당자','대표자'],phone:['연락처','전화번호'],email:['이메일'],region:['소재지','지역'],industry:['업종'],revenue:['매출','매출액'],consult_type:['상담유형','유형'],inflow:['유입경로'],tax_delinquent:['체납여부'],note:['비고'],applied_at:['상담신청시간','신청시간','신청일시']};
   const hm={};Object.entries(ALIAS).forEach(([key,al])=>al.forEach(a=>hm[a.toLowerCase()]=key));
   _pending=[];let dup=0;
-  const existing=allLeads||[];
-  const existSet=new Set(existing.map(l=>(l.company_name||'')+(l.phone||'').replace(/[^0-9]/g,'')));
+  // ── 중복체크: Supabase 직접 조회 (캐시 의존 제거) ─────────────────────
+  // 엑셀에서 전화번호 추출 후 DB와 직접 비교
+  const _excelPhones = rows.slice(1).map(row=>{
+    const map2={};hdrs.forEach((h,j)=>{const k=hm[h.toLowerCase()];if(k)map2[k]=row[j];});
+    return String(map2.phone||'').replace(/[^0-9]/g,'');
+  }).filter(p=>p.length>=9);
+
+  // Supabase에서 전화번호 목록 직접 조회
+  let _dbPhoneSet = new Set();
+  let _dbNameSet  = new Set();
+  try{
+    if(!testMode&&_excelPhones.length){
+      // 전화번호 IN 쿼리 (100개씩)
+      const _chunks=[];
+      for(let ci=0;ci<_excelPhones.length;ci+=100)
+        _chunks.push(_excelPhones.slice(ci,ci+100));
+      for(const chunk of _chunks){
+        const _q=chunk.map(p=>`"${p}"`).join(',');
+        const _r=await fetch(SB_URL+'/rest/v1/leads?select=phone,company_name&status=neq.deleted',{
+          headers:{...sbH(),'Range-Unit':'items','Range':'0-4999','Prefer':'count=none'}
+        });
+        if(_r.ok){
+          const _rows=await _r.json().catch(()=>[]);
+          (_rows||[]).forEach(l=>{
+            const ph=String(l.phone||'').replace(/[^0-9]/g,'');
+            if(ph.length>=9) _dbPhoneSet.add(ph);
+            const nm=String(l.company_name||'').trim();
+            if(nm) _dbNameSet.add(nm);
+          });
+        }
+      }
+    }
+  }catch(e){ console.warn('중복체크 조회 실패, 캐시 fallback:', e.message); }
+
+  // 캐시 fallback (Supabase 실패 시)
+  if(!_dbPhoneSet.size){
+    (allLeads||[]).forEach(l=>{
+      const ph=String(l.phone||'').replace(/[^0-9]/g,'');
+      if(ph.length>=9) _dbPhoneSet.add(ph);
+      const nm=String(l.company_name||'').trim();
+      if(nm) _dbNameSet.add(nm);
+    });
+  }
+
+  const existing=allLeads||[]; // 하위 호환용
+  const existSet=_dbPhoneSet;  // 기존 변수명 유지
   for(let i=1;i<rows.length;i++){
     const row=rows[i];
     const map={};hdrs.forEach((h,j)=>{const k=hm[h.toLowerCase()];if(k)map[k]=row[j];else if(h)map[h]=row[j];});
     const co=String(map.company_name||'').trim();if(!co)continue;
     const ph=String(map.phone||'').trim().replace(/[^0-9]/g,'');
-    if(existSet.has(co+ph)){dup++;continue;}
+    // 1순위: 전화번호 정규화 비교 (DB 직접 조회 기반)
+    const _phNorm=ph.replace(/[^0-9]/g,'');
+    if(_phNorm.length>=9&&existSet.has(_phNorm)){dup++;continue;}
+    // 2순위: 전화번호 없으면 회사명 비교
+    if(_phNorm.length<9&&co&&_dbNameSet.has(co)){dup++;continue;}
     _pending.push({
       id:uuid(),company_name:co,contact_name:String(map.contact_name||'').trim(),
       phone:formatPhone(String(map.phone||'')).trim(),email:String(map.email||'').trim(),
@@ -7184,7 +7258,7 @@ async function importTmExcel(event){
 async function openTmExport(){
   if(!window.XLSX){await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
   // tm_done=true(이관완료)된 건은 tmLeads에서 제외 → allLeads 관리자뷰로만 이동
-  const data=tmLeads.filter(l=>!(l.tm_done===true||l.tm_done==='true'));
+  const data=tmLeads.filter(l=>!isTmCompleted(l));
   if(!data.length){showToast('내보낼 데이터가 없습니다.','error');return;}
   const rows=[['회사명','신청자','연락처','지점','팀장','상태','TM결과','TM날짜','1차미팅일','TM내용','해피콜내용','분배날짜']];
   data.forEach(l=>rows.push([
@@ -7252,14 +7326,62 @@ async function importExcel(event){
   const normS=v=>{if(!v)return'assigned';const s=String(v).trim();const k=s.toLowerCase();for(const[mk,mv]of Object.entries(STATUS_NORM)){if(mk===k||mk===s)return mv;}return s.length>15?'consulting':'pending';};
   _pending=[];let dup=0;
   // Supabase 모드: allLeads 캐시로 중복체크 (localStorage 우회)
-  const existing=allLeads||[];
-  const existSet=new Set(existing.map(l=>(l.company_name||'')+(l.phone||'').replace(/[^0-9]/g,'')));
+  // ── 중복체크: Supabase 직접 조회 (캐시 의존 제거) ─────────────────────
+  // 엑셀에서 전화번호 추출 후 DB와 직접 비교
+  const _excelPhones = rows.slice(1).map(row=>{
+    const map2={};hdrs.forEach((h,j)=>{const k=hm[h.toLowerCase()];if(k)map2[k]=row[j];});
+    return String(map2.phone||'').replace(/[^0-9]/g,'');
+  }).filter(p=>p.length>=9);
+
+  // Supabase에서 전화번호 목록 직접 조회
+  let _dbPhoneSet = new Set();
+  let _dbNameSet  = new Set();
+  try{
+    if(!testMode&&_excelPhones.length){
+      // 전화번호 IN 쿼리 (100개씩)
+      const _chunks=[];
+      for(let ci=0;ci<_excelPhones.length;ci+=100)
+        _chunks.push(_excelPhones.slice(ci,ci+100));
+      for(const chunk of _chunks){
+        const _q=chunk.map(p=>`"${p}"`).join(',');
+        const _r=await fetch(SB_URL+'/rest/v1/leads?select=phone,company_name&status=neq.deleted',{
+          headers:{...sbH(),'Range-Unit':'items','Range':'0-4999','Prefer':'count=none'}
+        });
+        if(_r.ok){
+          const _rows=await _r.json().catch(()=>[]);
+          (_rows||[]).forEach(l=>{
+            const ph=String(l.phone||'').replace(/[^0-9]/g,'');
+            if(ph.length>=9) _dbPhoneSet.add(ph);
+            const nm=String(l.company_name||'').trim();
+            if(nm) _dbNameSet.add(nm);
+          });
+        }
+      }
+    }
+  }catch(e){ console.warn('중복체크 조회 실패, 캐시 fallback:', e.message); }
+
+  // 캐시 fallback (Supabase 실패 시)
+  if(!_dbPhoneSet.size){
+    (allLeads||[]).forEach(l=>{
+      const ph=String(l.phone||'').replace(/[^0-9]/g,'');
+      if(ph.length>=9) _dbPhoneSet.add(ph);
+      const nm=String(l.company_name||'').trim();
+      if(nm) _dbNameSet.add(nm);
+    });
+  }
+
+  const existing=allLeads||[]; // 하위 호환용
+  const existSet=_dbPhoneSet;  // 기존 변수명 유지
   for(let i=1;i<rows.length;i++){
     const row=rows[i];
     const map={};hdrs.forEach((h,j)=>{const k=hm[h.toLowerCase()];if(k)map[k]=row[j];else if(h)map[h]=row[j];});
     const co=String(map.company_name||'').trim();if(!co)continue;
     const ph=String(map.phone||'').trim().replace(/[^0-9]/g,'');
-    if(existSet.has(co+ph)){dup++;continue;}
+    // 1순위: 전화번호 정규화 비교 (DB 직접 조회 기반)
+    const _phNorm=ph.replace(/[^0-9]/g,'');
+    if(_phNorm.length>=9&&existSet.has(_phNorm)){dup++;continue;}
+    // 2순위: 전화번호 없으면 회사명 비교
+    if(_phNorm.length<9&&co&&_dbNameSet.has(co)){dup++;continue;}
     const _branch=String(map.branch_name||'').trim();
     const _team=String(map.team_name||'').trim();
     const _autoStatus=_branch?'assigned':'pending';
@@ -9345,7 +9467,7 @@ async function loadTmPanel(){
   // TM 대상 필터
   const _tmRaw=_allUniq.filter(l=>{
     if(l.status==='deleted') return false;
-    if((l.tm_done===true||l.tm_done==='true')&&!(l.tm_transferred===true||l.tm_transferred==='true')) return false;
+    if(isTmCompleted(l)&&!(l.tm_transferred===true||l.tm_transferred==='true')) return false;
     if(l.tm_transferred===true||l.tm_transferred==='true') return true;
     try{ const cb=JSON.parse(l.collab_branches||'[]'); if(cb.includes('대전TM')) return true; }catch(e){}
     return false;
@@ -9412,7 +9534,7 @@ async function loadTmPanel(){
   // 그룹탭 카운트: 이관DB = tm_transferred, 회수DB = 전체회수 이관, 재배정DB = 관리자 재배정
   const cntTransfer=tmLeads.filter(l=>l.tm_transferred===true||l.tm_transferred==='true').length;
   const cntRecallGrp=0; // 대전TM 회수그룹 카운트 (미사용)
-  const cntReassignGrp=tmLeads.filter(l=>l.tm_done===true||l.tm_done==='true').length;
+  const cntReassignGrp=tmLeads.filter(l=>isTmCompleted(l)).length;
   setTQ('tgq-transfer',cntTransfer);
   setTQ('tgq-recall',cntRecallGrp);
   setTQ('tgq-reassign',cntReassignGrp);
@@ -9421,7 +9543,7 @@ async function loadTmPanel(){
   setTQ('tq-scheduled',cntScheduled);
   setTQ('tq-done',cntDone);
   setTQ('tq-hc',cntHC+(cntHCPending>0?` (+${cntHCPending}예정)`:''));
-  const cntTmDone=tmLeads.filter(l=>l.tm_done===true||l.tm_done==='true').length;
+  const cntTmDone=tmLeads.filter(l=>isTmCompleted(l)).length;
   setTQ('tq-drop',cntDrop);
   setTQ('tq-recalldone',cntRecallDone);
   setTQ('tq-tmdone',cntTmDone);
@@ -9652,7 +9774,7 @@ function renderTmListView(){
       <tbody>
         ${data.map(l=>{
           const lastAct=acts.filter(a=>a.lead_id===l.id&&a.type!=='assign').sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];
-          const isRecall=l.tm_transferred&&l.tm_done;
+          const isRecall=l.tm_transferred&&isTmCompleted(l);
           const rowStyle=isRecall?'background:rgba(124,58,237,.04)':'';
           return `<tr onclick="openTmDetail('${l.id}')" style="border-bottom:1px solid var(--gray-100);cursor:pointer;${rowStyle}" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background='${isRecall?'rgba(124,58,237,.04)':''}'" >
             <td style="padding:9px 12px;font-weight:700;color:var(--navy);font-size:13px">
@@ -9702,7 +9824,7 @@ function _filterForTab(tab,s,br){
     }
     if(tab==='drop') return l.status==='drop';
     // 이관완료: TM이 완료 처리 후 본사로 보낸 건
-    if(tab==='tmdone') return l.tm_done===true||l.tm_done==='true';
+    if(tab==='tmdone') return isTmCompleted(l);
     // 재콜: 팀장 활동기록이 있는 건 + tm_transferred=true (팀장→대전TM 재이관)
     if(tab==='recalldone'){
       if(!(l.tm_transferred===true||l.tm_transferred==='true')) return false;
@@ -10068,6 +10190,7 @@ async function tmToAdmin(lid){
     team_names: JSON.stringify([]),
     tm_transferred: false,
     tm_done: true,
+    // tm_completed_at: new Date().toISOString(), // Supabase 컬럼 추가 후 활성화
     assigned_at: new Date().toISOString(),
     status: 'pending',
     collab_branches: null
@@ -10272,7 +10395,7 @@ function renderAssignSummary(all){
           &&!(l.yj_transferred===true||l.yj_transferred==='true')
           &&!(l.tm_transferred===true||l.tm_transferred==='true')
           &&!(l.yj_done===true||l.yj_done==='true')
-          &&!(l.tm_done===true||l.tm_done==='true')
+          &&!isTmCompleted(l)
           &&l.status!=='drop')
       : all.filter(l=>l.branch_name===b&&l.status!=='drop');
     const noTeam=bl.filter(l=>!l.team_name).length;
@@ -11348,7 +11471,7 @@ function _rcCandidates(){
     if(l.tm_transferred===true||l.tm_transferred==='true') return false;
     if(l.yj_transferred===true||l.yj_transferred==='true') return false;
     if(l.yj_done===true||l.yj_done==='true')               return false;
-    if(l.tm_done===true||l.tm_done==='true')                return false;
+    if(isTmCompleted(l))                return false;
     const st=String(l.status||'');
     if(st==='drop'||st==='deleted') return false;
     const sg=String(l.current_stage||'');
@@ -13537,7 +13660,7 @@ function renderLeadsTable(){
       &&!l.yj_transferred;
     const _el2=_getElapsed(_t2);
     const _rc2=_unr2&&_el2>=48*3600000?'overdue-48h-row':_unr2&&_el2>=30*3600000?'overdue-30h-row':_unr2&&_el2>=24*3600000?'overdue-24h-row':'';
-    const _isReassign=(l.tm_done===true||l.tm_done==='true')||(l.yj_done===true||l.yj_done==='true');
+    const _isReassign=isTmCompleted(l)||(l.yj_done===true||l.yj_done==='true');
     const _rowStyle=_isReassign?'background:rgba(124,58,237,.04);border-left:3px solid #7c3aed':'';
     return`<tr onclick="rowClick(event,'${l.id}')" class="${sel?'selected':''} ${_rc2}" style="${_rowStyle}">
       <td style="width:32px">
