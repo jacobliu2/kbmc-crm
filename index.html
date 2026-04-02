@@ -3719,6 +3719,35 @@ function _trackLocalId(id){
 
 // ── Supabase REST ─────────────────────────────────────────
 function sbH(){ return {'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Prefer':'return=representation'}; }
+// ── activities 전체 페이지네이션 로드 (Supabase max_rows 우회) ──────────
+async function _loadAllActivities(){
+  const PAGE = 1000;
+  let offset = 0;
+  const all = [];
+  while(true){
+    try{
+      const r = await fetch(
+        SB_URL+'/rest/v1/activities?select=*&order=created_at.desc',
+        { headers:{
+            ...sbH(),
+            'Range-Unit':'items',
+            'Range': offset+'-'+(offset+PAGE-1),
+            'Prefer':'count=none'
+        }}
+      );
+      if(!r.ok) break;
+      const rows = await r.json().catch(()=>[]);
+      if(!rows||!rows.length) break;
+      all.push(...rows);
+      if(rows.length < PAGE) break;
+      offset += PAGE;
+      if(offset > 500000) break; // 안전 상한
+    }catch(e){ console.warn('_loadAllActivities err:',e.message); break; }
+  }
+  console.log('[활동기록] 전체 로드 완료:', all.length,'건');
+  return all;
+}
+
 async function sbGet(path, _retry=0){
   if(testMode) return [];
   try{
@@ -4485,7 +4514,15 @@ async function loadAdmin(){
   (document.getElementById('s-total')||{}).textContent=all.length;
   (document.getElementById('s-contract')||{}).textContent=all.filter(l=>l.current_stage==='계약').length;
   (document.getElementById('s-consulting')||{}).textContent=all.filter(l=>l.status==='contacted').length;
-  (document.getElementById('s-pending')||{}).textContent=all.filter(l=>!l.branch_name||l.branch_name==='').length;
+  // 미배정: branch_name 없음 + yj/tm 이관 중인 건 제외
+  (document.getElementById('s-pending')||{}).textContent=all.filter(l=>
+    (!l.branch_name||l.branch_name==='')
+    &&!(l.yj_transferred===true||l.yj_transferred==='true')
+    &&!(l.tm_transferred===true||l.tm_transferred==='true')
+    &&!(l.yj_done===true||l.yj_done==='true')
+    &&!(l.tm_done===true||l.tm_done==='true')
+    &&l.status!=='drop'
+  ).length;
   const dropEl=document.getElementById('s-drop');if(dropEl)dropEl.textContent=all.filter(l=>l.status==='drop').length;
   // 이탈 위험 고객 알림
   const acts_admin=allActivities||[];
@@ -4729,7 +4766,7 @@ async function loadLeads(){
   // leads + activities + next_actions 동시 로드 (타이밍 문제 근본 해결)
   const [_leadsRaw, _actsRaw, _nasRaw] = await Promise.all([
     dbQ('leads').catch(()=>[]),
-    testMode ? Promise.resolve(lg('activities')) : dbQ('activities').catch(()=>[]),
+    testMode ? Promise.resolve(lg('activities')) : _loadAllActivities(),
     testMode ? Promise.resolve(allNextActions||[]) : dbQ('next_actions').catch(()=>[]),
   ]);
   allActivities = _actsRaw;
@@ -5854,7 +5891,12 @@ function openActM(lid,cname){
   // 유영준 이관 DB - 재이관 버튼 표시
   const yjReWrap=document.getElementById('act-yj-reassign');
   if(yjReWrap){
-    const isYJ=lead?.yj_transferred&&lead?.team_name==='유영준';
+    // 유영준이 보류/드랍 처리한 건은 초도이관완료 버튼 숨김
+    const _yjStage=String(lead?.current_stage||'').trim();
+    const _yjStatus=String(lead?.status||'').trim();
+    const isYJ=lead?.yj_transferred&&lead?.team_name==='유영준'
+      &&!['보류','드랍'].includes(_yjStage)
+      &&!['drop'].includes(_yjStatus);
     yjReWrap.style.display=isYJ?'':'none';
     if(isYJ){
       // 팀장 목록 채우기
@@ -10226,7 +10268,12 @@ function renderAssignSummary(all){
   const now=Date.now(); const H30=30*3600*1000;
   const rows=[...BRANCHES,'미배정'].map(b=>{
     const bl=b==='미배정'
-      ? all.filter(l=>!l.branch_name||l.branch_name==='')
+      ? all.filter(l=>(!l.branch_name||l.branch_name==='')
+          &&!(l.yj_transferred===true||l.yj_transferred==='true')
+          &&!(l.tm_transferred===true||l.tm_transferred==='true')
+          &&!(l.yj_done===true||l.yj_done==='true')
+          &&!(l.tm_done===true||l.tm_done==='true')
+          &&l.status!=='drop')
       : all.filter(l=>l.branch_name===b&&l.status!=='drop');
     const noTeam=bl.filter(l=>!l.team_name).length;
     const done=bl.filter(l=>l.team_name).length;
