@@ -1288,7 +1288,10 @@ tbody tr.selected td{background:var(--blue-50)!important}
       <div id="leads-panel-trash" style="display:none">
         <div class="page-header" style="margin-bottom:12px">
           <div class="page-title" style="font-size:16px">🗑️ 휴지통 <sub id="trash-inline-sub"></sub></div>
-          <button class="btn btn-outline btn-sm" onclick="emptyTrashInline()">🗑️ 전체 삭제</button>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-outline btn-sm" style="color:var(--ok);border-color:var(--ok)" onclick="trashExportExcel()">📥 엑셀 다운로드</button>
+            <button class="btn btn-outline btn-sm" onclick="emptyTrashInline()">🗑️ 전체 삭제</button>
+          </div>
         </div>
         <div class="card" style="padding:0">
           <div class="db-wrap">
@@ -1296,6 +1299,9 @@ tbody tr.selected td{background:var(--blue-50)!important}
               <thead><tr>
                 <th style="width:140px">회사명</th>
                 <th style="width:110px">연락처</th>
+                <th style="width:80px">지점장</th>
+                <th style="width:90px">팀장</th>
+                <th style="width:70px">단계</th>
                 <th style="width:80px">삭제일</th>
                 <th style="width:80px">삭제자</th>
                 <th style="width:100px">액션</th>
@@ -4755,7 +4761,8 @@ async function loadLeads(){
   // dbmanager: 배정/드랍/삭제 모두 숨김, team: 배정·드랍 버튼 숨김 (진행단계에서 드랍 선택)
   if(_abarDist) _abarDist.style.display = (_isDbMgr||_isTeam) ? 'none' : '';
   if(_abarDrop) _abarDrop.style.display = (_isDbMgr||_isTeam) ? 'none' : '';
-  if(_abarDel)  _abarDel.style.display  = _isDbMgr ? 'none' : '';
+  // 삭제 버튼: 관리자만 표시
+  if(_abarDel)  _abarDel.style.display  = (curUser?.role==='admin') ? '' : 'none';
   const isYJ=curUser?.name==='유영준';
   const yjFilterEl=document.getElementById('leads-yj-filter');
   const yjTabEl=document.getElementById('qtab-yj-initial');
@@ -11368,45 +11375,72 @@ const TRASH_LS='kbmc_v2_trash';
 function getTrash(){try{return JSON.parse(localStorage.getItem(TRASH_LS)||'[]');}catch(e){return[];}}
 function saveTrash(t){localStorage.setItem(TRASH_LS,JSON.stringify(t));}
 
-async function openDelete(){
-  if(curUser?.role==='dbmanager'){showToast('DB관리자는 삭제 권한이 없습니다.','error');return;}
+async function openDelete(singleId){
+  // 관리자만 삭제 가능
+  if(curUser?.role!=='admin'){showToast('삭제 권한은 관리자만 가능합니다.','error');return;}
+  if(singleId){
+    // 단건 삭제 (드랍패널 등에서 호출)
+    selIds.clear(); selIds.add(singleId);
+  }
   if(!selIds.size){showToast('선택하세요.','error');return;}
   const count=selIds.size;
-  // 삭제 확인 입력 팝업
   let ov=document.getElementById('ov-delete-confirm');
   if(!ov){ov=document.createElement('div');ov.id='ov-delete-confirm';ov.className='ov-bg';document.body.appendChild(ov);}
-  ov.innerHTML=`<div class="ov-box" style="width:380px;max-width:96vw;text-align:center">
-    <div style="font-size:40px;margin-bottom:12px">⚠️</div>
-    <div style="font-size:16px;font-weight:800;color:var(--gray-900);margin-bottom:6px">휴지통으로 이동</div>
+  ov.innerHTML=`<div class="ov-box" style="width:420px;max-width:96vw">
+    <div style="font-size:17px;font-weight:800;color:var(--err);margin-bottom:4px">🗑 휴지통으로 이동</div>
     <div style="font-size:13px;color:var(--gray-600);margin-bottom:16px">
-      선택한 <strong style="color:var(--err)">${count}건</strong>을 휴지통으로 이동합니다.<br>
-      휴지통에서 복구하거나 영구삭제할 수 있습니다.
+      선택한 <strong style="color:var(--err)">${count}건</strong>을 휴지통으로 이동합니다.
     </div>
-    <div style="font-size:12px;color:var(--gray-500);margin-bottom:8px"><strong>삭제확인</strong>을 입력하세요.</div>
+    <div class="fg" style="margin-bottom:12px">
+      <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">삭제자 이름 * <span style="font-size:11px;font-weight:400;color:var(--gray-400)">(자동입력)</span></label>
+      <input type="text" id="del-name-input" value="${esc(curUser?.name||'')}" readonly
+        style="width:100%;padding:10px;background:var(--gray-100);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--gray-700)">
+    </div>
+    <div class="fg" style="margin-bottom:12px">
+      <label style="font-size:13px;font-weight:700;margin-bottom:6px;display:block">삭제 사유 * <span style="font-size:11px;font-weight:400;color:var(--err)">필수</span></label>
+      <select id="del-reason-select" onchange="checkDelConfirm()"
+        style="width:100%;padding:10px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;margin-bottom:8px">
+        <option value="">— 사유 선택 —</option>
+        <option>중복 DB</option>
+        <option>고객 요청 삭제</option>
+        <option>잘못 등록된 DB</option>
+        <option>테스트 데이터</option>
+        <option>기타</option>
+      </select>
+      <input type="text" id="del-reason-detail" placeholder="추가 설명 (선택)" oninput="checkDelConfirm()"
+        style="width:100%;padding:10px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--gray-900)">
+    </div>
+    <div style="font-size:12px;color:var(--gray-500);margin-bottom:6px">확인을 위해 <strong>삭제확인</strong>을 입력하세요.</div>
     <input type="text" id="del-confirm-input" placeholder="삭제확인" oninput="checkDelConfirm()"
       style="width:100%;padding:10px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:14px;text-align:center;font-family:inherit;color:var(--gray-900);margin-bottom:14px">
-    <div style="display:flex;gap:8px;justify-content:center">
+    <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="btn btn-outline" onclick="closeOv('ov-delete-confirm')">취소</button>
       <button class="btn btn-danger" id="del-confirm-btn" disabled onclick="doSoftDelete()" style="opacity:.4;cursor:not-allowed">🗑 휴지통 이동</button>
     </div>
   </div>`;
   ov.classList.add('open');
-  setTimeout(()=>document.getElementById('del-confirm-input')?.focus(),100);
+  setTimeout(()=>document.getElementById('del-reason-select')?.focus(),100);
 }
 function checkDelConfirm(){
   const v=document.getElementById('del-confirm-input')?.value;
+  const r=document.getElementById('del-reason-select')?.value;
   const btn=document.getElementById('del-confirm-btn');
   if(!btn)return;
-  const ok=v==='삭제확인';
+  const ok=v==='삭제확인'&&r&&r!=='';
   btn.disabled=!ok;
   btn.style.opacity=ok?'1':'.4';
   btn.style.cursor=ok?'pointer':'not-allowed';
 }
 async function doSoftDelete(){
+  // 관리자 권한 재확인
+  if(curUser?.role!=='admin'){showToast('삭제 권한은 관리자만 가능합니다.','error');return;}
   const ids=[...selIds];
   const now=new Date().toISOString();
-  // 배치 PATCH — 건별 루프 대신 병렬 처리
-  const updateData={status:'deleted',deleted_at:now,deleted_by:curUser?.name||'',updated_at:now};
+  const reason=document.getElementById('del-reason-select')?.value||'';
+  const detail=document.getElementById('del-reason-detail')?.value.trim()||'';
+  const reasonFull=detail?reason+' — '+detail:reason;
+  const deletedBy=(curUser?.name||'관리자')+(reasonFull?' ('+reasonFull+')':'');
+  const updateData={status:'deleted',deleted_at:now,deleted_by:deletedBy,updated_at:now};
   if(!testMode){
     // Supabase: 병렬 PATCH
     await Promise.all(ids.map(id=>{ _trackLocalId(id); return sbPatch('leads',id,updateData); }));
@@ -11940,10 +11974,13 @@ async function renderTrashInline(){
   updateLeadsSubTabCounts();
   if(!trash.length){tbody.innerHTML='<tr><td colspan="5" class="empty" style="padding:30px">휴지통이 비어 있습니다</td></tr>';return;}
   tbody.innerHTML=trash.map(l=>`<tr>
-    <td style="font-weight:700">${esc(l.company_name||'-')}</td>
+    <td style="font-weight:700;cursor:pointer" onclick="openPanel(allLeads.find(x=>x.id==='${l.id}')||l)">${esc(l.company_name||'-')}</td>
     <td style="font-size:12px">${esc(l.phone||'-')}</td>
-    <td style="font-size:11px;color:var(--gray-400)">${fmtD(l._deleted_at)}</td>
-    <td style="font-size:11px">${esc(l._deleted_by||'-')}</td>
+    <td style="font-size:12px">${esc(l.branch_name||'-')}</td>
+    <td style="font-size:12px">${esc(l.team_name||'-')}</td>
+    <td style="font-size:11px">${esc(l.current_stage||l.status||'-')}</td>
+    <td style="font-size:11px;color:var(--gray-400)">${fmtD(l.deleted_at)}</td>
+    <td style="font-size:11px">${esc(l.deleted_by||'-')}</td>
     <td><div style="display:flex;gap:4px">
       <button class="btn btn-outline btn-xs" onclick="restoreFromTrashInline('${l.id}')">복구</button>
       <button class="btn btn-danger btn-xs" onclick="permDeleteInline('${l.id}')">영구삭제</button>
@@ -11954,6 +11991,62 @@ async function renderTrashInline(){
 async function restoreFromTrashInline(id){
   await restoreFromTrash(id);
   renderTrashInline(); updateLeadsSubTabCounts();
+}
+
+// ── 휴지통 엑셀 다운로드 ────────────────────────────────────────────────
+async function trashExportExcel(){
+  // 최신 데이터 직접 조회
+  let trash=[];
+  if(!testMode){
+    try{
+      const rows=await sbGet('leads?select=*&status=eq.deleted&order=updated_at.desc&limit=2000');
+      trash=rows||[];
+    }catch(e){ trash=[]; }
+  } else {
+    trash=getTrash();
+  }
+  if(!trash.length){showToast('휴지통이 비어 있습니다','error');return;}
+
+  if(!window.XLSX){
+    await new Promise((res,rej)=>{
+      const s=document.createElement('script');
+      s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.onload=res; s.onerror=rej; document.head.appendChild(s);
+    });
+  }
+
+  const fmtDt=v=>{
+    if(!v) return '';
+    const d=new Date(v); if(isNaN(d)) return String(v||'');
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')
+      +' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  };
+
+  const headers=['회사명','신청자','연락처','지점장','팀장','진행단계','상담유형','소재지','신청일자','배정일자','삭제일','삭제자'];
+  const rows=trash.map(l=>[
+    l.company_name||'',
+    l.contact_name||'',
+    l.phone||'',
+    l.branch_name||'',
+    l.team_name||'',
+    l.current_stage||l.status||'',
+    l.consult_type||'',
+    l.region||'',
+    fmtDt(l.applied_at||l.created_at),
+    fmtDt(l.assigned_at),
+    fmtDt(l.deleted_at),
+    l.deleted_by||''
+  ]);
+
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet([headers,...rows]);
+  ws['!cols']=[{wch:20},{wch:12},{wch:14},{wch:10},{wch:12},{wch:8},{wch:16},{wch:18},{wch:16},{wch:16},{wch:16},{wch:12}];
+  XLSX.utils.book_append_sheet(wb,ws,'휴지통');
+
+  const now=new Date();
+  const fname='휴지통_'+now.getFullYear()+String(now.getMonth()+1).padStart(2,'0')+String(now.getDate()).padStart(2,'0')+'.xlsx';
+  XLSX.writeFile(wb,fname);
+  showToast(`휴지통 ${trash.length}건 다운로드 완료`,'success');
 }
 
 async function permDeleteInline(id){
