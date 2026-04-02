@@ -1609,126 +1609,75 @@ tbody tr.selected td{background:var(--blue-50)!important}
 
     <!-- ── 대전TM 전용 화면 ── -->
     <div id="screen-tm-panel" class="screen">
-      <div class="page-header">
-        <div class="page-title">📞 TM 센터 <sub id="tm-sub"></sub></div>
+      <!-- ── 헤더 ── -->
+      <div class="page-header" style="margin-bottom:0">
+        <div class="page-title">📞 대전TM센터 <sub id="tm-sub" style="font-size:13px;color:var(--gray-400)"></sub></div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input type="text" id="tm-search" placeholder="🔍 회사명·연락처" oninput="tmFilterAll()"
+            style="padding:7px 12px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;width:160px">
           <button class="btn btn-outline btn-sm" onclick="downloadTmTemplate()">📋 양식 다운로드</button>
           <label class="btn btn-outline btn-sm" style="cursor:pointer;margin:0">📤 엑셀 업로드
             <input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="importTmExcel(event)">
           </label>
           <button class="btn btn-outline btn-sm" onclick="openTmExport()">📥 엑셀 다운로드</button>
-          <input type="text" id="tm-search" placeholder="🔍 회사명·연락처" oninput="filterTmLeads()"
-            style="padding:7px 12px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;width:180px">
-          <select id="tm-branch-filter" onchange="filterTmLeads()"
-            style="padding:7px 11px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit">
-            <option value="">전체 지점</option>
-          </select>
         </div>
       </div>
 
-      <!-- TM 상단 그룹탭 -->
-      <div style="display:flex;gap:6px;padding:10px 0 8px;border-bottom:2px solid var(--gray-200);margin-bottom:0">
-        <button id="tmgrp-transfer" onclick="switchTmGroup('transfer',this)"
-          style="padding:7px 16px;border:1.5px solid var(--navy);background:var(--navy);color:#fff;border-radius:20px;cursor:pointer;font-size:13px;font-weight:700;font-family:inherit;transition:.15s">
-          📋 관리DB <span id="tgq-transfer" style="font-size:11px;background:rgba(255,255,255,.2);padding:1px 6px;border-radius:8px;margin-left:3px">0</span>
+      <!-- ── 상단 탭 ── -->
+      <div style="display:flex;gap:0;border-bottom:2px solid var(--gray-200);margin-bottom:0;overflow-x:auto;margin-top:14px">
+        <button class="tm-v2-tab" id="tmv2-tab-manage" onclick="tmV2SwitchTab('manage',this)"
+          style="padding:10px 20px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:700;color:var(--navy);border-bottom:2px solid var(--navy);margin-bottom:-2px;font-family:inherit;white-space:nowrap">
+          📋 관리DB <span id="tmv2-cnt-manage" style="font-size:11px;padding:1px 6px;background:rgba(30,58,95,.1);color:var(--navy);border-radius:8px;margin-left:3px">0</span>
         </button>
-        <button id="tmgrp-done" onclick="switchTmGroup('done',this)"
-          style="padding:7px 16px;border:1.5px solid var(--gray-200);background:transparent;color:var(--gray-600);border-radius:20px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;transition:.15s">
-          📤 이관DB <span id="tgq-done" style="font-size:11px;background:var(--gray-100);padding:1px 6px;border-radius:8px;margin-left:3px">0</span>
+        <button class="tm-v2-tab" id="tmv2-tab-pending" onclick="tmV2SwitchTab('pending',this)"
+          style="padding:10px 20px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit;white-space:nowrap">
+          📥 미완료DB <span id="tmv2-cnt-pending" style="font-size:11px;padding:1px 6px;background:var(--gray-100);color:var(--gray-500);border-radius:8px;margin-left:3px">0</span>
         </button>
-        <button id="tmgrp-recall" onclick="switchTmGroup('recall',this)"
-          style="padding:7px 16px;border:1.5px solid var(--gray-200);background:transparent;color:var(--gray-600);border-radius:20px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;transition:.15s">
-          ↩ 회수DB <span id="tgq-recall" style="font-size:11px;background:var(--gray-100);padding:1px 6px;border-radius:8px;margin-left:3px">0</span>
+        <button class="tm-v2-tab" id="tmv2-tab-collab" onclick="tmV2SwitchTab('collab',this)"
+          style="padding:10px 20px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit;white-space:nowrap">
+          🤝 공동관리DB <span id="tmv2-cnt-collab" style="font-size:11px;padding:1px 6px;background:var(--gray-100);color:var(--gray-500);border-radius:8px;margin-left:3px">0</span>
         </button>
-        <button id="tmgrp-reassign" onclick="switchTmGroup('reassign',this)"
-          style="padding:7px 16px;border:1.5px solid var(--gray-200);background:transparent;color:var(--gray-600);border-radius:20px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;transition:.15s">
-          🔄 재배정DB <span id="tgq-reassign" style="font-size:11px;background:var(--gray-100);padding:1px 6px;border-radius:8px;margin-left:3px">0</span>
+        <button class="tm-v2-tab" id="tmv2-tab-contacted" onclick="tmV2SwitchTab('contacted',this)"
+          style="padding:10px 20px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit;white-space:nowrap">
+          ✅ 통화완료 <span id="tmv2-cnt-contacted" style="font-size:11px;padding:1px 6px;background:var(--gray-100);color:var(--gray-500);border-radius:8px;margin-left:3px">0</span>
         </button>
-      </div>
-
-      <!-- TM 서브탭 네비게이션 -->
-      <div id="tm-subtab-wrap" style="display:flex;gap:0;border-bottom:2px solid var(--gray-200);margin-bottom:0;overflow-x:auto">
-        <button class="tm-main-tab" id="tmt-all" onclick="switchTmMainTab('all',this)"
-          style="padding:10px 18px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit;white-space:nowrap">
-          전체 <span id="tq-all" style="font-size:11px;padding:1px 5px;background:var(--gray-100);color:var(--gray-500);border-radius:8px;margin-left:3px">0</span>
+        <button class="tm-v2-tab" id="tmv2-tab-happycall" onclick="tmV2SwitchTab('happycall',this)"
+          style="padding:10px 20px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit;white-space:nowrap">
+          📞 해피콜 <span id="tmv2-cnt-happycall" style="font-size:11px;padding:1px 6px;background:var(--gray-100);color:var(--gray-500);border-radius:8px;margin-left:3px">0</span>
         </button>
-        <button class="tm-main-tab" id="tmt-new" onclick="switchTmMainTab('new',this)"
-          style="padding:10px 18px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:700;color:var(--blue);border-bottom:2px solid var(--blue);margin-bottom:-2px;font-family:inherit;white-space:nowrap">
-          📥 신규배정 <span id="tq-new" style="font-size:11px;padding:1px 5px;background:rgba(49,130,246,.12);color:var(--blue);border-radius:8px;margin-left:3px">0</span>
-        </button>
-
-        <button class="tm-main-tab" id="tmt-contacted" onclick="switchTmMainTab('contacted',this)"
-          style="padding:10px 18px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit;white-space:nowrap">
-          ✅ 통화완료 <span id="tq-done" style="font-size:11px;padding:1px 5px;background:var(--gray-100);color:var(--gray-500);border-radius:8px;margin-left:3px">0</span>
-        </button>
-        <button class="tm-main-tab" id="tmt-happycall" onclick="switchTmMainTab('happycall',this)"
-          style="padding:10px 18px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit;white-space:nowrap">
-          😊 해피콜 <span id="tq-hc" style="font-size:11px;padding:1px 5px;background:var(--gray-100);color:var(--gray-500);border-radius:8px;margin-left:3px">0</span>
-        </button>
-        <button class="tm-main-tab" id="tmt-drop" onclick="switchTmMainTab('drop',this)"
-          style="padding:10px 18px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit;white-space:nowrap">
-          드랍 <span id="tq-drop" style="font-size:11px;padding:1px 5px;background:var(--gray-100);color:var(--gray-500);border-radius:8px;margin-left:3px">0</span>
-        </button>
-        <button class="tm-main-tab" id="tmt-recalldone" onclick="switchTmMainTab('recalldone',this)"
-          style="padding:10px 18px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit;white-space:nowrap">
-          🔄 재콜 <span id="tq-recalldone" style="font-size:11px;padding:1px 5px;background:var(--gray-100);color:var(--gray-500);border-radius:8px;margin-left:3px">0</span>
-        </button>
-        <button class="tm-main-tab" id="tmt-tmdone" onclick="switchTmMainTab('tmdone',this)"
-          style="padding:10px 18px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:600;color:var(--ok);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit;white-space:nowrap">
-          📤 이관완료 <span id="tq-tmdone" style="font-size:11px;padding:1px 5px;background:rgba(0,192,115,.1);color:var(--ok);border-radius:8px;margin-left:3px">0</span>
+        <button class="tm-v2-tab" id="tmv2-tab-drop" onclick="tmV2SwitchTab('drop',this)"
+          style="padding:10px 20px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit;white-space:nowrap">
+          ❌ 드랍 <span id="tmv2-cnt-drop" style="font-size:11px;padding:1px 6px;background:var(--gray-100);color:var(--gray-500);border-radius:8px;margin-left:3px">0</span>
         </button>
       </div>
 
-      <!-- 탭 설명 -->
-      <div id="tm-tab-desc" style="font-size:12px;color:var(--gray-400);padding:8px 4px 4px;border-bottom:1px solid var(--gray-100);margin-bottom:0"></div>
-
-      <!-- 탭별 단(컨테이너) -->
-      <div id="tm-tab-all" style="display:none;padding-top:16px">
-        <div id="tm-card-grid-all" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px"></div>
-      </div>
-      <div id="tm-tab-new" style="display:none;padding-top:16px">
-        <!-- 48h 미통화 경고 배너 -->
-        <div id="tm-overdue-banner" style="display:none;margin-bottom:12px;padding:10px 14px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:var(--r-sm);align-items:center;gap:10px">
-          <span style="font-size:18px">⛔</span>
-          <div>
-            <div style="font-size:13px;font-weight:700;color:var(--err)" id="tm-overdue-title">48시간 미통화 건 있음</div>
-            <div style="font-size:11px;color:var(--gray-500)" id="tm-overdue-desc"></div>
-          </div>
+      <!-- ── 테이블 ── -->
+      <div class="card" style="padding:0;margin-top:0;border-radius:0 0 var(--r) var(--r)">
+        <div class="db-wrap">
+          <table class="db-table">
+            <thead><tr>
+              <th style="width:160px">회사명</th>
+              <th style="width:100px">신청자</th>
+              <th style="width:120px">연락처</th>
+              <th style="width:140px">상담유형</th>
+              <th style="width:90px">소재지</th>
+              <th style="width:80px">지점장</th>
+              <th style="width:100px">팀장</th>
+              <th style="width:70px">진행단계</th>
+              <th style="width:80px">미팅일</th>
+              <th style="width:80px">배정일</th>
+              <th>진행내용</th>
+              <th style="width:60px">액션</th>
+            </tr></thead>
+            <tbody id="tmv2-tbody">
+              <tr><td colspan="12" class="loading">로딩 중...</td></tr>
+            </tbody>
+          </table>
         </div>
-        <div id="tm-card-grid-new" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px"></div>
-      </div>
-
-      <div id="tm-tab-contacted" style="display:none;padding-top:16px">
-        <div id="tm-card-grid-contacted" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px"></div>
-      </div>
-      <div id="tm-tab-happycall" style="display:none;padding-top:16px">
-        <div id="tm-card-grid-happycall" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px"></div>
-      </div>
-      <div id="tm-tab-drop" style="display:none;padding-top:16px">
-        <div id="tm-card-grid-drop" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px"></div>
-      </div>
-      <div id="tm-tab-recalldone" style="display:none;padding-top:16px">
-        <div id="tm-card-grid-recalldone" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px"></div>
-      </div>
-      <div id="tm-tab-tmdone" style="display:none;padding-top:16px">
-        <div style="font-size:13px;color:var(--gray-400);margin-bottom:12px">TM 상담 완료 후 본사(팀장)로 이관한 건입니다. 추적 조회만 가능합니다.</div>
-        <div id="tm-card-grid-tmdone" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px"></div>
-      </div>
-
-      <!-- ⑤ 목록뷰 전환 버튼 -->
-      <div style="position:fixed;bottom:24px;right:24px;z-index:200">
-        <button id="tm-view-toggle" onclick="toggleTmView()"
-          style="padding:8px 14px;background:var(--navy);color:#fff;border:none;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 3px 10px rgba(0,0,0,.2);display:flex;align-items:center;gap:6px">
-          <span id="tm-view-icon">☰</span>
-          <span id="tm-view-label">목록뷰</span>
-        </button>
-      </div>
-      <!-- 목록뷰 컨테이너 -->
-      <div id="tm-list-view" style="display:none;padding-top:16px">
-        <div id="tm-list-wrap"></div>
       </div>
     </div>
-    <!-- TM 입력 모달 -->
+
+
     <div class="modal-overlay" id="modal-tm-input">
       <div class="modal" style="width:500px;max-height:90vh;overflow-y:auto">
         <div class="mh"><div class="mt" id="tm-modal-title">📞 TM 기록</div><button class="mc" onclick="closeM('modal-tm-input')">✕</button></div>
@@ -1754,8 +1703,14 @@ tbody tr.selected td{background:var(--blue-50)!important}
         </div>
         <div class="fg" style="margin-bottom:10px"><label>TM 내용</label>
           <textarea id="tm-content" rows="4" placeholder="통화 내용을 상세히 입력하세요"></textarea></div>
-        <div class="fg" style="margin-bottom:10px"><label>고객 미팅희망일자 (선택)</label>
-          <input type="date" id="tm-meeting-date"></div>
+        <div class="fg" style="margin-bottom:10px">
+          <label style="display:flex;align-items:center;gap:6px">
+            📅 미팅일 확정
+            <span style="font-size:11px;font-weight:400;color:var(--gray-400)">(저장 시 해피콜 자동 연동)</span>
+          </label>
+          <input type="date" id="tm-meeting-date"
+            style="width:100%;padding:9px 12px;border:1.5px solid var(--blue);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--blue);font-weight:700">
+        </div>
 
         <!-- 해피콜 예정일 재설정 (해피콜 DB만 표시) -->
         <div id="tm-hc-wrap" style="display:none;margin-bottom:14px;padding:14px;background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:var(--r-sm)">
@@ -1802,9 +1757,6 @@ tbody tr.selected td{background:var(--blue-50)!important}
         </div>
       </div>
     </div>
-
-
-    <!-- ── 지점장 전용 화면 ── -->
     <div id="screen-branch" class="screen">
       <div class="page-header">
         <div class="page-title">지점 관리 <sub id="branch-sub"></sub></div>
@@ -3651,6 +3603,16 @@ function handleRealtimeChange(table, payload){
       if(typeof updateLeadsSubTabCounts==='function') updateLeadsSubTabCounts();
       // recall 탭 열려있으면 자동 갱신
       if(typeof rcRender==='function'&&typeof _leadsSubTab!=='undefined'&&_leadsSubTab==='recall') rcRender();
+      // TM v2 실시간 갱신
+      if(typeof _tmV2Data!=='undefined'&&allLeads){
+        _tmV2Data=allLeads.filter(l=>{
+          if(l.status==='deleted') return false;
+          if(l.tm_transferred===true||l.tm_transferred==='true') return true;
+          try{const cb=JSON.parse(l.collab_branches||'[]');if(cb.includes('대전TM'))return true;}catch(e){}
+          return false;
+        });
+        if(typeof tmV2Render==='function') tmV2Render();
+      }
     }, 400);
 
   } else if(table === 'activities'){
@@ -3670,6 +3632,16 @@ function handleRealtimeChange(table, payload){
       if(typeof filterLeads==='function') filterLeads();
       // recall 탭 열려있으면 활동기록 변경 시 재판정
       if(typeof rcRender==='function'&&typeof _leadsSubTab!=='undefined'&&_leadsSubTab==='recall') rcRender();
+      // TM v2 실시간 갱신
+      if(typeof _tmV2Data!=='undefined'&&allLeads){
+        _tmV2Data=allLeads.filter(l=>{
+          if(l.status==='deleted') return false;
+          if(l.tm_transferred===true||l.tm_transferred==='true') return true;
+          try{const cb=JSON.parse(l.collab_branches||'[]');if(cb.includes('대전TM'))return true;}catch(e){}
+          return false;
+        });
+        if(typeof tmV2Render==='function') tmV2Render();
+      }
       // 현재 열린 활동모달 히스토리도 갱신
       const openLid = document.getElementById('act-lead-id')?.value;
       if(openLid && document.getElementById('modal-activity')?.classList.contains('open')){
@@ -5639,9 +5611,10 @@ function _renderLDetailHistory(acts, leadId){
     return;
   }
   const isAdminDH=curUser?.role==='admin';
-  el.innerHTML = dateBanner + acts.map(a=>{
+  el.innerHTML = dateBanner + acts.map((a,_idx)=>{
     // 대전TM 기록 판별: author가 대전센터이거나 대전TM 계정
     const _isTmAct = ['대전센터','대전'].includes(String(a.author||'').trim());
+    const _num = _idx+1; // 번호 (오래된순 정렬 기준)
     const _rowBg   = _isTmAct ? 'background:rgba(0,192,115,.06);border-left:3px solid var(--ok);padding-left:8px;border-radius:4px;' : '';
     const _authorColor = _isTmAct ? 'color:#00a86b;' : 'color:var(--navy);';
     return `
@@ -5650,6 +5623,7 @@ function _renderLDetailHistory(acts, leadId){
       <div style="flex:1;min-width:0">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
           <div style="display:flex;align-items:center;gap:5px">
+            <span style="font-size:10px;font-weight:800;color:var(--gray-400)">${_num}.</span>
             <span style="font-size:12px;font-weight:700;${_authorColor}">${esc(a.author||'-')}</span>
             ${_isTmAct?'<span style="font-size:9px;font-weight:700;color:#fff;background:#00a86b;padding:1px 5px;border-radius:8px">TM</span>':''}
           </div>
@@ -7169,7 +7143,7 @@ async function importTmExcel(event){
   const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
   if(rows.length<2){showToast('데이터가 없습니다.','error');return;}
   const hdrs=rows[0].map(h=>h?String(h).trim().replace(/[\r\n]/g,''):'');
-  const ALIAS={company_name:['회사명','기업명','업체명'],contact_name:['신청자','담당자','대표자'],phone:['연락처','전화번호'],email:['이메일'],region:['소재지','지역'],industry:['업종'],revenue:['매출','매출액'],consult_type:['상담유형','유형'],inflow:['유입경로'],tax_delinquent:['체납여부'],note:['비고'],applied_at:['상담신청시간','신청시간','신청일시']};
+  const ALIAS={company_name:['회사명','기업명','업체명'],contact_name:['신청자','담당자','대표자'],phone:['연락처','전화번호'],email:['이메일'],region:['소재지','지역'],industry:['업종'],revenue:['매출','매출액'],consult_type:['상담유형','유형'],inflow:['유입경로'],tax_delinquent:['체납여부'],note:['비고'],applied_at:['상담신청시간','신청시간','신청일시'],tm_result:['TM결과','tm결과'],tm_date:['TM날짜','tm날짜'],tm_meeting:['1차미팅일','미팅일'],tm_happycall:['해피콜내용','해피콜']};
   const hm={};Object.entries(ALIAS).forEach(([key,al])=>al.forEach(a=>hm[a.toLowerCase()]=key));
   _pending=[];let dup=0;
   // ── 중복체크: Supabase 직접 조회 (캐시 의존 제거) ─────────────────────
@@ -7250,7 +7224,15 @@ async function importTmExcel(event){
         return s;
       }()),
       assigned_at:new Date().toISOString(),
-      created_at:new Date().toISOString(),updated_at:new Date().toISOString()
+      created_at:new Date().toISOString(),updated_at:new Date().toISOString(),
+      // 신규 TM 필드
+      tm_result:String(map.tm_result||'').trim()||undefined,
+      tm_date:String(map.tm_date||'').trim()||undefined,
+      tm_meeting:String(map.tm_meeting||'').trim()||undefined,
+      tm_happycall:String(map.tm_happycall||'').trim()||undefined,
+      // TM결과가 있으면 통화완료, 해피콜내용 있으면 해피콜 탭으로 자동 분류
+      status:(String(map.tm_result||'').trim()?'contacted':'assigned'),
+      happycall_date:(String(map.tm_meeting||'').trim()||undefined)
     });
   }
   const _sumEl=document.getElementById('import-summary');
@@ -7290,7 +7272,7 @@ async function openTmExport(){
 async function downloadTmTemplate(){
   if(!window.XLSX){await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
   const wb=XLSX.utils.book_new();
-  const ws=XLSX.utils.aoa_to_sheet([['회사명','신청자','연락처','이메일','소재지','상담유형','유입경로','매출','체납여부','비고','상담신청시간']]);
+  const ws=XLSX.utils.aoa_to_sheet([['회사명','신청자','연락처','이메일','소재지','상담유형','유입경로','매출','체납여부','비고','상담신청시간','TM결과','TM날짜','1차미팅일','해피콜내용']]);
   ws['!cols']=[{wch:20},{wch:10},{wch:14},{wch:22},{wch:20},{wch:22},{wch:10},{wch:16},{wch:8},{wch:14},{wch:18}];
   XLSX.utils.book_append_sheet(wb,ws,'TM 업로드 양식');
   XLSX.writeFile(wb,'대전TM_업로드양식.xlsx');
@@ -9467,6 +9449,131 @@ function initTmDefaultTabUI(){
   if(card) card.style.display=(curUser?.role==='tm'||curUser?.role==='admin')?'':'none';
 }
 
+// ━━ 대전TM v2 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+let _tmV2Tab = 'manage'; // 현재 탭
+let _tmV2Data = [];      // 전체 TM 리드 (필터 전)
+let _tmV2Search = '';    // 검색어
+
+// ── 탭 전환 ──────────────────────────────────────────────────────────────
+function tmV2SwitchTab(tab, btn){
+  _tmV2Tab = tab;
+  document.querySelectorAll('.tm-v2-tab').forEach(b=>{
+    b.style.color='var(--gray-500)';
+    b.style.borderBottom='2px solid transparent';
+    b.style.fontWeight='600';
+  });
+  if(btn){
+    const activeColor = tab==='manage'?'var(--navy)':tab==='pending'?'var(--blue)':tab==='collab'?'#7c3aed':tab==='contacted'?'var(--ok)':tab==='happycall'?'var(--blue)':'var(--err)';
+    btn.style.color=activeColor;
+    btn.style.borderBottom='2px solid '+activeColor;
+    btn.style.fontWeight='700';
+  }
+  tmV2Render();
+}
+
+// ── 검색 ──────────────────────────────────────────────────────────────────
+function tmFilterAll(){
+  _tmV2Search=(document.getElementById('tm-search')?.value||'').toLowerCase().trim();
+  tmV2Render();
+}
+
+// ── 탭별 필터 ─────────────────────────────────────────────────────────────
+function _tmV2Filter(tab){
+  const s=_tmV2Search;
+  return _tmV2Data.filter(l=>{
+    // 검색 필터
+    if(s&&!(l.company_name||'').toLowerCase().includes(s)&&!(l.phone||'').includes(s)&&!(l.contact_name||'').toLowerCase().includes(s)) return false;
+
+    const isTmSolo   = (l.tm_transferred===true||l.tm_transferred==='true')&&l.branch_name==='대전';
+    const isCollab   = (l.tm_transferred===true||l.tm_transferred==='true')&&l.branch_name!=='대전';
+    const isAnyTm    = isTmSolo||isCollab;
+    const isDrop     = l.status==='drop'||l.current_stage==='드랍';
+    const isContacted= l.status==='contacted'&&!isDrop;
+    const isPending  = l.status==='assigned'&&!isDrop;
+    const hasHappycall= !!(l.tm_happycall||l.happycall_date);
+
+    switch(tab){
+      case 'manage':    return isAnyTm&&!isDrop;
+      case 'pending':   return isTmSolo&&isPending;
+      case 'collab':    return isCollab&&!isDrop;
+      case 'contacted': return isTmSolo&&isContacted;
+      case 'happycall': return isAnyTm&&hasHappycall&&!isDrop;
+      case 'drop':      return isAnyTm&&isDrop;
+      default:          return isAnyTm;
+    }
+  });
+}
+
+// ── 카운트 갱신 ───────────────────────────────────────────────────────────
+function _tmV2UpdateCounts(){
+  const tabs=['manage','pending','collab','contacted','happycall','drop'];
+  tabs.forEach(tab=>{
+    const cnt=_tmV2Filter(tab).length;
+    const el=document.getElementById('tmv2-cnt-'+tab);
+    if(el) el.textContent=cnt;
+  });
+  const total=_tmV2Filter('manage').length;
+  const sub=document.getElementById('tm-sub');
+  if(sub) sub.textContent=total+'건';
+}
+
+// ── 테이블 렌더 ──────────────────────────────────────────────────────────
+function tmV2Render(){
+  const tbody=document.getElementById('tmv2-tbody');
+  if(!tbody) return;
+  _tmV2UpdateCounts();
+
+  const rows=_tmV2Filter(_tmV2Tab);
+  if(!rows.length){
+    tbody.innerHTML='<tr><td colspan="12" class="empty" style="padding:40px">데이터 없음</td></tr>';
+    return;
+  }
+
+  const acts=allActivities||[];
+  const fmtShort=v=>{if(!v)return'-';const d=new Date(v);if(isNaN(d))return'-';return(d.getMonth()+1)+'/'+(d.getDate());};
+
+  tbody.innerHTML=rows.map(l=>{
+    // 마지막 활동 (assign/status_change 제외)
+    const lastAct=acts.filter(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type))
+      .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];
+
+    // 지점장/팀장 표시 — 단독이면 대전/대전
+    const branchDisp = l.branch_name||'대전';
+    const teamDisp   = l.team_name||'대전센터';
+
+    // 진행단계 뱃지
+    const stageMap={'배정':'badge-stage-green','접촉':'badge-stage-sky','상담':'badge-stage-sky','제안':'badge-stage-sky','계약':'badge-stage-blue','관리':'badge-stage-blue','보류':'badge-stage-orange','드랍':'badge-stage-red'};
+    const stageBadge=l.current_stage?`<span class="badge ${stageMap[l.current_stage]||'badge-pending'}" style="font-size:10px">${esc(l.current_stage)}</span>`:'-';
+
+    // 미팅일 (tm_meeting)
+    const meetingDisp=l.tm_meeting?`<span style="color:var(--blue);font-weight:700;font-size:12px">${fmtShort(l.tm_meeting)}</span>`:'-';
+
+    // 통화완료 탭: 본사이관 버튼
+    const actionBtn=_tmV2Tab==='contacted'
+      ?`<button class="btn btn-xs" style="background:var(--navy);color:#fff;border:none;font-size:10px;white-space:nowrap" onclick="event.stopPropagation();tmToAdmin('${l.id}')">본사이관</button>`
+      :`<button class="btn btn-primary btn-xs" onclick="event.stopPropagation();openTmInput('${l.id}','${esc(l.company_name||'')}')">기록</button>`;
+
+    return`<tr style="cursor:pointer;border-bottom:1px solid var(--gray-100)"
+      onclick="openTmInput('${l.id}','${esc(l.company_name||'')}')"
+      onmouseover="this.style.background='var(--gray-50)'"
+      onmouseout="this.style.background=''">
+      <td style="font-weight:700;color:var(--navy);padding:9px 12px">${esc(l.company_name||'-')}</td>
+      <td style="font-size:12px;padding:9px 10px">${esc(l.contact_name||'-')}</td>
+      <td style="font-size:12px;padding:9px 10px">${esc(l.phone||'-')}</td>
+      <td style="font-size:11px;padding:9px 10px">${esc((l.consult_type||'-').slice(0,16))}</td>
+      <td style="font-size:11px;padding:9px 10px">${esc((l.region||'-').slice(0,10))}</td>
+      <td style="font-size:12px;padding:9px 10px">${esc(branchDisp)}</td>
+      <td style="font-size:12px;padding:9px 10px">${esc(teamDisp)}</td>
+      <td style="padding:9px 10px">${stageBadge}</td>
+      <td style="padding:9px 10px">${meetingDisp}</td>
+      <td style="font-size:11px;color:var(--gray-400);padding:9px 10px">${fmtShort(l.assigned_at||l.created_at)}</td>
+      <td style="font-size:11px;color:var(--gray-600);padding:9px 10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(lastAct?.content?.slice(0,50)||'-')}</td>
+      <td style="padding:9px 10px" onclick="event.stopPropagation()">${actionBtn}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 async function loadTmPanel(){
   const all=await dbQ('leads');
   const today=new Date().toISOString().slice(0,10);
@@ -9619,7 +9726,9 @@ async function loadTmPanel(){
   } else {
     const lv=document.getElementById('tm-list-view');
     if(lv) lv.style.display='none';
-    renderAllTmTabs(); // 각 탭별 필터 적용하여 렌더
+    // v2 렌더
+    _tmV2Data = tmLeads;
+    tmV2Render();
   }
 }
 
@@ -10013,7 +10122,7 @@ function renderTmTable(){
   }).join('');
 }
 
-const TM_STATUS=[{v:'contacted',l:'통화완료'},{v:'no_answer',l:'부재중'},{v:'drop',l:'드랍'},{v:'assigned',l:'미팅확정'}];
+const TM_STATUS=[{v:'contacted',l:'통화완료'},{v:'no_answer',l:'부재중'},{v:'drop',l:'드랍'}];
 let curTmStatus='contacted';
 function openTmInput(lid,cname){
   (document.getElementById('tm-lead-id')||{}).value=lid;
@@ -10082,22 +10191,40 @@ function _renderTmCompanyHistory(lid, lead){
   const TYPE_ICON={call:'📞',meeting:'🤝',email:'📧',online:'💻',note:'📝',proposal:'📋',contract:'🎉'};
   wrap.style.display='block';
 
-  const histHtml = allActs.length
+  // 전체 기록 로드 (최대 20건) — 오래된순 정렬 후 번호 부여
+  const allActsFull=(allActivities||[]).filter(a=>
+    a.lead_id===lid &&
+    !['assign','status_change'].includes(a.type) &&
+    (a.content||'').trim()
+  ).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).slice(-20);
+
+  const TYPE_ICON2={call:'📞',meeting:'🤝',email:'📧',online:'💻',note:'📝',proposal:'📋',contract:'🎉'};
+
+  const histHtml = allActsFull.length
     ? `<div style="font-size:12px;font-weight:700;color:var(--blue);margin-bottom:8px">
-        🏢 기업 활동 히스토리 <span style="font-size:10px;font-weight:400;color:var(--gray-400)">(최근 ${allActs.length}건)</span>
+        🏢 기업 활동 히스토리 <span style="font-size:10px;font-weight:400;color:var(--gray-400)">(${allActsFull.length}건 · 오래된순)</span>
       </div>
-      ${allActs.map(a=>`
-        <div style="display:flex;gap:8px;padding:7px 10px;background:var(--gray-50);border-radius:var(--r-sm);margin-bottom:5px;border-left:3px solid var(--blue)">
-          <span style="font-size:13px;flex-shrink:0">${TYPE_ICON[a.type]||'📌'}</span>
+      ${allActsFull.map((a,i)=>{
+        const isTmAct=['대전센터','대전'].includes(String(a.author||'').trim());
+        const borderColor=isTmAct?'var(--ok)':'var(--blue)';
+        const bgColor=isTmAct?'rgba(0,192,115,.06)':'var(--gray-50)';
+        const authorColor=isTmAct?'#00a86b':'var(--navy)';
+        return`<div style="display:flex;gap:8px;padding:7px 10px;background:${bgColor};border-radius:var(--r-sm);margin-bottom:5px;border-left:3px solid ${borderColor}">
+          <span style="font-size:11px;font-weight:800;color:var(--gray-400);flex-shrink:0;min-width:18px">${i+1}.</span>
+          <span style="font-size:13px;flex-shrink:0">${TYPE_ICON2[a.type]||'📌'}</span>
           <div style="flex:1;min-width:0">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
-              <span style="font-size:11px;font-weight:700;color:var(--navy)">${esc(a.author||'-')}</span>
-              <span style="font-size:10px;color:var(--gray-400)">${(a.created_at||'').slice(0,10)}</span>
+              <div style="display:flex;align-items:center;gap:4px">
+                <span style="font-size:11px;font-weight:700;color:${authorColor}">${esc(a.author||'-')}</span>
+                ${isTmAct?'<span style="font-size:9px;font-weight:700;color:#fff;background:#00a86b;padding:1px 4px;border-radius:6px">TM</span>':''}
+              </div>
+              <span style="font-size:10px;color:var(--gray-400)">${(a.date||a.created_at||'').slice(0,10)}</span>
             </div>
-            <div style="font-size:12px;color:var(--gray-700);overflow:visible;white-space:nowrap">${esc((a.content||'').slice(0,60))}</div>
+            <div style="font-size:12px;color:var(--gray-700);white-space:pre-wrap;word-break:break-all">${esc((a.content||'').slice(0,120))}</div>
             ${a.stage?`<span style="font-size:10px;color:var(--blue);margin-top:1px;display:inline-block">${esc(a.stage)}</span>`:''}
           </div>
-        </div>`).join('')}`
+        </div>`;
+      }).join('')}`
     : `<div style="font-size:11px;color:var(--gray-400);padding:4px 0">이전 활동 기록이 없습니다</div>`;
 
   wrap.innerHTML = dateBanner + histHtml;
@@ -10290,7 +10417,17 @@ async function saveTmRecord(){
     tm_content: cont,
     tm_date: new Date().toISOString().slice(0,10)
   };
-  if(mdate) tmFieldUpdate.tm_meeting=mdate;
+  if(mdate){
+    tmFieldUpdate.tm_meeting=mdate;
+    // 미팅일 확정 → 해피콜 탭 자동 연동
+    if(!tmFieldUpdate.tm_happycall && !tmFieldUpdate.happycall_date){
+      const lead=(allLeads||[]).find(l=>l.id===lid);
+      if(!lead?.tm_happycall){
+        tmFieldUpdate.happycall_date=mdate;
+        tmFieldUpdate.tm_happycall=tmFieldUpdate.tm_happycall||'미팅일 확정';
+      }
+    }
+  }
   await dbU('leads', lid, tmFieldUpdate);
 
   // 3. 통화 내용 활동 기록 (항상)
