@@ -11962,12 +11962,28 @@ async function renderTrashInline(){
   let trash=[];
   if(!testMode){
     try{
+      // sbH() 의 Prefer 헤더 충돌 방지 — 헤더 직접 구성
       const r=await fetch(SB_URL+'/rest/v1/leads?select=*&status=eq.deleted&order=updated_at.desc',{
-        headers:{...sbH(),'Range-Unit':'items','Range':'0-1999','Prefer':'count=none'}
+        headers:{
+          'Content-Type':'application/json',
+          'apikey': SB_KEY,
+          'Authorization': 'Bearer '+SB_KEY,
+          'Range-Unit': 'items',
+          'Range': '0-1999',
+          'Prefer': 'count=none'
+        }
       });
-      if(r.ok) trash=await r.json().catch(()=>[]);
-      else trash=[];
-    }catch(e){ trash=getTrash(); }
+      if(r.ok){
+        trash=await r.json().catch(()=>[]);
+        if(!Array.isArray(trash)) trash=[];
+      } else {
+        console.error('휴지통 조회 실패:', r.status, await r.text().catch(()=>''));
+        trash=[];
+      }
+    }catch(e){
+      console.error('휴지통 fetch 오류:',e);
+      trash=getTrash();
+    }
   } else {
     trash=getTrash();
   }
