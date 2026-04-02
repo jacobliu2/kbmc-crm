@@ -11899,6 +11899,22 @@ async function rcExportExcel(){
 // ━━ 재배정DB 패널 렌더 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // updateLeadsSubTabCounts에 reassigndb 카운트 추가
 
+// ── 서브탭 카운트 업데이트 (stub — 각 탭 렌더 함수에서 직접 처리)
+function updateLeadsSubTabCounts(){
+  // 드랍 카운트
+  const dropSub=document.getElementById('drop-sub');
+  if(dropSub&&allLeads) dropSub.textContent=(allLeads.filter(l=>l.status==='drop'||l.current_stage==='보류')).length+'건';
+  // 휴지통 카운트
+  const trashSub=document.getElementById('trash-inline-sub');
+  if(trashSub&&typeof _trashCount!=='undefined') trashSub.textContent=_trashCount+'건';
+  // 회수대상 카운트
+  const recallCnt=document.getElementById('leads-subtab-recall-cnt');
+  if(recallCnt&&typeof rcCount==='function'){
+    const cnt=rcCount();
+    recallCnt.textContent=cnt?'('+cnt+')':'';
+  }
+}
+
 let _dropAll=[], _dropFiltered=[];
 function renderDropPanel(){
   // TM 역할이면 TM 이관 건 중 드랍만 표시 (타 지점 드랍 차단)
