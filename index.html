@@ -4728,7 +4728,7 @@ async function loadLeads(){
   // leads + activities + next_actions 동시 로드 (타이밍 문제 근본 해결)
   const [_leadsRaw, _actsRaw, _nasRaw] = await Promise.all([
     dbQ('leads').catch(()=>[]),
-    testMode ? Promise.resolve(allActivities||[]) : dbQ('activities').catch(()=>[]),
+    testMode ? Promise.resolve(lg('activities')) : dbQ('activities').catch(()=>[]),
     testMode ? Promise.resolve(allNextActions||[]) : dbQ('next_actions').catch(()=>[]),
   ]);
   allActivities = _actsRaw;
@@ -11313,53 +11313,115 @@ function _rcCandidates(){
 // 실활동 = type NOT IN (assign, status_change)
 // lead_id 목록을 IN 쿼리로 한번에 조회
 async function _rcFetchLastActs(leadIds){
-  // leadIds: string[]
-  // 반환: Map<leadId, lastRealMs>
-  const map = new Map();
+  // RPC: 서버에서 리드별 최신 실활동 시각 + 활동 건수 확정 반환
+  const map = new Map(); // Map<leadId, {lastMs, count}>
   if(!leadIds.length) return map;
 
-  const SKIP = new Set(['assign','status_change']);
-  const CHUNK = 200; // IN 쿼리 최대 200개씩
+  try{
+    const r = await fetch(SB_URL+'/rest/v1/rpc/get_last_real_activity',{
+      method:'POST',
+      headers:{...sbH(),'Content-Type':'application/json'},
+      body: JSON.stringify({lead_ids: leadIds})
+    });
+    if(!r.ok){
+      console.warn('RPC get_last_real_activity 실패 →  fallback:', r.status);
+      return await _rcFetchLastActsFallback(leadIds);
+    }
+    const rows = await r.json().catch(()=>[]);
+    if(!Array.isArray(rows)) return map;
+    for(const row of rows){
+      if(!row||!row.lead_id||!row.last_at) continue;
+      const ms = new Date(row.last_at).getTime();
+      if(isNaN(ms)) continue;
+      map.set(String(row.lead_id), {lastMs:ms, count:row.activity_count||0});
+    }
+    console.log('[RC] RPC 완료: 후보', leadIds.length,'건 → 활동있음', map.size,'건');
+  }catch(e){
+    console.warn('[RC] RPC 예외 → fallback:', e.message);
+    return await _rcFetchLastActsFallback(leadIds);
+  }
+  return map;
+}
 
-  for(let i=0;i<leadIds.length;i+=CHUNK){
+// fallback: RPC 미등록 시 소청크 직접 조회
+async function _rcFetchLastActsFallback(leadIds){
+  const map  = new Map();
+  const REAL = new Set(['call','meeting','online','proposal','contract','email']); // 실접촉 타입만
+  const CHUNK = 10;
+  for(let i=0; i<leadIds.length; i+=CHUNK){
     const chunk = leadIds.slice(i,i+CHUNK);
-    // PostgREST: lead_id=in.(id1,id2,...) 
-    const inParam = chunk.map(id=>`"${id}"`).join(',');
     const url = SB_URL+'/rest/v1/activities'
       +'?select=lead_id,type,created_at'
       +'&lead_id=in.('+chunk.join(',')+')'
-      +'&type=neq.assign&type=neq.status_change'
-      +'&order=created_at.desc'
-      +'&limit=10000';
+      +'&order=created_at.desc';
     try{
-      const r = await fetch(url, {headers:{...sbH(),'Prefer':'count=none'}});
+      const r = await fetch(url,{
+        headers:{...sbH(),'Range-Unit':'items','Range':'0-999','Prefer':'count=none'}
+      });
       if(!r.ok) continue;
       const rows = await r.json().catch(()=>[]);
+      if(!Array.isArray(rows)) continue;
       for(const a of rows){
         if(!a||!a.lead_id) continue;
+        if(!REAL.has(String(a.type||'').trim())) continue; // 허용 기반 필터
         const ms = new Date(a.created_at).getTime();
         if(isNaN(ms)) continue;
         const key = String(a.lead_id);
         const prev = map.get(key);
-        if(prev===undefined||ms>prev) map.set(key,ms);
+        if(!prev||ms>prev.lastMs) map.set(key,{lastMs:ms,count:(prev?.count||0)+1});
       }
-    }catch(e){ console.warn('_rcFetchLastActs chunk err:',e); }
+    }catch(e){ console.warn('[RC] fallback err:',e.message); }
   }
-  return map; // Map<leadId, lastRealMs(number)>
+  console.warn('[RC] fallback 완료 (RPC 등록 권장)');
+  return map;
+}
+
+// RPC 미설치 시 fallback (청크 10, Range 0-999)
+async function _rcFetchLastActsFallback(leadIds){
+  const map  = new Map();
+  const SKIP = new Set(['assign','status_change']);
+  const CHUNK = 10;
+  for(let i=0; i<leadIds.length; i+=CHUNK){
+    const chunk = leadIds.slice(i, i+CHUNK);
+    const url = SB_URL+'/rest/v1/activities'
+      +'?select=lead_id,type,created_at'
+      +'&lead_id=in.('+chunk.join(',')+')'
+      +'&order=created_at.desc';
+    try{
+      const r = await fetch(url,{
+        headers:{...sbH(),'Range-Unit':'items','Range':'0-999','Prefer':'count=none'}
+      });
+      if(!r.ok) continue;
+      const rows = await r.json().catch(()=>[]);
+      if(!Array.isArray(rows)) continue;
+      for(const a of rows){
+        if(!a||!a.lead_id||SKIP.has(String(a.type||'').trim())) continue;
+        const ms = new Date(a.created_at).getTime();
+        if(isNaN(ms)) continue;
+        const key = String(a.lead_id);
+        const prev = map.get(key);
+        if(prev===undefined||ms>prev) map.set(key, ms);
+      }
+    }catch(e){ console.warn('fallback err:',e.message); }
+  }
+  return map;
 }
 
 // testMode용 — localStorage activities에서 맵 구성
 function _rcBuildLastActMapFromCache(){
-  const SKIP = new Set(['assign','status_change']);
+  // 허용 기반 필터 (SKIP이 아닌 REAL 화이트리스트)
+  const REAL = new Set(['call','meeting','online','proposal','contract','email']); // 실접촉 타입만
   const map  = new Map();
-  const acts = Array.isArray(allActivities) ? allActivities : lg('activities');
+  const acts = (Array.isArray(allActivities)&&allActivities.length>0)
+    ? allActivities : lg('activities');
   for(const a of (acts||[])){
-    if(!a||!a.lead_id||SKIP.has(String(a.type||''))) continue;
+    if(!a||!a.lead_id) continue;
+    if(!REAL.has(String(a.type||'').trim())) continue;
     const ms = new Date(a.created_at).getTime();
     if(isNaN(ms)) continue;
     const key = String(a.lead_id);
     const prev = map.get(key);
-    if(prev===undefined||ms>prev) map.set(key,ms);
+    if(!prev||ms>prev.lastMs) map.set(key,{lastMs:ms,count:(prev?.count||0)+1});
   }
   return map;
 }
@@ -11431,7 +11493,8 @@ async function rcRender(){
   // 3. 판정
   _rcTargets = [];
   for(const lead of cands){
-    const lastMs = lastActMap.get(String(lead.id));
+    const _rcVal = lastActMap.get(String(lead.id));
+    const lastMs = _rcVal?.lastMs; // undefined면 활동 없음
     const reason = _rcJudge(lead, lastMs);
     if(reason) _rcTargets.push({...lead, _rcReason:reason});
   }
@@ -11544,8 +11607,8 @@ function rcCount(){
   const lastActMap=_rcBuildLastActMapFromCache();
   let cnt=0;
   for(const lead of cands){
-    const lastMs=lastActMap.get(String(lead.id));
-    if(_rcJudge(lead,lastMs)) cnt++;
+    const _v=lastActMap.get(String(lead.id));
+    if(_rcJudge(lead,_v?.lastMs)) cnt++;
   }
   return cnt;
 }
