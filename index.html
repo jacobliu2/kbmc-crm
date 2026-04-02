@@ -1090,7 +1090,10 @@ tbody tr.selected td{background:var(--blue-50)!important}
           ❌ 드랍·보류 DB <span id="leads-subtab-drop-cnt" style="font-size:11px;font-weight:400;color:var(--gray-400)"></span>
         </button>
 
-<!-- 회수대상 탭 제거됨 -->
+        <button id="leads-subtab-recall" onclick="switchLeadsSubTab('recall',this)"
+          style="display:none;padding:9px 18px;border:none;outline:none;background:transparent;cursor:pointer;font-size:14px;font-weight:600;color:var(--err);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">
+          ⛔ 회수대상 <span id="leads-subtab-recall-cnt" style="font-size:11px;font-weight:400;color:var(--gray-400)"></span>
+        </button>
         <button id="leads-subtab-trash" onclick="switchLeadsSubTab('trash',this)"
           style="display:none;padding:9px 18px;border:none;outline:none;background:transparent;cursor:pointer;font-size:14px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">
           🗑️ 휴지통 <span id="leads-subtab-trash-cnt" style="font-size:11px;font-weight:400;color:var(--gray-400)"></span>
@@ -1216,8 +1219,38 @@ tbody tr.selected td{background:var(--blue-50)!important}
       <!-- 드랍 DB 패널 -->
       
 
-      <!-- 회수대상 패널 제거됨 -->
-            <div id="leads-panel-drop" style="display:none">
+      <!-- ── 회수대상 패널 ── -->
+      <div id="leads-panel-recall" style="display:none">
+        <div class="page-header" style="margin-bottom:12px">
+          <div class="page-title" style="font-size:16px">⛔ 회수대상 <sub id="recall-sub" style="font-size:13px;color:var(--err)"></sub></div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-outline btn-sm" onclick="rcCheckAll(true)" style="font-size:12px">전체선택</button>
+            <button class="btn btn-outline btn-sm" onclick="rcCheckAll(false)" style="font-size:12px">선택해제</button>
+            <button class="btn btn-sm" style="background:var(--err);color:#fff;border-color:var(--err)" onclick="rcRecallSelected()">↩ 선택 회수 → 대전TM</button>
+          </div>
+        </div>
+        <div style="font-size:12px;color:var(--gray-500);margin-bottom:10px;padding:8px 12px;background:rgba(239,68,68,.06);border-radius:6px;border-left:3px solid var(--err)">
+          배정 후 48h 미기록 / 접촉·상담 120h 마지막기록 경과 / 관리 30영업일 마지막기록 경과 DB. 회수 시 대전TM으로 이관됩니다.
+        </div>
+        <div class="card" style="padding:0">
+          <div class="db-wrap">
+            <table class="db-table">
+              <thead><tr>
+                <th style="width:32px"><input type="checkbox" id="recall-chk-all" onchange="rcCheckAll(this.checked)"></th>
+                <th style="width:160px">회사명</th>
+                <th style="width:80px">지점장</th>
+                <th style="width:100px">팀장</th>
+                <th style="width:120px">배정일시</th>
+                <th>회수 사유</th>
+                <th style="width:70px">액션</th>
+              </tr></thead>
+              <tbody id="recall-tbody"><tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-400)">로딩 중...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="leads-panel-drop" style="display:none">
         <div class="page-header" style="margin-bottom:12px">
           <div class="page-title" style="font-size:16px">드랍·보류 DB <sub id="drop-sub"></sub></div>
           <div style="display:flex;gap:8px">
@@ -3605,7 +3638,8 @@ function handleRealtimeChange(table, payload){
       (document.getElementById('leads-sub')||{}).textContent=allLeads.filter(l=>l.status!=='deleted').length+'건';
       if(typeof filterLeads==='function') filterLeads();
       if(typeof updateLeadsSubTabCounts==='function') updateLeadsSubTabCounts();
-      // 조용히 갱신 — 토스트 제거 (방해됨)
+      // recall 탭 열려있으면 자동 갱신
+      if(typeof rcRender==='function'&&typeof _leadsSubTab!=='undefined'&&_leadsSubTab==='recall') rcRender();
     }, 400);
 
   } else if(table === 'activities'){
@@ -3623,6 +3657,8 @@ function handleRealtimeChange(table, payload){
     clearTimeout(_rtDebounceTimer);
     _rtDebounceTimer = setTimeout(()=>{
       if(typeof filterLeads==='function') filterLeads();
+      // recall 탭 열려있으면 활동기록 변경 시 재판정
+      if(typeof rcRender==='function'&&typeof _leadsSubTab!=='undefined'&&_leadsSubTab==='recall') rcRender();
       // 현재 열린 활동모달 히스토리도 갱신
       const openLid = document.getElementById('act-lead-id')?.value;
       if(openLid && document.getElementById('modal-activity')?.classList.contains('open')){
@@ -4657,7 +4693,7 @@ async function loadLeads(){
   // 30h+ 버튼 관리자에게만 표시
   const _o30btn=document.getElementById('qtab-overdue30');
   if(_o30btn) _o30btn.style.display=_showAdminTabs?'':'none';  // trash 탭
-  ['leads-subtab-trash'].forEach(id=>{
+  ['leads-subtab-recall','leads-subtab-trash'].forEach(id=>{
     const el=document.getElementById(id);
     if(el){ el.style.removeProperty('display'); if(!_showAdminTabs) el.style.display='none'; }
   });
@@ -4766,7 +4802,7 @@ async function loadLeads(){
   // activities/next_actions는 위에서 이미 동시 로드 완료
   // active 패널만 직접 표시 (switchLeadsSubTab 호출 시 무한루프 방지)
   _leadsSubTab='active';
-  ['active','drop','trash'].forEach(t=>{
+  ['active','drop','recall','trash'].forEach(t=>{
     const el=document.getElementById('leads-panel-'+t);
     if(el) el.style.display=t==='active'?'':'none';
     const b=document.getElementById('leads-subtab-'+t);
@@ -4895,6 +4931,14 @@ function filterLeads(){
   curPage=1; renderLeadsTable();
   (document.getElementById('leads-sub')||{}).textContent=filtered.length+'건';
   updateLeadsStatsMini();
+  // 회수대상 카운트 갱신 (관리자만)
+  if(curUser?.role==='admin'){
+    const _rcCntEl=document.getElementById('leads-subtab-recall-cnt');
+    if(_rcCntEl){
+      const _rc=allActivities?.length?rcCount():0;
+      _rcCntEl.textContent=_rc?'('+_rc+')':'';
+    }
+  }
 }
 function clearLeadFilters(){
   ['leads-search','leads-status','leads-type'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
@@ -11220,7 +11264,7 @@ let _leadsSubTab='active';
 
 function switchLeadsSubTab(tab, btn){
   _leadsSubTab=tab;
-  ['active','drop','trash'].forEach(t=>{
+  ['active','drop','recall','trash'].forEach(t=>{
     const el=document.getElementById('leads-panel-'+t);
     if(el) el.style.display=t===tab?'':'none';
     const b=document.getElementById('leads-subtab-'+t);
@@ -11233,6 +11277,7 @@ function switchLeadsSubTab(tab, btn){
   });
   if(tab==='drop') renderDropPanel();
   if(tab==='trash') renderTrashInline();
+  if(tab==='recall') rcRender();
 
   // 정렬 컨트롤바: active 탭에서만 표시
   const sortBar=document.getElementById('leads-sort-bar');
@@ -11243,7 +11288,210 @@ function switchLeadsSubTab(tab, btn){
 
 
 
-// 회수대상 모듈 제거됨
+
+// ━━ 회수대상 모듈 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+let _rcTargets=[], _rcSelected=new Set();
+
+/* 활동기록 맵 구성 */
+function _rcBuildActMap(){
+  const map=new Map();
+  const acts=Array.isArray(allActivities)?allActivities:[];
+  for(const a of acts){
+    if(!a||!a.lead_id) continue;
+    const key=String(a.lead_id);
+    if(!map.has(key)) map.set(key,[]);
+    map.get(key).push(a);
+  }
+  for(const arr of map.values())
+    arr.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  return map;
+}
+
+/* 회수 사유 판정 */
+function _rcGetReason(lead, actMap){
+  if(!lead) return null;
+  // 제외 조건
+  if(lead.tm_transferred===true||lead.tm_transferred==='true') return null;
+  if(lead.yj_transferred===true||lead.yj_transferred==='true') return null;
+  if(lead.yj_done===true||lead.yj_done==='true') return null;
+  if(lead.tm_done===true||lead.tm_done==='true') return null;
+  if(!lead.assigned_at) return null;
+  if(!lead.team_name||!lead.team_name.trim()) return null;
+  const stage=String(lead.current_stage||'').trim();
+  const status=String(lead.status||'').trim();
+  if(['계약','제안','보류','드랍'].includes(stage)) return null;
+  if(['drop','deleted'].includes(status)) return null;
+  if(!Array.isArray(allActivities)) return null;
+
+  const now=Date.now();
+  const baseTime=new Date(lead.assigned_at).getTime();
+  if(isNaN(baseTime)) return null;
+
+  const rawActs=(actMap.get(String(lead.id))||[])
+    .filter(a=>!['assign','status_change'].includes(String(a.type||'').trim()));
+
+  // A. 배정 후 아무 기록 없음 → 48h
+  if(rawActs.length===0){
+    const h=Math.floor((now-baseTime)/3600000);
+    if(h>48) return {code:'A',weight:1,
+      text:`⚠️ 분배 후 ${h}h 미기록 (기준: 48h)`,bg:'rgba(239,68,68,.07)'};
+    return null;
+  }
+
+  const lastAt=new Date(rawActs[0].created_at).getTime();
+  if(isNaN(lastAt)) return null;
+
+  // C. 관리 단계 → 30영업일
+  if(stage==='관리'){
+    const bd=bizElapsedDays(lastAt,now);
+    if(bd>30) return {code:'C',weight:3,
+      text:`🏢 마지막 기록 ${bd}영업일 경과 (기준 30일)`,bg:''};
+    return null;
+  }
+
+  // B. 접촉·상담 등 → 120h
+  const h=Math.floor((now-lastAt)/3600000);
+  if(h>120) return {code:'B',weight:2,
+    text:`📞 마지막 기록 ${h}h 경과 (기준 120h)`,bg:''};
+  return null;
+}
+
+/* 대상 계산 */
+function rcComputeTargets(){
+  if(!Array.isArray(allLeads)||!allLeads.length) return [];
+  if(!Array.isArray(allActivities)) return [];
+  const actMap=_rcBuildActMap();
+  const targets=[];
+  for(const lead of allLeads){
+    try{
+      const reason=_rcGetReason(lead,actMap);
+      if(reason) targets.push({...lead,_rcReason:reason});
+    }catch(e){console.warn('rcCompute err:',lead?.id,e);}
+  }
+  targets.sort((a,b)=>{
+    const w=(a._rcReason.weight||9)-(b._rcReason.weight||9);
+    if(w!==0) return w;
+    return new Date(a.assigned_at)-new Date(b.assigned_at);
+  });
+  return targets;
+}
+
+/* 렌더 */
+function rcRender(){
+  const tbody=document.getElementById('recall-tbody');
+  const sub=document.getElementById('recall-sub');
+  if(!tbody) return;
+  if(!Array.isArray(allActivities)){
+    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-400)">⏳ 활동기록 로딩 중...</td></tr>';
+    return;
+  }
+  try{
+    _rcTargets=rcComputeTargets();
+    const cnt=_rcTargets.length;
+    if(sub) sub.textContent=cnt+'건';
+    const cntEl=document.getElementById('leads-subtab-recall-cnt');
+    if(cntEl) cntEl.textContent=cnt?'('+cnt+')':'';
+    if(!cnt){
+      tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-400)">✅ 회수대상 DB가 없습니다</td></tr>';
+      return;
+    }
+    const fmtDt=v=>{
+      if(!v) return '-';
+      const d=new Date(v);
+      if(isNaN(d)) return '-';
+      return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')
+        +' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+    };
+    tbody.innerHTML=_rcTargets.map(t=>{
+      const chk=_rcSelected.has(t.id)?'checked':'';
+      const rowBg=t._rcReason.bg?'background:'+t._rcReason.bg+';':'';
+      return `<tr style="border-bottom:1px solid var(--gray-100);cursor:pointer;${rowBg}"
+        onmouseover="this.style.background='var(--gray-50)'"
+        onmouseout="this.style.background='${t._rcReason.bg||''}'">
+        <td style="padding:8px 10px" onclick="event.stopPropagation()">
+          <input type="checkbox" ${chk} onchange="rcToggleOne('${t.id}',this.checked)">
+        </td>
+        <td style="padding:8px 12px;font-weight:700;color:var(--navy);cursor:pointer"
+          onclick="openPanel(allLeads.find(l=>l.id==='${t.id}'))">${esc(t.company_name||'-')}</td>
+        <td style="padding:8px 10px;font-size:12px">${esc(t.branch_name||'-')}</td>
+        <td style="padding:8px 10px;font-size:12px">${esc(t.team_name||'-')}</td>
+        <td style="padding:8px 10px;font-size:11px;color:var(--gray-400)">${fmtDt(t.assigned_at)}</td>
+        <td style="padding:8px 10px;font-size:12px;font-weight:600;color:var(--err)">${t._rcReason.text||''}</td>
+        <td style="padding:8px 10px;white-space:nowrap" onclick="event.stopPropagation()">
+          <button class="btn btn-sm btn-outline" style="color:var(--err);border-color:var(--err);font-size:11px"
+            onclick="rcRecallOne('${t.id}')">↩ 회수</button>
+        </td>
+      </tr>`;
+    }).join('');
+  }catch(e){
+    console.error('rcRender err:',e);
+    tbody.innerHTML='<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--err)">오류: '+e.message+'</td></tr>';
+  }
+}
+
+/* 선택 */
+function rcToggleOne(id,checked){checked?_rcSelected.add(id):_rcSelected.delete(id);}
+function rcCheckAll(checked){
+  _rcTargets.forEach(t=>checked?_rcSelected.add(t.id):_rcSelected.delete(t.id));
+  document.querySelectorAll('#recall-tbody input[type=checkbox]').forEach(c=>c.checked=checked);
+  const chkAll=document.getElementById('recall-chk-all');
+  if(chkAll) chkAll.checked=checked;
+}
+
+/* 회수 공통 패치 */
+function _rcBuildPatch(reason){
+  return {
+    branch_name:'대전', team_name:'대전센터', team_names:JSON.stringify(['대전센터']),
+    tm_transferred:true, assigned_at:new Date().toISOString(),
+    status:'assigned', collab_branches:null,
+    auto_recalled:true, auto_recall_reason:reason||'수동 회수',
+    auto_recall_at:new Date().toISOString()
+  };
+}
+
+/* 단건 회수 */
+async function rcRecallOne(id){
+  const t=_rcTargets.find(x=>x.id===id);
+  if(!t){showToast('대상 없음','error');return;}
+  if(!confirm(`"${t.company_name||''}" 을(를) 회수하고 대전TM으로 이관하시겠습니까?`)) return;
+  try{
+    const patch=_rcBuildPatch(t._rcReason?.text);
+    await dbU('leads',id,patch);
+    await logActivity(id,'assign','회수 → 대전TM 이관 ('+( t._rcReason?.text||'')+')', 'assigned','');
+    if(allLeads){const i=allLeads.findIndex(x=>x.id===id);if(i>=0)allLeads[i]={...allLeads[i],...patch};}
+    _rcSelected.delete(id);
+    showToast('회수 완료 → 대전TM 이관','success');
+    filterLeads(); rcRender(); updateLeadsSubTabCounts?.();
+  }catch(e){console.error(e);showToast('오류: '+e.message,'error');}
+}
+
+/* 선택 일괄 회수 */
+async function rcRecallSelected(){
+  const ids=[..._rcSelected];
+  if(!ids.length){showToast('선택된 DB가 없습니다','error');return;}
+  if(!confirm(ids.length+'건을 회수하고 대전TM으로 이관하시겠습니까?')) return;
+  try{
+    for(const id of ids){
+      const t=_rcTargets.find(x=>x.id===id);
+      const patch=_rcBuildPatch(t?._rcReason?.text);
+      await dbU('leads',id,patch);
+      await logActivity(id,'assign','일괄 회수 → 대전TM 이관 ('+(t?._rcReason?.text||'')+')', 'assigned','');
+      if(allLeads){const i=allLeads.findIndex(x=>x.id===id);if(i>=0)allLeads[i]={...allLeads[i],...patch};}
+    }
+    _rcSelected.clear();
+    showToast(ids.length+'건 회수 완료 → 대전TM 이관','success');
+    filterLeads(); rcRender(); updateLeadsSubTabCounts?.();
+  }catch(e){console.error(e);showToast('오류: '+e.message,'error');}
+}
+
+/* 카운트 (updateLeadsSubTabCounts용) */
+function rcCount(){
+  if(!Array.isArray(allLeads)||!allLeads.length) return 0;
+  if(!Array.isArray(allActivities)) return 0;
+  return rcComputeTargets().length;
+}
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 
 
 // ━━ 재배정DB 패널 렌더 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
