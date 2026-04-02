@@ -9251,18 +9251,37 @@ async function loadTmPanel(){
   const all=await dbQ('leads');
   const today=new Date().toISOString().slice(0,10);
   const todayStart=today+'T00:00:00';
-  // id 기준 중복 제거 후 필터 (Realtime 이중 수신 방지)
+  // id 기준 중복 제거 (Realtime 이중 수신 방지)
   const _allUniq=[];const _seenIds=new Set();
   for(const l of all){if(!_seenIds.has(l.id)){_seenIds.add(l.id);_allUniq.push(l);}}
-  tmLeads=_allUniq.filter(l=>{
+
+  // TM 대상 필터
+  const _tmRaw=_allUniq.filter(l=>{
     if(l.status==='deleted') return false;
-    // TM이관완료(tm_done=true, tm_transferred=false) 건은 TM뷰 제외 (관리자 재배정풀로)
     if((l.tm_done===true||l.tm_done==='true')&&!(l.tm_transferred===true||l.tm_transferred==='true')) return false;
-    // TM이 담당한 모든 건 (드랍 포함 추적)
     if(l.tm_transferred===true||l.tm_transferred==='true') return true;
     try{ const cb=JSON.parse(l.collab_branches||'[]'); if(cb.includes('대전TM')) return true; }catch(e){}
     return false;
   });
+
+  // phone+name 기준 중복 제거 — 가장 최근 assigned_at 건 유지
+  const _tmSeenKey=new Map();
+  for(const l of _tmRaw){
+    const _phone=(l.phone||'').replace(/[^0-9]/g,'');
+    const _name=(l.company_name||'').trim();
+    const _key=_name+'__'+_phone;
+    if(!_key||_key==='__'){_tmSeenKey.set(l.id,l);continue;}
+    if(!_tmSeenKey.has(_key)){
+      _tmSeenKey.set(_key,l);
+    } else {
+      // 더 최근 건 유지
+      const _prev=_tmSeenKey.get(_key);
+      const _prevT=new Date(_prev.assigned_at||_prev.created_at||0).getTime();
+      const _curT=new Date(l.assigned_at||l.created_at||0).getTime();
+      if(_curT>_prevT) _tmSeenKey.set(_key,l);
+    }
+  }
+  tmLeads=[..._tmSeenKey.values()];
   const acts=allActivities||[];
   const now=Date.now();
 
@@ -10245,14 +10264,8 @@ async function confirmAutoDist(ids){
 function openDbCleanup(){
   const leads=(allLeads||[]).filter(l=>l.status!=='deleted');
 
-  // ── 중복 그룹 계산 ─────────────────────────────
-  // 1. 전화번호+회사명 완전일치
-  const _byPhoneName={};
-  // 2. 전화번호 단독
-  const _byPhone={};
-  // 3. 회사명 단독
-  const _byName={};
-
+  // ── 중복 그룹 계산
+  const _byPhoneName={};const _byPhone={};const _byName={};
   leads.forEach(l=>{
     const phone=(l.phone||'').replace(/[^0-9]/g,'');
     const name=(l.company_name||'').trim();
@@ -10260,10 +10273,7 @@ function openDbCleanup(){
     const k2=phone&&phone.length>=9?phone:'';
     const k3=name&&name.length>=2?name:'';
     if(k1){if(!_byPhoneName[k1])_byPhoneName[k1]=[];_byPhoneName[k1].push(l);}
-    else {
-      if(k2){if(!_byPhone[k2])_byPhone[k2]=[];_byPhone[k2].push(l);}
-      if(k3){if(!_byName[k3])_byName[k3]=[];_byName[k3].push(l);}
-    }
+    else{if(k2){if(!_byPhone[k2])_byPhone[k2]=[];_byPhone[k2].push(l);}if(k3){if(!_byName[k3])_byName[k3]=[];_byName[k3].push(l);}}
   });
 
   const dupGroups=[];
@@ -10273,14 +10283,18 @@ function openDbCleanup(){
 
   const unassigned=leads.filter(l=>!l.branch_name||l.branch_name==='');
   const dropped=leads.filter(l=>l.status==='drop');
+  window._dbCleanupGroups=dupGroups; // 전역 저장
 
   let ov=document.getElementById('ov-cleanup');
   if(!ov){ov=document.createElement('div');ov.id='ov-cleanup';ov.className='ov-bg';document.body.appendChild(ov);}
-  ov.innerHTML=`<div class="ov-box" style="width:680px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column">
-    <div style="font-size:17px;font-weight:800;color:var(--navy);margin-bottom:16px">🧹 DB 정리</div>
+  ov.innerHTML=`<div class="ov-box" style="width:720px;max-width:96vw;max-height:92vh;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="font-size:17px;font-weight:800;color:var(--navy)">🧹 DB 정리</div>
+      <button class="mc" onclick="closeOv('ov-cleanup')">✕</button>
+    </div>
 
     <!-- 현황 요약 -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
       <div style="padding:12px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15);border-radius:var(--r-sm);text-align:center">
         <div style="font-size:11px;font-weight:700;color:var(--err);margin-bottom:4px">중복 그룹</div>
         <div style="font-size:22px;font-weight:800;color:var(--err)">${dupGroups.length}</div>
@@ -10299,76 +10313,125 @@ function openDbCleanup(){
       </div>
     </div>
 
+    <!-- 옵션 -->
+    <div style="display:flex;align-items:center;gap:16px;padding:10px 12px;background:rgba(49,130,246,.05);border-radius:8px;margin-bottom:12px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+        <input type="checkbox" id="dup-move-acts" checked style="accent-color:var(--navy)">
+        <span>삭제 전 활동기록 → 유지 건으로 이동</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;margin-left:auto">
+        <input type="checkbox" id="dup-select-all" onchange="dupToggleAll(this.checked)" style="accent-color:var(--navy)">
+        <span>전체 선택</span>
+      </label>
+    </div>
+
     <!-- 중복 목록 -->
-    <div style="font-size:13px;font-weight:700;color:var(--gray-700);margin-bottom:8px">중복 DB 목록 <span style="font-size:11px;font-weight:400;color:var(--gray-400)">(각 그룹에서 남길 건 선택 → 나머지 삭제)</span></div>
-    <div style="flex:1;overflow-y:auto;max-height:400px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm)">
+    <div style="flex:1;overflow-y:auto;border:1.5px solid var(--gray-200);border-radius:var(--r-sm)">
     ${dupGroups.length===0
       ? '<div style="text-align:center;padding:40px;color:var(--gray-400)">✅ 중복 DB가 없습니다</div>'
-      : dupGroups.map((dg,gi)=>`
-        <div style="padding:12px 14px;border-bottom:1px solid var(--gray-100)">
-          <div style="font-size:11px;font-weight:700;color:var(--err);margin-bottom:8px">
-            🔴 [${dg.type} 중복] — ${dg.group.length}건
-          </div>
-          ${dg.group.map((l,li)=>{
-            const stageClr={'계약':'var(--ok)','관리':'var(--ok)','드랍':'var(--err)','보류':'var(--warn)'}[l.current_stage]||'var(--blue)';
-            return `<label style="display:flex;align-items:flex-start;gap:8px;padding:7px 10px;margin-bottom:4px;border:1.5px solid var(--gray-200);border-radius:6px;cursor:pointer;background:#fff">
-              <input type="radio" name="dup-keep-${gi}" value="${l.id}" ${li===0?'checked':''} style="margin-top:2px;accent-color:var(--navy)">
-              <div style="flex:1;min-width:0">
-                <div style="font-weight:700;font-size:13px;color:var(--navy)">${esc(l.company_name||'-')}</div>
-                <div style="font-size:11px;color:var(--gray-500);margin-top:2px">
-                  📞 ${esc(l.phone||'-')} &nbsp;|&nbsp; 지점: ${esc(l.branch_name||'미배정')} &nbsp;|&nbsp; 팀장: ${esc(l.team_name||'-')}
-                  &nbsp;|&nbsp; <span style="color:${stageClr};font-weight:700">${esc(l.current_stage||l.status||'-')}</span>
-                  &nbsp;|&nbsp; 등록: ${(l.created_at||'').slice(0,10)}
+      : dupGroups.map((dg,gi)=>{
+          const acts=allActivities||[];
+          return `<div id="dup-group-${gi}" style="padding:12px 14px;border-bottom:1px solid var(--gray-100)">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+              <input type="checkbox" class="dup-grp-chk" data-gi="${gi}" style="accent-color:var(--navy);width:15px;height:15px">
+              <span style="font-size:11px;font-weight:700;color:var(--err)">🔴 [${dg.type}] ${dg.group.length}건 중복</span>
+            </div>
+            ${dg.group.map((l,li)=>{
+              const actCnt=acts.filter(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type)).length;
+              const lastAct=acts.filter(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type))
+                .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];
+              const stageClr={'계약':'var(--ok)','관리':'var(--ok)','드랍':'var(--err)','보류':'var(--warn)'}[l.current_stage]||'var(--blue)';
+              return `<label style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;margin-bottom:4px;border:1.5px solid var(--gray-200);border-radius:6px;cursor:pointer;background:#fff;transition:border-color .1s" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--gray-200)'">
+                <input type="radio" name="dup-keep-${gi}" value="${l.id}" ${li===0?'checked':''} style="margin-top:3px;accent-color:var(--navy)">
+                <div style="flex:1;min-width:0">
+                  <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                    <span style="font-weight:700;font-size:13px;color:var(--navy)">${esc(l.company_name||'-')}</span>
+                    <span style="font-size:10px;padding:1px 6px;border-radius:10px;background:${actCnt>0?'rgba(0,192,115,.1)':'var(--gray-100)'};color:${actCnt>0?'var(--ok)':'var(--gray-400)'};font-weight:700">활동 ${actCnt}건</span>
+                    ${li===0?'<span style="font-size:10px;padding:1px 6px;border-radius:10px;background:rgba(49,130,246,.1);color:var(--blue);font-weight:700">유지 기본값</span>':''}
+                  </div>
+                  <div style="font-size:11px;color:var(--gray-500);margin-top:3px">
+                    📞 ${esc(l.phone||'-')} &nbsp;|&nbsp;
+                    지점: ${esc(l.branch_name||'미배정')} &nbsp;|&nbsp;
+                    팀장: ${esc(l.team_name||'-')} &nbsp;|&nbsp;
+                    <span style="color:${stageClr};font-weight:700">${esc(l.current_stage||l.status||'-')}</span>
+                    &nbsp;|&nbsp; 등록: ${(l.created_at||'').slice(0,10)}
+                    ${lastAct?`&nbsp;|&nbsp; 최근활동: ${(lastAct.created_at||'').slice(0,10)} [${esc((lastAct.content||'').slice(0,20))}]`:''}
+                  </div>
                 </div>
-              </div>
-            </label>`;
-          }).join('')}
-        </div>`).join('')
+              </label>`;
+            }).join('')}
+          </div>`;
+        }).join('')
     }
     </div>
 
-    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
-      <button class="btn btn-outline" onclick="closeOv('ov-cleanup')">닫기</button>
-      ${dupGroups.length?`<button class="btn btn-danger" onclick="mergeDupsFromModal(${JSON.stringify(dupGroups.map((_,i)=>i))})">🗑 선택 외 삭제</button>`:''}
+    <div style="display:flex;align-items:center;gap:8px;justify-content:space-between;margin-top:14px">
+      <div style="font-size:12px;color:var(--gray-400)">체크박스로 정리할 그룹을 선택 후 실행</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-outline" onclick="closeOv('ov-cleanup')">닫기</button>
+        ${dupGroups.length?`<button class="btn btn-danger" onclick="mergeDupsFromModal()">🗑 선택 그룹 정리</button>`:''}
+      </div>
     </div>
   </div>`;
   ov.classList.add('open');
 }
 
-async function mergeDupsFromModal(groupIndices){
-  // 각 그룹에서 선택된(남길) id를 파악 → 나머지 삭제
+function dupToggleAll(checked){
+  document.querySelectorAll('.dup-grp-chk').forEach(c=>c.checked=checked);
+}
+
+async function mergeDupsFromModal(){
+  const checkedGIs=[...document.querySelectorAll('.dup-grp-chk:checked')].map(c=>parseInt(c.dataset.gi));
+  if(!checkedGIs.length){showToast('정리할 그룹을 체크하세요','error');return;}
+  const dupGroups=window._dbCleanupGroups||[];
+  const moveActs=document.getElementById('dup-move-acts')?.checked!==false;
   const toDelete=[];
-  const leads=(allLeads||[]).filter(l=>l.status!=='deleted');
+  const actMoves=[]; // {fromId, toId}
 
-  // 그룹 재계산 (모달과 동일 로직)
-  const _byPhoneName={};const _byPhone={};const _byName={};
-  leads.forEach(l=>{
-    const phone=(l.phone||'').replace(/[^0-9]/g,'');
-    const name=(l.company_name||'').trim();
-    const k1=phone&&name?name+'__'+phone:'';
-    const k2=phone&&phone.length>=9?phone:'';
-    const k3=name&&name.length>=2?name:'';
-    if(k1){if(!_byPhoneName[k1])_byPhoneName[k1]=[];_byPhoneName[k1].push(l);}
-    else{if(k2){if(!_byPhone[k2])_byPhone[k2]=[];_byPhone[k2].push(l);}if(k3){if(!_byName[k3])_byName[k3]=[];_byName[k3].push(l);}}
-  });
-  const dupGroups=[];
-  Object.values(_byPhoneName).filter(g=>g.length>1).forEach(g=>dupGroups.push({type:'회사명+연락처',group:g}));
-  Object.values(_byPhone).filter(g=>g.length>1).forEach(g=>dupGroups.push({type:'연락처',group:g}));
-  Object.values(_byName).filter(g=>g.length>1).forEach(g=>dupGroups.push({type:'회사명',group:g}));
-
-  groupIndices.forEach(gi=>{
+  checkedGIs.forEach(gi=>{
     const dg=dupGroups[gi]; if(!dg)return;
     const keepEl=document.querySelector(`input[name="dup-keep-${gi}"]:checked`);
     const keepId=keepEl?.value;
-    dg.group.forEach(l=>{ if(l.id!==keepId) toDelete.push(l.id); });
+    if(!keepId)return;
+    dg.group.forEach(l=>{
+      if(l.id!==keepId){
+        toDelete.push(l.id);
+        if(moveActs) actMoves.push({fromId:l.id,toId:keepId});
+      }
+    });
   });
 
   if(!toDelete.length){showToast('삭제할 항목이 없습니다','error');return;}
-  if(!confirm(`중복 ${toDelete.length}건을 삭제 처리하시겠습니까?\n(선택한 건만 유지)`))return;
+  const moveMsg=moveActs&&actMoves.length?`\n활동기록 ${actMoves.reduce((s,m)=>{const cnt=(allActivities||[]).filter(a=>a.lead_id===m.fromId&&!['assign','status_change'].includes(a.type)).length;return s+cnt;},0)}건도 이동합니다.`:'';
+  if(!confirm(`선택 그룹 ${checkedGIs.length}개 — 중복 ${toDelete.length}건 삭제하시겠습니까?${moveMsg}`))return;
+
+  // 활동기록 이동
+  if(moveActs){
+    for(const {fromId,toId} of actMoves){
+      const fromActs=(allActivities||[]).filter(a=>a.lead_id===fromId&&!['assign','status_change'].includes(a.type));
+      for(const act of fromActs){
+        // Supabase: activities.lead_id 업데이트
+        if(!testMode){
+          await fetch(SB_URL+'/rest/v1/activities?id=eq.'+act.id,{
+            method:'PATCH',
+            headers:{...sbH(),'Prefer':'return=minimal'},
+            body:JSON.stringify({lead_id:toId})
+          });
+        }
+        // 로컬 캐시 갱신
+        if(allActivities){const i=allActivities.findIndex(a=>a.id===act.id);if(i>=0)allActivities[i].lead_id=toId;}
+        if(testMode){const a=lg('activities');const i=a.findIndex(x=>x.id===act.id);if(i>=0){a[i].lead_id=toId;ls('activities',a);}}
+      }
+    }
+    showToast(`활동기록 이동 완료`);
+  }
+
+  // 중복 삭제
   for(const id of toDelete){
     await dbU('leads',id,{status:'deleted',deleted_at:new Date().toISOString(),deleted_by:curUser.name+'(중복정리)'});
     if(allLeads){const i=allLeads.findIndex(l=>l.id===id);if(i>=0)allLeads[i].status='deleted';}
   }
+
   closeOv('ov-cleanup');
   showToast(`중복 ${toDelete.length}건 정리 완료`,'success');
   filterLeads(); updateLeadsSubTabCounts();
