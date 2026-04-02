@@ -9541,6 +9541,8 @@ function tmV2Render(){
     // 마지막 활동 (assign/status_change 제외)
     const lastAct=acts.filter(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type))
       .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];
+    // acts 캐시 없을 때 DB 저장된 tm_content fallback
+    const lastContent = lastAct?.content || l.tm_content || '';
 
     // 지점장/팀장 표시 — 단독이면 대전/대전
     const branchDisp = l.branch_name||'대전';
@@ -9572,7 +9574,7 @@ function tmV2Render(){
       <td style="padding:9px 10px">${stageBadge}</td>
       <td style="padding:9px 10px">${meetingDisp}</td>
       <td style="font-size:11px;color:var(--gray-400);padding:9px 10px">${fmtShort(l.assigned_at||l.created_at)}</td>
-      <td style="font-size:11px;color:var(--gray-600);padding:9px 10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(lastAct?.content?.slice(0,50)||'-')}</td>
+      <td style="font-size:11px;color:var(--gray-600);padding:9px 10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(lastContent.slice(0,50)||'-')}</td>
       <td style="padding:9px 10px" onclick="event.stopPropagation()">${actionBtn}</td>
     </tr>`;
   }).join('');
@@ -11001,6 +11003,10 @@ function brFilterStat(type){
   if(tbl) tbl.closest('table')?.scrollIntoView({behavior:'smooth',block:'start'});
 }
 async function loadBranchScreen(){
+  // allActivities 로드 (히스토리/진행내용 표시용)
+  if(!testMode && (!allActivities || allActivities.length===0)){
+    allActivities = await _loadAllActivities().catch(()=>[]);
+  }
   const all=await dbQ('leads');
   const myTeams=new Set(TEAM_MAP[curUser.name]||[]);
   brAllLeads=all.filter(l=>{
