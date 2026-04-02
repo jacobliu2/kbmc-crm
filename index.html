@@ -9251,11 +9251,15 @@ async function loadTmPanel(){
   const all=await dbQ('leads');
   const today=new Date().toISOString().slice(0,10);
   const todayStart=today+'T00:00:00';
-  tmLeads=all.filter(l=>{
+  // id 기준 중복 제거 후 필터 (Realtime 이중 수신 방지)
+  const _allUniq=[];const _seenIds=new Set();
+  for(const l of all){if(!_seenIds.has(l.id)){_seenIds.add(l.id);_allUniq.push(l);}}
+  tmLeads=_allUniq.filter(l=>{
     if(l.status==='deleted') return false;
+    // TM이관완료(tm_done=true, tm_transferred=false) 건은 TM뷰 제외 (관리자 재배정풀로)
+    if((l.tm_done===true||l.tm_done==='true')&&!(l.tm_transferred===true||l.tm_transferred==='true')) return false;
     // TM이 담당한 모든 건 (드랍 포함 추적)
     if(l.tm_transferred===true||l.tm_transferred==='true') return true;
-    if(l.tm_done===true||l.tm_done==='true') return true;
     try{ const cb=JSON.parse(l.collab_branches||'[]'); if(cb.includes('대전TM')) return true; }catch(e){}
     return false;
   });
@@ -10239,62 +10243,138 @@ async function confirmAutoDist(ids){
 }
 
 function openDbCleanup(){
-  const leads=(allLeads?.length ? allLeads : allLeads||[]).filter(l=>l.status!=='deleted');
-  // 중복 감지 (회사명+전화번호)
-  const seen={}, dups=[];
+  const leads=(allLeads||[]).filter(l=>l.status!=='deleted');
+
+  // ── 중복 그룹 계산 ─────────────────────────────
+  // 1. 전화번호+회사명 완전일치
+  const _byPhoneName={};
+  // 2. 전화번호 단독
+  const _byPhone={};
+  // 3. 회사명 단독
+  const _byName={};
+
   leads.forEach(l=>{
-    const k=(l.company_name||'').trim()+(l.phone||'').replace(/[^0-9]/g,'');
-    if(k&&k.length>3){
-      if(seen[k]) dups.push({a:seen[k],b:l});
-      else seen[k]=l;
+    const phone=(l.phone||'').replace(/[^0-9]/g,'');
+    const name=(l.company_name||'').trim();
+    const k1=phone&&name?name+'__'+phone:'';
+    const k2=phone&&phone.length>=9?phone:'';
+    const k3=name&&name.length>=2?name:'';
+    if(k1){if(!_byPhoneName[k1])_byPhoneName[k1]=[];_byPhoneName[k1].push(l);}
+    else {
+      if(k2){if(!_byPhone[k2])_byPhone[k2]=[];_byPhone[k2].push(l);}
+      if(k3){if(!_byName[k3])_byName[k3]=[];_byName[k3].push(l);}
     }
   });
+
+  const dupGroups=[];
+  Object.values(_byPhoneName).filter(g=>g.length>1).forEach(g=>dupGroups.push({type:'회사명+연락처',group:g}));
+  Object.values(_byPhone).filter(g=>g.length>1).forEach(g=>dupGroups.push({type:'연락처',group:g}));
+  Object.values(_byName).filter(g=>g.length>1).forEach(g=>dupGroups.push({type:'회사명',group:g}));
+
   const unassigned=leads.filter(l=>!l.branch_name||l.branch_name==='');
   const dropped=leads.filter(l=>l.status==='drop');
+
   let ov=document.getElementById('ov-cleanup');
   if(!ov){ov=document.createElement('div');ov.id='ov-cleanup';ov.className='ov-bg';document.body.appendChild(ov);}
-  ov.innerHTML=`<div class="ov-box" style="width:500px;max-width:96vw">
+  ov.innerHTML=`<div class="ov-box" style="width:680px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column">
     <div style="font-size:17px;font-weight:800;color:var(--navy);margin-bottom:16px">🧹 DB 정리</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px">
-      <div style="padding:14px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15);border-radius:var(--r-sm)">
-        <div style="font-size:11px;font-weight:700;color:var(--err);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">중복 감지</div>
-        <div style="font-size:22px;font-weight:800;color:var(--err)">${dups.length}쌍</div>
-        <div style="font-size:11px;color:var(--gray-400);margin-top:4px">회사명+연락처 기준</div>
-        ${dups.length?`<button class="btn btn-danger btn-sm" style="margin-top:8px;width:100%;justify-content:center" onclick="mergeDups(${JSON.stringify(dups.map(d=>d.b.id))})">최신 1건만 유지</button>`:''}
+
+    <!-- 현황 요약 -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px">
+      <div style="padding:12px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15);border-radius:var(--r-sm);text-align:center">
+        <div style="font-size:11px;font-weight:700;color:var(--err);margin-bottom:4px">중복 그룹</div>
+        <div style="font-size:22px;font-weight:800;color:var(--err)">${dupGroups.length}</div>
       </div>
-      <div style="padding:14px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.15);border-radius:var(--r-sm)">
-        <div style="font-size:11px;font-weight:700;color:var(--warn);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">미배정</div>
-        <div style="font-size:22px;font-weight:800;color:var(--warn)">${unassigned.length}건</div>
-        <div style="font-size:11px;color:var(--gray-400);margin-top:4px">지점 미지정 DB</div>
-        ${unassigned.length?`<button class="btn btn-outline btn-sm" style="margin-top:8px;width:100%;justify-content:center" onclick="closeOv('ov-cleanup');quickTab('unassigned',document.getElementById('qtab-unassigned'))">목록 보기</button>`:''}
+      <div style="padding:12px;background:rgba(49,130,246,.06);border:1px solid rgba(49,130,246,.15);border-radius:var(--r-sm);text-align:center">
+        <div style="font-size:11px;font-weight:700;color:var(--blue);margin-bottom:4px">미배정</div>
+        <div style="font-size:22px;font-weight:800;color:var(--blue)">${unassigned.length}</div>
       </div>
-      <div style="padding:14px;background:rgba(100,116,139,.06);border:1px solid rgba(100,116,139,.15);border-radius:var(--r-sm)">
-        <div style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">드랍</div>
-        <div style="font-size:22px;font-weight:800;color:var(--gray-400)">${dropped.length}건</div>
-        <div style="font-size:11px;color:var(--gray-400);margin-top:4px">드랍 처리된 DB</div>
+      <div style="padding:12px;background:rgba(100,116,139,.06);border:1px solid rgba(100,116,139,.15);border-radius:var(--r-sm);text-align:center">
+        <div style="font-size:11px;font-weight:700;color:var(--gray-500);margin-bottom:4px">드랍</div>
+        <div style="font-size:22px;font-weight:800;color:var(--gray-400)">${dropped.length}</div>
       </div>
-      <div style="padding:14px;background:var(--gray-50);border:1px solid var(--gray-200);border-radius:var(--r-sm)">
-        <div style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">전체</div>
-        <div style="font-size:22px;font-weight:800;color:var(--navy)">${leads.length}건</div>
-        <div style="font-size:11px;color:var(--gray-400);margin-top:4px">삭제 제외 전체</div>
+      <div style="padding:12px;background:var(--gray-50);border:1px solid var(--gray-200);border-radius:var(--r-sm);text-align:center">
+        <div style="font-size:11px;font-weight:700;color:var(--gray-500);margin-bottom:4px">전체</div>
+        <div style="font-size:22px;font-weight:800;color:var(--navy)">${leads.length}</div>
       </div>
     </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end">
+
+    <!-- 중복 목록 -->
+    <div style="font-size:13px;font-weight:700;color:var(--gray-700);margin-bottom:8px">중복 DB 목록 <span style="font-size:11px;font-weight:400;color:var(--gray-400)">(각 그룹에서 남길 건 선택 → 나머지 삭제)</span></div>
+    <div style="flex:1;overflow-y:auto;max-height:400px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm)">
+    ${dupGroups.length===0
+      ? '<div style="text-align:center;padding:40px;color:var(--gray-400)">✅ 중복 DB가 없습니다</div>'
+      : dupGroups.map((dg,gi)=>`
+        <div style="padding:12px 14px;border-bottom:1px solid var(--gray-100)">
+          <div style="font-size:11px;font-weight:700;color:var(--err);margin-bottom:8px">
+            🔴 [${dg.type} 중복] — ${dg.group.length}건
+          </div>
+          ${dg.group.map((l,li)=>{
+            const stageClr={'계약':'var(--ok)','관리':'var(--ok)','드랍':'var(--err)','보류':'var(--warn)'}[l.current_stage]||'var(--blue)';
+            return `<label style="display:flex;align-items:flex-start;gap:8px;padding:7px 10px;margin-bottom:4px;border:1.5px solid var(--gray-200);border-radius:6px;cursor:pointer;background:#fff">
+              <input type="radio" name="dup-keep-${gi}" value="${l.id}" ${li===0?'checked':''} style="margin-top:2px;accent-color:var(--navy)">
+              <div style="flex:1;min-width:0">
+                <div style="font-weight:700;font-size:13px;color:var(--navy)">${esc(l.company_name||'-')}</div>
+                <div style="font-size:11px;color:var(--gray-500);margin-top:2px">
+                  📞 ${esc(l.phone||'-')} &nbsp;|&nbsp; 지점: ${esc(l.branch_name||'미배정')} &nbsp;|&nbsp; 팀장: ${esc(l.team_name||'-')}
+                  &nbsp;|&nbsp; <span style="color:${stageClr};font-weight:700">${esc(l.current_stage||l.status||'-')}</span>
+                  &nbsp;|&nbsp; 등록: ${(l.created_at||'').slice(0,10)}
+                </div>
+              </div>
+            </label>`;
+          }).join('')}
+        </div>`).join('')
+    }
+    </div>
+
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
       <button class="btn btn-outline" onclick="closeOv('ov-cleanup')">닫기</button>
+      ${dupGroups.length?`<button class="btn btn-danger" onclick="mergeDupsFromModal(${JSON.stringify(dupGroups.map((_,i)=>i))})">🗑 선택 외 삭제</button>`:''}
     </div>
   </div>`;
   ov.classList.add('open');
 }
 
-async function mergeDups(removeIds){
-  if(!removeIds?.length)return;
-  if(!confirm(`중복 ${removeIds.length}건을 삭제 처리하시겠습니까?
-(각 그룹의 최신 데이터 유지)`))return;
-  for(const id of removeIds){
+async function mergeDupsFromModal(groupIndices){
+  // 각 그룹에서 선택된(남길) id를 파악 → 나머지 삭제
+  const toDelete=[];
+  const leads=(allLeads||[]).filter(l=>l.status!=='deleted');
+
+  // 그룹 재계산 (모달과 동일 로직)
+  const _byPhoneName={};const _byPhone={};const _byName={};
+  leads.forEach(l=>{
+    const phone=(l.phone||'').replace(/[^0-9]/g,'');
+    const name=(l.company_name||'').trim();
+    const k1=phone&&name?name+'__'+phone:'';
+    const k2=phone&&phone.length>=9?phone:'';
+    const k3=name&&name.length>=2?name:'';
+    if(k1){if(!_byPhoneName[k1])_byPhoneName[k1]=[];_byPhoneName[k1].push(l);}
+    else{if(k2){if(!_byPhone[k2])_byPhone[k2]=[];_byPhone[k2].push(l);}if(k3){if(!_byName[k3])_byName[k3]=[];_byName[k3].push(l);}}
+  });
+  const dupGroups=[];
+  Object.values(_byPhoneName).filter(g=>g.length>1).forEach(g=>dupGroups.push({type:'회사명+연락처',group:g}));
+  Object.values(_byPhone).filter(g=>g.length>1).forEach(g=>dupGroups.push({type:'연락처',group:g}));
+  Object.values(_byName).filter(g=>g.length>1).forEach(g=>dupGroups.push({type:'회사명',group:g}));
+
+  groupIndices.forEach(gi=>{
+    const dg=dupGroups[gi]; if(!dg)return;
+    const keepEl=document.querySelector(`input[name="dup-keep-${gi}"]:checked`);
+    const keepId=keepEl?.value;
+    dg.group.forEach(l=>{ if(l.id!==keepId) toDelete.push(l.id); });
+  });
+
+  if(!toDelete.length){showToast('삭제할 항목이 없습니다','error');return;}
+  if(!confirm(`중복 ${toDelete.length}건을 삭제 처리하시겠습니까?\n(선택한 건만 유지)`))return;
+  for(const id of toDelete){
     await dbU('leads',id,{status:'deleted',deleted_at:new Date().toISOString(),deleted_by:curUser.name+'(중복정리)'});
+    if(allLeads){const i=allLeads.findIndex(l=>l.id===id);if(i>=0)allLeads[i].status='deleted';}
   }
-  closeOv('ov-cleanup'); showToast(`중복 ${removeIds.length}건 정리 완료`,'success'); loadLeads();
+  closeOv('ov-cleanup');
+  showToast(`중복 ${toDelete.length}건 정리 완료`,'success');
+  filterLeads(); updateLeadsSubTabCounts();
 }
+
+// mergeDups → mergeDupsFromModal로 대체됨
 
 // ── 앱 초기화 ─────────────────────────────────────────────
 function renderSchema(){
