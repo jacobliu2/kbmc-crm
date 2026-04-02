@@ -11289,199 +11289,221 @@ function switchLeadsSubTab(tab, btn){
 
 
 
-// ━━ 회수대상 모듈 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ━━ 회수대상 모듈 (v4 — 리드별 개별 조회) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 let _rcTargets=[], _rcSelected=new Set();
 
-/* 활동기록 맵 구성 — 실활동(assign·status_change 제외)만 포함, 최신순 정렬 */
-function _rcBuildActMap(){
-  const SKIP=new Set(['assign','status_change']);
-  const map=new Map();
-  const acts=Array.isArray(allActivities)?allActivities:[];
-  for(const a of acts){
-    if(!a||!a.lead_id) continue;
-    if(SKIP.has(String(a.type||'').trim())) continue; // 실활동만
-    const key=String(a.lead_id);
-    if(!map.has(key)) map.set(key,[]);
-    map.get(key).push(a);
+// ── 회수 후보 리드 선별 (제외 조건만 적용, 시간 판정 전) ──────────────
+function _rcCandidates(){
+  return (allLeads||[]).filter(l=>{
+    if(!l||!l.team_name||!l.team_name.trim()) return false;
+    if(!l.assigned_at) return false;
+    if(l.tm_transferred===true||l.tm_transferred==='true') return false;
+    if(l.yj_transferred===true||l.yj_transferred==='true') return false;
+    if(l.yj_done===true||l.yj_done==='true')               return false;
+    if(l.tm_done===true||l.tm_done==='true')                return false;
+    const st=String(l.status||'');
+    if(st==='drop'||st==='deleted') return false;
+    const sg=String(l.current_stage||'');
+    if(['계약','제안','보류','드랍'].includes(sg)) return false;
+    return true;
+  });
+}
+
+// ── 리드별 최신 실활동 1건 조회 (Supabase) ─────────────────────────────
+// 실활동 = type NOT IN (assign, status_change)
+// lead_id 목록을 IN 쿼리로 한번에 조회
+async function _rcFetchLastActs(leadIds){
+  // leadIds: string[]
+  // 반환: Map<leadId, lastRealMs>
+  const map = new Map();
+  if(!leadIds.length) return map;
+
+  const SKIP = new Set(['assign','status_change']);
+  const CHUNK = 200; // IN 쿼리 최대 200개씩
+
+  for(let i=0;i<leadIds.length;i+=CHUNK){
+    const chunk = leadIds.slice(i,i+CHUNK);
+    // PostgREST: lead_id=in.(id1,id2,...) 
+    const inParam = chunk.map(id=>`"${id}"`).join(',');
+    const url = SB_URL+'/rest/v1/activities'
+      +'?select=lead_id,type,created_at'
+      +'&lead_id=in.('+chunk.join(',')+')'
+      +'&type=neq.assign&type=neq.status_change'
+      +'&order=created_at.desc'
+      +'&limit=10000';
+    try{
+      const r = await fetch(url, {headers:{...sbH(),'Prefer':'count=none'}});
+      if(!r.ok) continue;
+      const rows = await r.json().catch(()=>[]);
+      for(const a of rows){
+        if(!a||!a.lead_id) continue;
+        const ms = new Date(a.created_at).getTime();
+        if(isNaN(ms)) continue;
+        const key = String(a.lead_id);
+        const prev = map.get(key);
+        if(prev===undefined||ms>prev) map.set(key,ms);
+      }
+    }catch(e){ console.warn('_rcFetchLastActs chunk err:',e); }
   }
-  // 각 리드별 최신순 정렬
-  for(const arr of map.values())
-    arr.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  return map; // Map<leadId, lastRealMs(number)>
+}
+
+// testMode용 — localStorage activities에서 맵 구성
+function _rcBuildLastActMapFromCache(){
+  const SKIP = new Set(['assign','status_change']);
+  const map  = new Map();
+  const acts = Array.isArray(allActivities) ? allActivities : lg('activities');
+  for(const a of (acts||[])){
+    if(!a||!a.lead_id||SKIP.has(String(a.type||''))) continue;
+    const ms = new Date(a.created_at).getTime();
+    if(isNaN(ms)) continue;
+    const key = String(a.lead_id);
+    const prev = map.get(key);
+    if(prev===undefined||ms>prev) map.set(key,ms);
+  }
   return map;
 }
 
-/* 회수 사유 판정 — 모든 기준: 최종 실활동기록 시각 */
-function _rcGetReason(lead, actMap){
-  if(!lead) return null;
+// ── 시간 판정 ──────────────────────────────────────────────────────────
+// lastMs: 최신 실활동 timestamp(ms) | undefined(기록 없음)
+// 반환: {code,weight,text,bg} | null
+function _rcJudge(lead, lastMs){
+  const NOW   = Date.now();
+  const H48   = 48  * 3600 * 1000; // ms
+  const H120  = 120 * 3600 * 1000; // ms
 
-  // ── 제외 조건 ─────────────────────────────────────────
-  if(lead.tm_transferred===true||lead.tm_transferred==='true') return null;
-  if(lead.yj_transferred===true||lead.yj_transferred==='true') return null;
-  if(lead.yj_done===true||lead.yj_done==='true') return null;
-  if(lead.tm_done===true||lead.tm_done==='true') return null;
-  if(!lead.assigned_at) return null;
-  if(!lead.team_name||!lead.team_name.trim()) return null;
-  const stage=String(lead.current_stage||'').trim();
-  const status=String(lead.status||'').trim();
-  if(['계약','제안','보류','드랍'].includes(stage)) return null;
-  if(['drop','deleted'].includes(status)) return null;
-  if(!Array.isArray(allActivities)) return null;
+  const stage = String(lead.current_stage||'').trim();
+  const assignedMs = new Date(lead.assigned_at).getTime();
+  if(isNaN(assignedMs)) return null;
 
-  const now=Date.now();
-  const assignedT=new Date(lead.assigned_at).getTime();
-  if(isNaN(assignedT)) return null;
-
-  // actMap: 실활동만(assign·status_change 제외), 최신순 정렬
-  // lead.id를 string/number 모두 커버
-  const _lid=lead.id;
-  const realActs=actMap.get(String(_lid))||actMap.get(_lid)||[];
-
-  // ── A. 배정 후 실활동 기록 없음 → 배정일 기준 48h ────
-  // 활동기록이 1건이라도 있으면 A 판정 절대 불가
-  if(realActs.length===0){
-    const elapsedH=Math.floor((now-assignedT)/3600000);
-    if(elapsedH>48) return {
-      code:'A', weight:1,
-      text:`⚠️ 분배 후 ${elapsedH}h 미기록 (기준: 48h)`,
-      bg:'rgba(239,68,68,.07)'
-    };
-    return null; // 48h 이내 → 제외
+  // A. 기록 없음 → 배정일 기준 48h
+  if(lastMs===undefined){
+    const diff = NOW - assignedMs;
+    if(diff > H48){
+      const h = Math.floor(diff/3600000);
+      return {code:'A',weight:1,
+        text:`⚠️ 분배 후 ${h}h 미기록 (기준: 48h)`,
+        bg:'rgba(239,68,68,.07)'};
+    }
+    return null;
   }
 
-  // ── 최종 실활동 시각 ───────────────────────────────────
-  const lastRealAt=new Date(realActs[0].created_at).getTime();
-  if(isNaN(lastRealAt)) return null;
+  // 기록 있음 → lastMs 기준
+  const sinceMs = NOW - lastMs;
 
-  // ── C. 관리 단계 → 최종 실활동으로부터 30영업일 ───────
+  // C. 관리 단계 → 30영업일
   if(stage==='관리'){
-    const bd=bizElapsedDays(lastRealAt,now);
-    if(bd>30) return {
-      code:'C', weight:3,
-      text:`🏢 마지막 기록 ${bd}영업일 경과 (기준 30일)`,
-      bg:''
-    };
-    return null; // 30영업일 이내 → 제외
+    const bd = bizElapsedDays(lastMs, NOW);
+    if(bd>30) return {code:'C',weight:3,
+      text:`🏢 마지막 기록 ${bd}영업일 경과 (기준 30일)`,bg:''};
+    return null;
   }
 
-  // ── B. 그 외 단계 → 최종 실활동으로부터 120h ──────────
-  // (배정·접촉·상담·미설정 모두 동일 기준)
-  const elapsedH=Math.floor((now-lastRealAt)/3600000);
-  if(elapsedH>120) return {
-    code:'B', weight:2,
-    text:`📞 마지막 기록 ${elapsedH}h 경과 (기준 120h)`,
-    bg:''
-  };
-  return null; // 120h 이내 → 제외
+  // B. 그 외 → 120h
+  if(sinceMs > H120){
+    const h = Math.floor(sinceMs/3600000);
+    return {code:'B',weight:2,
+      text:`📞 마지막 기록 ${h}h 경과 (기준 120h)`,bg:''};
+  }
+  return null;
 }
 
-/* 대상 계산 */
-function rcComputeTargets(){
-  if(!Array.isArray(allLeads)||!allLeads.length) return [];
-  if(!Array.isArray(allActivities)) return [];
-  // allActivities가 빈 배열이면 판정 불가 (로드 실패 방어)
-  // 단, testMode에서는 진짜 빈 배열일 수 있으므로 허용
-  const actMap=_rcBuildActMap();
-  const targets=[];
-  for(const lead of allLeads){
-    try{
-      const reason=_rcGetReason(lead,actMap);
-      if(reason) targets.push({...lead,_rcReason:reason});
-    }catch(e){console.warn('rcCompute err:',lead?.id,e);}
+// ── 렌더 (탭 클릭 시 호출) ────────────────────────────────────────────
+async function rcRender(){
+  const tbody = document.getElementById('recall-tbody');
+  const sub   = document.getElementById('recall-sub');
+  if(!tbody) return;
+
+  tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-400)">⏳ 회수 대상 산출 중...</td></tr>';
+
+  // 1. 후보 리드
+  const cands = _rcCandidates();
+
+  // 2. 최신 실활동 조회
+  let lastActMap;
+  if(testMode){
+    lastActMap = _rcBuildLastActMapFromCache();
+  } else {
+    const ids = cands.map(l=>String(l.id));
+    lastActMap = await _rcFetchLastActs(ids);
   }
-  targets.sort((a,b)=>{
+
+  // 3. 판정
+  _rcTargets = [];
+  for(const lead of cands){
+    const lastMs = lastActMap.get(String(lead.id));
+    const reason = _rcJudge(lead, lastMs);
+    if(reason) _rcTargets.push({...lead, _rcReason:reason});
+  }
+
+  // 4. 정렬 (weight → assignedAt)
+  _rcTargets.sort((a,b)=>{
     const w=(a._rcReason.weight||9)-(b._rcReason.weight||9);
     if(w!==0) return w;
     return new Date(a.assigned_at)-new Date(b.assigned_at);
   });
-  return targets;
-}
 
-/* 렌더 */
-async function rcRender(){
-  const tbody=document.getElementById('recall-tbody');
-  const sub=document.getElementById('recall-sub');
-  if(!tbody) return;
+  // 5. 렌더
+  const cnt = _rcTargets.length;
+  if(sub) sub.textContent=cnt+'건';
+  const cntEl=document.getElementById('leads-subtab-recall-cnt');
+  if(cntEl) cntEl.textContent=cnt?'('+cnt+')':'';
 
-  // 로딩 표시
-  tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-400)">⏳ 활동기록 최신화 중...</td></tr>';
-
-  // Supabase에서 activities 직접 재조회 (캐시 의존 제거)
-  if(!testMode){
-    try{
-      const fresh=await sbGet('activities?select=*&order=created_at.desc&limit=100000');
-      if(fresh&&Array.isArray(fresh)) allActivities=fresh;
-    }catch(e){ console.warn('rcRender activities reload err:',e); }
-  }
-
-  if(!Array.isArray(allActivities)){
-    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-400)">⚠️ 활동기록 로드 실패</td></tr>';
+  if(!cnt){
+    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-400)">✅ 회수대상 DB가 없습니다</td></tr>';
     return;
   }
-  try{
-    _rcTargets=rcComputeTargets();
-    const cnt=_rcTargets.length;
-    if(sub) sub.textContent=cnt+'건';
-    const cntEl=document.getElementById('leads-subtab-recall-cnt');
-    if(cntEl) cntEl.textContent=cnt?'('+cnt+')':'';
-    if(!cnt){
-      tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-400)">✅ 회수대상 DB가 없습니다</td></tr>';
-      return;
-    }
-    const fmtDt=v=>{
-      if(!v) return '-';
-      const d=new Date(v);
-      if(isNaN(d)) return '-';
-      return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')
-        +' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
-    };
-    tbody.innerHTML=_rcTargets.map(t=>{
-      const chk=_rcSelected.has(t.id)?'checked':'';
-      const rowBg=t._rcReason.bg?'background:'+t._rcReason.bg+';':'';
-      return `<tr style="border-bottom:1px solid var(--gray-100);cursor:pointer;${rowBg}"
-        onmouseover="this.style.background='var(--gray-50)'"
-        onmouseout="this.style.background='${t._rcReason.bg||''}'">
-        <td style="padding:8px 10px" onclick="event.stopPropagation()">
-          <input type="checkbox" ${chk} onchange="rcToggleOne('${t.id}',this.checked)">
-        </td>
-        <td style="padding:8px 12px;font-weight:700;color:var(--navy);cursor:pointer"
-          onclick="openPanel(allLeads.find(l=>l.id==='${t.id}'))">${esc(t.company_name||'-')}</td>
-        <td style="padding:8px 10px;font-size:12px">${esc(t.branch_name||'-')}</td>
-        <td style="padding:8px 10px;font-size:12px">${esc(t.team_name||'-')}</td>
-        <td style="padding:8px 10px;font-size:11px;color:var(--gray-400)">${fmtDt(t.assigned_at)}</td>
-        <td style="padding:8px 10px;font-size:12px;font-weight:600;color:var(--err)">${t._rcReason.text||''}</td>
-        <td style="padding:8px 10px;white-space:nowrap" onclick="event.stopPropagation()">
-          <button class="btn btn-sm btn-outline" style="color:var(--err);border-color:var(--err);font-size:11px"
-            onclick="rcRecallOne('${t.id}')">↩ 회수</button>
-        </td>
-      </tr>`;
-    }).join('');
-  }catch(e){
-    console.error('rcRender err:',e);
-    tbody.innerHTML='<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--err)">오류: '+e.message+'</td></tr>';
-  }
+
+  const fmtDt=v=>{
+    if(!v) return '-';
+    const d=new Date(v); if(isNaN(d)) return '-';
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')
+      +' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  };
+
+  tbody.innerHTML=_rcTargets.map(t=>{
+    const chk   = _rcSelected.has(t.id)?'checked':'';
+    const rowBg = t._rcReason.bg?'background:'+t._rcReason.bg+';':'';
+    return `<tr style="border-bottom:1px solid var(--gray-100);${rowBg}"
+      onmouseover="this.style.background='var(--gray-50)'"
+      onmouseout="this.style.background='${t._rcReason.bg||''}'">
+      <td style="padding:8px 10px" onclick="event.stopPropagation()">
+        <input type="checkbox" ${chk} onchange="rcToggleOne('${t.id}',this.checked)">
+      </td>
+      <td style="padding:8px 12px;font-weight:700;color:var(--navy);cursor:pointer"
+        onclick="openPanel(allLeads.find(l=>l.id==='${t.id}'))">${esc(t.company_name||'-')}</td>
+      <td style="padding:8px 10px;font-size:12px">${esc(t.branch_name||'-')}</td>
+      <td style="padding:8px 10px;font-size:12px">${esc(t.team_name||'-')}</td>
+      <td style="padding:8px 10px;font-size:11px;color:var(--gray-400)">${fmtDt(t.assigned_at)}</td>
+      <td style="padding:8px 10px;font-size:12px;font-weight:600;color:var(--err)">${t._rcReason.text||''}</td>
+      <td style="padding:8px 10px;white-space:nowrap" onclick="event.stopPropagation()">
+        <button class="btn btn-sm btn-outline" style="color:var(--err);border-color:var(--err);font-size:11px"
+          onclick="rcRecallOne('${t.id}')">↩ 회수</button>
+      </td>
+    </tr>`;
+  }).join('');
 }
 
-/* 선택 */
+// ── 선택 ──────────────────────────────────────────────────────────────
 function rcToggleOne(id,checked){checked?_rcSelected.add(id):_rcSelected.delete(id);}
 function rcCheckAll(checked){
   _rcTargets.forEach(t=>checked?_rcSelected.add(t.id):_rcSelected.delete(t.id));
   document.querySelectorAll('#recall-tbody input[type=checkbox]').forEach(c=>c.checked=checked);
-  const chkAll=document.getElementById('recall-chk-all');
-  if(chkAll) chkAll.checked=checked;
+  const ca=document.getElementById('recall-chk-all');if(ca)ca.checked=checked;
 }
 
-/* 회수 공통 패치 */
+// ── 회수 공통 패치 ────────────────────────────────────────────────────
 function _rcBuildPatch(reason){
   return {
-    branch_name:'대전', team_name:'대전센터', team_names:JSON.stringify(['대전센터']),
-    tm_transferred:true, assigned_at:new Date().toISOString(),
-    status:'assigned', collab_branches:null,
-    auto_recalled:true, auto_recall_reason:reason||'수동 회수',
+    branch_name:'대전',team_name:'대전센터',team_names:JSON.stringify(['대전센터']),
+    tm_transferred:true,assigned_at:new Date().toISOString(),
+    status:'assigned',collab_branches:null,
+    auto_recalled:true,auto_recall_reason:reason||'수동 회수',
     auto_recall_at:new Date().toISOString()
   };
 }
 
-/* 단건 회수 */
+// ── 단건 회수 ─────────────────────────────────────────────────────────
 async function rcRecallOne(id){
   const t=_rcTargets.find(x=>x.id===id);
   if(!t){showToast('대상 없음','error');return;}
@@ -11489,15 +11511,15 @@ async function rcRecallOne(id){
   try{
     const patch=_rcBuildPatch(t._rcReason?.text);
     await dbU('leads',id,patch);
-    await logActivity(id,'assign','회수 → 대전TM 이관 ('+( t._rcReason?.text||'')+')', 'assigned','');
+    await logActivity(id,'assign','회수 → 대전TM 이관 ('+(t._rcReason?.text||')'),'assigned','');
     if(allLeads){const i=allLeads.findIndex(x=>x.id===id);if(i>=0)allLeads[i]={...allLeads[i],...patch};}
     _rcSelected.delete(id);
     showToast('회수 완료 → 대전TM 이관','success');
-    filterLeads(); rcRender(); updateLeadsSubTabCounts?.();
+    filterLeads(); await rcRender();
   }catch(e){console.error(e);showToast('오류: '+e.message,'error');}
 }
 
-/* 선택 일괄 회수 */
+// ── 일괄 회수 ─────────────────────────────────────────────────────────
 async function rcRecallSelected(){
   const ids=[..._rcSelected];
   if(!ids.length){showToast('선택된 DB가 없습니다','error');return;}
@@ -11507,20 +11529,25 @@ async function rcRecallSelected(){
       const t=_rcTargets.find(x=>x.id===id);
       const patch=_rcBuildPatch(t?._rcReason?.text);
       await dbU('leads',id,patch);
-      await logActivity(id,'assign','일괄 회수 → 대전TM 이관 ('+(t?._rcReason?.text||'')+')', 'assigned','');
+      await logActivity(id,'assign','일괄 회수 → 대전TM 이관 ('+(t?._rcReason?.text||')'),'assigned','');
       if(allLeads){const i=allLeads.findIndex(x=>x.id===id);if(i>=0)allLeads[i]={...allLeads[i],...patch};}
     }
     _rcSelected.clear();
     showToast(ids.length+'건 회수 완료 → 대전TM 이관','success');
-    filterLeads(); rcRender(); updateLeadsSubTabCounts?.();
+    filterLeads(); await rcRender();
   }catch(e){console.error(e);showToast('오류: '+e.message,'error');}
 }
 
-/* 카운트 (updateLeadsSubTabCounts용) */
+// ── 카운트 (탭 배지 — 캐시 기반 빠른 추정) ────────────────────────────
 function rcCount(){
-  if(!Array.isArray(allLeads)||!allLeads.length) return 0;
-  if(!Array.isArray(allActivities)) return 0;
-  return rcComputeTargets().length;
+  const cands=_rcCandidates();
+  const lastActMap=_rcBuildLastActMapFromCache();
+  let cnt=0;
+  for(const lead of cands){
+    const lastMs=lastActMap.get(String(lead.id));
+    if(_rcJudge(lead,lastMs)) cnt++;
+  }
+  return cnt;
 }
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
