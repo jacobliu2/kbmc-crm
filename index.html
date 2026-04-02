@@ -1226,6 +1226,7 @@ tbody tr.selected td{background:var(--blue-50)!important}
           <div style="display:flex;gap:6px">
             <button class="btn btn-outline btn-sm" onclick="rcCheckAll(true)" style="font-size:12px">전체선택</button>
             <button class="btn btn-outline btn-sm" onclick="rcCheckAll(false)" style="font-size:12px">선택해제</button>
+            <button class="btn btn-outline btn-sm" onclick="rcExportExcel()" style="font-size:12px;color:var(--ok);border-color:var(--ok)">📥 엑셀 다운로드</button>
             <button class="btn btn-sm" style="background:var(--err);color:#fff;border-color:var(--err)" onclick="rcRecallSelected()">↩ 선택 회수 → 대전TM</button>
           </div>
         </div>
@@ -11613,6 +11614,85 @@ function rcCount(){
   return cnt;
 }
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+// ── 회수대상 엑셀 다운로드 ───────────────────────────────────────────────
+async function rcExportExcel(){
+  if(!_rcTargets||!_rcTargets.length){
+    showToast('다운로드할 회수대상이 없습니다','error'); return;
+  }
+
+  // XLSX 라이브러리 로드
+  if(!window.XLSX){
+    await new Promise((res,rej)=>{
+      const s=document.createElement('script');
+      s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.onload=res; s.onerror=rej;
+      document.head.appendChild(s);
+    });
+  }
+
+  const fmtDt=v=>{
+    if(!v) return '';
+    const d=new Date(v); if(isNaN(d)) return String(v||'');
+    return d.getFullYear()+'-'
+      +String(d.getMonth()+1).padStart(2,'0')+'-'
+      +String(d.getDate()).padStart(2,'0')+' '
+      +String(d.getHours()).padStart(2,'0')+':'
+      +String(d.getMinutes()).padStart(2,'0');
+  };
+
+  // 헤더
+  const headers = [
+    '회사명','신청자','연락처','지점장','팀장',
+    '신청일자','배분일자','마지막기록일시','회수사유','현재단계'
+  ];
+
+  // 데이터 행
+  const rows = _rcTargets.map(t=>{
+    // 마지막 실활동 시각: _rcJudge에 쓰인 lastMs를 역산
+    // _rcTargets에 저장된 _rcReason.text에서 경과시간 추출 또는
+    // allActivities에서 직접 계산
+    const REAL=new Set(['call','meeting','online','email','proposal','contract']);
+    const acts=(allActivities||[])
+      .filter(a=>a.lead_id===t.id&&REAL.has(String(a.type||'')))
+      .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+    const lastActAt=acts.length?acts[0].created_at:'';
+
+    return [
+      t.company_name||'',
+      t.contact_name||'',
+      t.phone||'',
+      t.branch_name||'',
+      t.team_name||'',
+      fmtDt(t.applied_at||t.created_at),   // 신청일자
+      fmtDt(t.assigned_at),                  // 배분일자
+      fmtDt(lastActAt),                       // 마지막 기록일시
+      t._rcReason?.text||'',                  // 회수사유
+      t.current_stage||''                     // 현재단계
+    ];
+  });
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+
+  // 컬럼 너비 설정
+  ws['!cols']=[
+    {wch:20},{wch:12},{wch:14},{wch:10},{wch:12},
+    {wch:16},{wch:16},{wch:18},{wch:36},{wch:8}
+  ];
+
+  XLSX.utils.book_append_sheet(wb, ws, '회수대상');
+
+  const now=new Date();
+  const fname='회수대상_'
+    +now.getFullYear()
+    +String(now.getMonth()+1).padStart(2,'0')
+    +String(now.getDate()).padStart(2,'0')
+    +'.xlsx';
+
+  XLSX.writeFile(wb, fname);
+  showToast(`회수대상 ${_rcTargets.length}건 다운로드 완료`,'success');
+}
 
 
 
