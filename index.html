@@ -11957,13 +11957,16 @@ async function restoreDrop(id){
 
 async function renderTrashInline(){
   const tbody=document.getElementById('trash-inline-tbody'); if(!tbody) return;
-  tbody.innerHTML='<tr><td colspan="5" class="loading">불러오는 중...</td></tr>';
-  // Supabase 모드: deleted 상태 항목을 직접 조회
+  tbody.innerHTML='<tr><td colspan="8" class="loading">불러오는 중...</td></tr>';
+  // Supabase 모드: deleted 상태 항목 전체 조회 (Range 헤더로 max_rows 우회)
   let trash=[];
   if(!testMode){
     try{
-      const rows=await sbGet('leads?select=*&status=eq.deleted&order=updated_at.desc&limit=200');
-      trash=rows||[];
+      const r=await fetch(SB_URL+'/rest/v1/leads?select=*&status=eq.deleted&order=updated_at.desc',{
+        headers:{...sbH(),'Range-Unit':'items','Range':'0-1999','Prefer':'count=none'}
+      });
+      if(r.ok) trash=await r.json().catch(()=>[]);
+      else trash=[];
     }catch(e){ trash=getTrash(); }
   } else {
     trash=getTrash();
@@ -11972,7 +11975,7 @@ async function renderTrashInline(){
   _trashCount=trash.length;
   if(sub) sub.textContent=trash.length+'건';
   updateLeadsSubTabCounts();
-  if(!trash.length){tbody.innerHTML='<tr><td colspan="5" class="empty" style="padding:30px">휴지통이 비어 있습니다</td></tr>';return;}
+  if(!trash.length){tbody.innerHTML='<tr><td colspan="8" class="empty" style="padding:30px">휴지통이 비어 있습니다</td></tr>';return;}
   tbody.innerHTML=trash.map(l=>`<tr>
     <td style="font-weight:700;cursor:pointer" onclick="openPanel(allLeads.find(x=>x.id==='${l.id}')||l)">${esc(l.company_name||'-')}</td>
     <td style="font-size:12px">${esc(l.phone||'-')}</td>
