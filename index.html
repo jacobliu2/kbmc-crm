@@ -11332,9 +11332,12 @@ function _rcGetReason(lead, actMap){
   if(isNaN(assignedT)) return null;
 
   // actMap: 실활동만(assign·status_change 제외), 최신순 정렬
-  const realActs=actMap.get(String(lead.id))||[];
+  // lead.id를 string/number 모두 커버
+  const _lid=lead.id;
+  const realActs=actMap.get(String(_lid))||actMap.get(_lid)||[];
 
   // ── A. 배정 후 실활동 기록 없음 → 배정일 기준 48h ────
+  // 활동기록이 1건이라도 있으면 A 판정 절대 불가
   if(realActs.length===0){
     const elapsedH=Math.floor((now-assignedT)/3600000);
     if(elapsedH>48) return {
@@ -11375,6 +11378,8 @@ function _rcGetReason(lead, actMap){
 function rcComputeTargets(){
   if(!Array.isArray(allLeads)||!allLeads.length) return [];
   if(!Array.isArray(allActivities)) return [];
+  // allActivities가 빈 배열이면 판정 불가 (로드 실패 방어)
+  // 단, testMode에서는 진짜 빈 배열일 수 있으므로 허용
   const actMap=_rcBuildActMap();
   const targets=[];
   for(const lead of allLeads){
@@ -11392,12 +11397,24 @@ function rcComputeTargets(){
 }
 
 /* 렌더 */
-function rcRender(){
+async function rcRender(){
   const tbody=document.getElementById('recall-tbody');
   const sub=document.getElementById('recall-sub');
   if(!tbody) return;
+
+  // 로딩 표시
+  tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-400)">⏳ 활동기록 최신화 중...</td></tr>';
+
+  // Supabase에서 activities 직접 재조회 (캐시 의존 제거)
+  if(!testMode){
+    try{
+      const fresh=await sbGet('activities?select=*&order=created_at.desc&limit=100000');
+      if(fresh&&Array.isArray(fresh)) allActivities=fresh;
+    }catch(e){ console.warn('rcRender activities reload err:',e); }
+  }
+
   if(!Array.isArray(allActivities)){
-    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-400)">⏳ 활동기록 로딩 중...</td></tr>';
+    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-400)">⚠️ 활동기록 로드 실패</td></tr>';
     return;
   }
   try{
