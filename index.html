@@ -12005,8 +12005,11 @@ async function rcRender(){
     const dayLabel=dayDiff===0?'오늘':dayDiff===1?'어제':dayDiff+'일 전';
     const dkDisp=dk&&dk!=='미정'?dk.replace(/(\d{4})-(\d{2})-(\d{2})/,'$1. $2. $3'):dk;
     const safeKey=sk.replace(/[^a-zA-Z0-9]/g,'_');
+    // 이 날짜 블록의 모든 lead id 목록 (체크박스 일괄 처리용)
+    const dateIds=items.map(t=>t.id).join(',');
     return `<details ${isOpen?'open':''} style="margin-bottom:12px;border:1px solid var(--gray-200);border-radius:8px;overflow:hidden" ontoggle="rcSaveOpenState('${sk}',this.open)">
       <summary style="list-style:none;padding:11px 16px;background:var(--gray-50);border-bottom:1px solid var(--gray-200);cursor:pointer;display:flex;align-items:center;gap:10px;user-select:none">
+        <input type="checkbox" id="rc-date-chk-${safeKey}" onclick="event.stopPropagation();rcCheckDate(this,'${safeKey}','${dateIds}')" style="width:15px;height:15px;cursor:pointer;flex-shrink:0">
         <span style="font-size:13px;font-weight:800;color:var(--navy)">📅 분배일 ${dkDisp}</span>
         <span style="font-size:11px;color:var(--gray-500);background:var(--gray-200);border-radius:8px;padding:1px 8px">${dayLabel}</span>
         <span style="font-size:11px;background:var(--err);color:#fff;border-radius:10px;padding:1px 9px;font-weight:700">총 ${totalCnt}건</span>
@@ -12025,6 +12028,19 @@ function rcSaveOpenState(key,isOpen){
   document.querySelectorAll('.rc-hint-'+safeKey).forEach(el=>{
     el.textContent=isOpen?'▲ 접기':'▼ 펼치기';
   });
+}
+
+// ── 날짜 블록 전체선택 ───────────────────────────────────────────────
+function rcCheckDate(chkEl, safeKey, dateIdsStr){
+  const ids = dateIdsStr ? dateIdsStr.split(',').filter(Boolean) : [];
+  ids.forEach(id => { chkEl.checked ? _rcSelected.add(id) : _rcSelected.delete(id); });
+  // 하위 tbody 체크박스 동기화
+  const det = chkEl.closest('details');
+  if(det){
+    det.querySelectorAll('tbody input[type=checkbox]').forEach(cb => { cb.checked = chkEl.checked; });
+    // 하위 범주 헤더 체크박스도 동기화
+    det.querySelectorAll('summary > input[type=checkbox]').forEach(cb => { cb.checked = chkEl.checked; });
+  }
 }
 
 // ── 범주 전체선택 ─────────────────────────────────────────────────────
