@@ -267,6 +267,9 @@ select option{background:#fff;color:var(--gray-900)}
 .badge-stage-sky{background:rgba(56,189,248,.12);color:#0284c7;font-weight:700}
 .badge-stage-blue{background:rgba(49,130,246,.12);color:#1d4ed8;font-weight:700}
 .badge-stage-contract{background:linear-gradient(135deg,#ff6f00,#ff8f00);color:#fff;font-weight:800;box-shadow:0 2px 6px rgba(255,111,0,.35);letter-spacing:.3px}
+/* 회수대상 접기/펼치기 */
+#recall-body details summary{outline:none}
+#recall-body details summary::-webkit-details-marker{display:none}
 .badge-stage-orange{background:rgba(245,158,11,.12);color:#b45309;font-weight:700}
 .badge-stage-red{background:rgba(239,68,68,.1);color:#ef4444;font-weight:700}
 .badge-pending{background:var(--gray-100);color:var(--gray-500)}
@@ -1224,34 +1227,19 @@ tbody tr.selected td{background:var(--blue-50)!important}
       <div id="leads-panel-recall" style="display:none">
         <div class="page-header" style="margin-bottom:12px">
           <div class="page-title" style="font-size:16px">⛔ 회수대상 <sub id="recall-sub" style="font-size:13px;color:var(--err)"></sub></div>
-          <div style="display:flex;gap:6px">
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
             <button class="btn btn-outline btn-sm" onclick="rcCheckAll(true)" style="font-size:12px">전체선택</button>
             <button class="btn btn-outline btn-sm" onclick="rcCheckAll(false)" style="font-size:12px">선택해제</button>
-            <button class="btn btn-outline btn-sm" onclick="rcExportExcel()" style="font-size:12px;color:var(--ok);border-color:var(--ok)">📥 엑셀 다운로드</button>
-            <button class="btn btn-sm" style="background:#f59e0b;color:#fff;border-color:#f59e0b;font-size:12px" onclick="rcSendNotice()">📢 담당팀장 알림전송</button>
-            <button class="btn btn-sm" style="background:var(--err);color:#fff;border-color:var(--err)" onclick="rcRecallSelected()">↩ 선택 회수 → 대전TM</button>
+            <button class="btn btn-outline btn-sm" onclick="rcExportExcel()" style="font-size:12px;color:var(--ok);border-color:var(--ok)">📥 엑셀</button>
+            <button class="btn btn-sm" style="background:#f59e0b;color:#fff;border-color:#f59e0b;font-size:12px" onclick="rcSendNotice()">📢 팀장알림</button>
+            <button class="btn btn-sm" style="background:var(--err);color:#fff;border-color:var(--err)" onclick="rcRecallSelected()">↩ 선택회수</button>
           </div>
         </div>
         <div style="font-size:12px;color:var(--gray-500);margin-bottom:10px;padding:8px 12px;background:rgba(239,68,68,.06);border-radius:6px;border-left:3px solid var(--err)">
-          배정 후 48h 미기록 / 접촉·상담 120h 마지막기록 경과 / 관리 30영업일 마지막기록 경과 DB. 회수 시 대전TM으로 이관됩니다.
+          ① 배정 후 48h 미기록 &nbsp;② 접촉 후 5영업일 미기록 &nbsp;③ 관리 30영업일 미기록 — 회수 시 대전TM 이관
         </div>
-        <div class="card" style="padding:0">
-          <div class="db-wrap">
-            <table class="db-table">
-              <thead><tr>
-                <th style="width:32px"><input type="checkbox" id="recall-chk-all" onchange="rcCheckAll(this.checked)"></th>
-                <th style="width:150px">회사명</th>
-                <th style="width:75px">지점장</th>
-                <th style="width:95px">팀장</th>
-                <th style="width:115px">배정일시</th>
-                <th style="width:180px">회수 사유</th>
-                <th>최근 진행내용</th>
-                <th style="width:70px">액션</th>
-              </tr></thead>
-              <tbody id="recall-tbody"><tr><td colspan="8" style="text-align:center;padding:40px;color:var(--gray-400)">로딩 중...</td></tr></tbody>
-            </table>
-          </div>
-        </div>
+        <!-- 범주별 렌더 컨테이너 (div 기반, details/summary 접기) -->
+        <div id="recall-body"></div>
       </div>
 
       <div id="leads-panel-drop" style="display:none">
@@ -4224,14 +4212,26 @@ function showScreen(id, btn){
 
 // ── 유틸 ─────────────────────────────────────────────────
 function esc(s){const d=document.createElement('div');d.textContent=String(s||'');return d.innerHTML;}
+// KST(UTC+9) 기준 날짜 추출 헬퍼
+function toKstDate(v){
+  if(!v) return null;
+  const d=new Date(v); if(isNaN(d)) return null;
+  const kst=new Date(d.getTime()+9*3600*1000);
+  return kst.toISOString().slice(0,10);
+}
 function fmtD(v){
   if(!v)return'-';
   const s=String(v).trim();
-  // ISO 계열: 2026-03-25 또는 2026-03-25T...
-  if(/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10).replace(/-/g,'.');
-  // 영문 Date 문자열(Mon Mar 02 2026...) → Date.parse 후 재포맷
+  const fmt=d=>d.replace(/(\d{4})-(\d{2})-(\d{2})/,'$1. $2. $3');
+  // 순수 날짜(YYYY-MM-DD) → 시간대 변환 불필요
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return fmt(s);
+  // ISO datetime → KST 기준 날짜
+  if(/^\d{4}-\d{2}-\d{2}[T ]/.test(s)){
+    const kst=toKstDate(s);
+    return kst?fmt(kst):fmt(s.slice(0,10));
+  }
   const t=Date.parse(s);
-  if(!isNaN(t)) return new Date(t).toISOString().slice(0,10).replace(/-/g,'.');
+  if(!isNaN(t)){const kst=toKstDate(new Date(t).toISOString());return kst?fmt(kst):'-';}
   return s.slice(0,10);
 }
 function fmtM(v){const n=parseInt(v)||0;if(!n)return'-';if(n>=100000000)return(n/100000000).toFixed(1)+'억';if(n>=10000)return Math.round(n/10000).toLocaleString()+'만';return n.toLocaleString()+'원';}
@@ -11803,36 +11803,6 @@ async function _rcFetchLastActsFallback(leadIds){
   return map;
 }
 
-// RPC 미설치 시 fallback (청크 10, Range 0-999)
-async function _rcFetchLastActsFallback(leadIds){
-  const map  = new Map();
-  const SKIP = new Set(['assign','status_change']);
-  const CHUNK = 10;
-  for(let i=0; i<leadIds.length; i+=CHUNK){
-    const chunk = leadIds.slice(i, i+CHUNK);
-    const url = SB_URL+'/rest/v1/activities'
-      +'?select=lead_id,type,created_at'
-      +'&lead_id=in.('+chunk.join(',')+')'
-      +'&order=created_at.desc';
-    try{
-      const r = await fetch(url,{
-        headers:{...sbH(),'Range-Unit':'items','Range':'0-999','Prefer':'count=none'}
-      });
-      if(!r.ok) continue;
-      const rows = await r.json().catch(()=>[]);
-      if(!Array.isArray(rows)) continue;
-      for(const a of rows){
-        if(!a||!a.lead_id||SKIP.has(String(a.type||'').trim())) continue;
-        const ms = new Date(a.created_at).getTime();
-        if(isNaN(ms)) continue;
-        const key = String(a.lead_id);
-        const prev = map.get(key);
-        if(prev===undefined||ms>prev) map.set(key, ms);
-      }
-    }catch(e){ console.warn('fallback err:',e.message); }
-  }
-  return map;
-}
 
 // testMode용 — localStorage activities에서 맵 구성
 function _rcBuildLastActMapFromCache(){
@@ -11859,7 +11829,7 @@ function _rcBuildLastActMapFromCache(){
 function _rcJudge(lead, lastMs){
   const NOW   = Date.now();
   const H48   = 48  * 3600 * 1000; // ms
-  const H120  = 120 * 3600 * 1000; // ms
+  const BD5   = 5; // 5영업일
 
   const stage = String(lead.current_stage||'').trim();
   const assignedMs = new Date(lead.assigned_at).getTime();
@@ -11875,7 +11845,6 @@ function _rcJudge(lead, lastMs){
   }
 
   // ── A. 배정 단계 + 활동기록 없음 → 배정일 기준 48h ──────
-  // 48h 기준은 오직 '배정' 단계에만 적용
   if(lastMs===undefined){
     if(stage==='배정'||stage===''||!stage){
       const diff = NOW - assignedMs;
@@ -11886,31 +11855,30 @@ function _rcJudge(lead, lastMs){
           bg:'rgba(239,68,68,.07)'};
       }
     }
-    return null; // 배정 외 단계에서 기록 없음 → 120h 기준으로 넘어가지 않고 제외
+    return null;
   }
 
-  // ── B. 활동기록 있음 → lastMs 기준 120h (접촉·상담 단계) ─
-  const sinceMs = NOW - lastMs;
-  if(sinceMs > H120){
-    const h = Math.floor(sinceMs/3600000);
+  // ── B. 활동기록 있음 → lastMs 기준 5영업일 (접촉·상담 단계) ─
+  const bd = bizElapsedDays(lastMs, NOW);
+  if(bd >= BD5){
     return {code:'B',weight:2,
-      text:`📞 마지막 기록 ${h}h 경과 (기준 120h)`,bg:''};
+      text:`📞 마지막 기록 ${bd}영업일 경과 (기준 5영업일)`,bg:''};
   }
   return null;
 }
 
 // ── 렌더 (탭 클릭 시 호출) ────────────────────────────────────────────
+// _rcOpenState: 접기/펼치기 상태 유지
+const _rcOpenState = new Map();
+
 async function rcRender(){
-  const tbody = document.getElementById('recall-tbody');
-  const sub   = document.getElementById('recall-sub');
-  if(!tbody) return;
+  const container = document.getElementById('recall-body');
+  const sub        = document.getElementById('recall-sub');
+  if(!container) return;
 
-  tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--gray-400)">⏳ 회수 대상 산출 중...</td></tr>';
+  container.innerHTML='<div style="text-align:center;padding:40px;color:var(--gray-400)">⏳ 회수 대상 산출 중...</div>';
 
-  // 1. 후보 리드
   const cands = _rcCandidates();
-
-  // 2. 최신 실활동 조회
   let lastActMap;
   if(testMode){
     lastActMap = _rcBuildLastActMapFromCache();
@@ -11919,81 +11887,162 @@ async function rcRender(){
     lastActMap = await _rcFetchLastActs(ids);
   }
 
-  // 3. 판정
   _rcTargets = [];
   for(const lead of cands){
     const _rcVal = lastActMap.get(String(lead.id));
-    const lastMs = _rcVal?.lastMs; // undefined면 활동 없음
+    const lastMs = _rcVal?.lastMs;
     const reason = _rcJudge(lead, lastMs);
     if(reason) _rcTargets.push({...lead, _rcReason:reason, _lastMs:lastMs});
   }
 
-  // 4. 정렬 (weight → assignedAt)
+  // 정렬: 2차범주(weight) → 분배일 오름차순
   _rcTargets.sort((a,b)=>{
     const w=(a._rcReason.weight||9)-(b._rcReason.weight||9);
     if(w!==0) return w;
     return new Date(a.assigned_at)-new Date(b.assigned_at);
   });
 
-  // 5. 렌더
   const cnt = _rcTargets.length;
   if(sub) sub.textContent=cnt+'건';
   const cntEl=document.getElementById('leads-subtab-recall-cnt');
   if(cntEl) cntEl.textContent=cnt?'('+cnt+')':'';
 
   if(!cnt){
-    tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--gray-400)">✅ 회수대상 DB가 없습니다</td></tr>';
+    container.innerHTML='<div style="text-align:center;padding:40px;color:var(--gray-400)">✅ 회수대상 DB가 없습니다</div>';
     return;
   }
 
+  // KST 기준 포맷 (toKstDate는 전역 선언)
   const fmtDt=v=>{
     if(!v) return '-';
     const d=new Date(v); if(isNaN(d)) return '-';
-    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')
-      +' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+    const kst=new Date(d.getTime()+9*3600*1000);
+    const date=kst.toISOString().slice(0,10).replace(/(\d{4})-(\d{2})-(\d{2})/,'$1. $2. $3');
+    const time=kst.toISOString().slice(11,16);
+    return date+' '+time;
   };
-
-  const _rcActs = allActivities || [];
+  const fmtDate=v=>{const s=toKstDate(v);return s?s.replace(/(\d{4})-(\d{2})-(\d{2})/,'$1. $2. $3'):'-';};
+  const _rcActs = allActivities||[];
   const _rcRealTypes = new Set(['call','meeting','online','proposal','contract','email','note']);
+  const _aLbl={'call':'📞통화','meeting':'🤝미팅','online':'💻온라인','proposal':'📄제안','contract':'🎉계약','email':'📧이메일','note':'📝메모'};
 
-  tbody.innerHTML=_rcTargets.map(t=>{
-    const chk   = _rcSelected.has(t.id)?'checked':'';
-    const rowBg = t._rcReason.bg?'background:'+t._rcReason.bg+';':'';
-    // 최근 진행내용: allActivities 캐시에서 실활동 최신 1건
-    const lastAct = _rcActs
-      .filter(a=>a.lead_id===t.id && _rcRealTypes.has(String(a.type||'').trim()))
+  // 2차 범주 정의
+  const CATS=[
+    {code:'A',label:'① 배정 후 48h 미기록',       clr:'#ef4444',bg:'rgba(239,68,68,.07)',  border:'#ef4444'},
+    {code:'B',label:'② 접촉 후 5영업일 미기록',    clr:'#f59e0b',bg:'rgba(245,158,11,.07)', border:'#f59e0b'},
+    {code:'C',label:'③ 관리 후 30영업일 미기록',   clr:'#6366f1',bg:'rgba(99,102,241,.07)', border:'#6366f1'},
+  ];
+
+  // 1차: 분배일별 그룹
+  const dateGroups=new Map();
+  for(const t of _rcTargets){
+    const dk=fmtDate(t.assigned_at);
+    if(!dateGroups.has(dk)) dateGroups.set(dk,[]);
+    dateGroups.get(dk).push(t);
+  }
+  const sortedDates=[...dateGroups.keys()].sort();
+
+  // 행 렌더
+  function renderRow(t){
+    const chk=_rcSelected.has(t.id)?'checked':'';
+    const la=_rcActs.filter(a=>a.lead_id===t.id&&_rcRealTypes.has(String(a.type||'').trim()))
       .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];
-    const _actTypeLabel={'call':'📞통화','meeting':'🤝미팅','online':'💻온라인','proposal':'📄제안','contract':'🎉계약','email':'📧이메일','note':'📝메모'};
-    const lastActTxt = lastAct
-      ? `<span style="font-size:10px;color:var(--blue);font-weight:600;margin-right:4px">${_actTypeLabel[lastAct.type]||lastAct.type}</span><span style="font-size:10px;color:var(--gray-400);margin-right:4px">${fmtDt(lastAct.created_at).slice(5,16)}</span><span style="font-size:11px;color:var(--gray-700)">${esc((lastAct.content||'').slice(0,55))}</span>`
-      : '<span style="color:var(--gray-300);font-style:italic;font-size:11px">활동기록 없음</span>';
-    return `<tr style="border-bottom:1px solid var(--gray-100);${rowBg}"
-      onmouseover="this.style.background='var(--gray-50)'"
-      onmouseout="this.style.background='${t._rcReason.bg||''}'">
-      <td style="padding:8px 10px" onclick="event.stopPropagation()">
-        <input type="checkbox" ${chk} onchange="rcToggleOne('${t.id}',this.checked)">
-      </td>
-      <td style="padding:8px 12px;font-weight:700;color:var(--navy);cursor:pointer"
-        onclick="openPanel(allLeads.find(l=>l.id==='${t.id}'))">${esc(t.company_name||'-')}</td>
-      <td style="padding:8px 10px;font-size:12px">${esc(t.branch_name||'-')}</td>
-      <td style="padding:8px 10px;font-size:12px">${esc(t.team_name||'-')}</td>
-      <td style="padding:8px 10px;font-size:11px;color:var(--gray-400)">${fmtDt(t.assigned_at)}</td>
-      <td style="padding:8px 10px;font-size:12px;font-weight:600;color:var(--err)">${t._rcReason.text||''}</td>
-      <td style="padding:8px 10px;max-width:240px">${lastActTxt}</td>
-      <td style="padding:8px 10px;white-space:nowrap" onclick="event.stopPropagation()">
-        <button class="btn btn-sm btn-outline" style="color:var(--err);border-color:var(--err);font-size:11px"
-          onclick="rcRecallOne('${t.id}')">↩ 회수</button>
-      </td>
+    const laTxt=la
+      ?`<span style="font-size:10px;color:var(--blue);font-weight:600;margin-right:3px">${_aLbl[la.type]||la.type}</span>`
+       +`<span style="font-size:10px;color:var(--gray-400);margin-right:3px">${fmtDt(la.created_at).slice(5,16)}</span>`
+       +`<span style="font-size:11px;color:var(--gray-700)">${esc((la.content||'').slice(0,55))}</span>`
+      :`<span style="color:var(--gray-300);font-style:italic;font-size:11px">활동기록 없음</span>`;
+    const id=t.id;
+    return `<tr onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''" style="border-bottom:1px solid var(--gray-100)">
+      <td style="padding:7px 10px" onclick="event.stopPropagation()"><input type="checkbox" ${chk} onchange="rcToggleOne('${id}',this.checked)"></td>
+      <td style="padding:7px 12px;font-weight:700;color:var(--navy);cursor:pointer;white-space:nowrap" onclick="openPanel(allLeads.find(l=>l.id==='${id}'))">${esc(t.company_name||'-')}</td>
+      <td style="padding:7px 10px;font-size:12px;white-space:nowrap">${esc(t.branch_name||'-')}</td>
+      <td style="padding:7px 10px;font-size:12px;white-space:nowrap">${esc(t.team_name||'-')}</td>
+      <td style="padding:7px 10px;max-width:260px">${laTxt}</td>
+      <td style="padding:7px 10px;white-space:nowrap" onclick="event.stopPropagation()"><button class="btn btn-sm btn-outline" style="color:var(--err);border-color:var(--err);font-size:11px" onclick="rcRecallOne('${id}')">↩ 회수</button></td>
     </tr>`;
+  }
+
+  // 2차 범주 블록
+  function renderCatBlock(cat,items,dk){
+    const its=items.filter(t=>t._rcReason.code===cat.code);
+    if(!its.length) return '';
+    const sk=dk+'__'+cat.code;
+    const isOpen=_rcOpenState.has(sk)?_rcOpenState.get(sk):true;
+    const rows=its.map(renderRow).join('');
+    const safeKey=sk.replace(/[^a-zA-Z0-9]/g,'_');
+    return `<details ${isOpen?'open':''} style="margin-bottom:6px" ontoggle="rcSaveOpenState('${sk}',this.open)">
+      <summary style="list-style:none;padding:7px 12px;background:${cat.bg};border-left:3px solid ${cat.border};border-radius:4px;cursor:pointer;display:flex;align-items:center;gap:8px;user-select:none">
+        <span style="font-size:12px;font-weight:700;color:${cat.clr}">${cat.label}</span>
+        <span style="font-size:11px;background:${cat.border};color:#fff;border-radius:10px;padding:1px 8px">${its.length}건</span>
+        <span class="rc-hint-${safeKey}" style="font-size:10px;color:var(--gray-400);margin-left:auto">${isOpen?'▲ 접기':'▼ 펼치기'}</span>
+      </summary>
+      <div style="overflow-x:auto;margin-top:4px">
+        <table class="db-table" style="min-width:680px">
+          <thead><tr>
+            <th style="width:32px"><input type="checkbox" onchange="rcCheckCat(this)"></th>
+            <th style="min-width:140px">회사명</th>
+            <th style="width:75px">지점장</th>
+            <th style="width:95px">팀장</th>
+            <th>최근 진행내용</th>
+            <th style="width:60px">액션</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </details>`;
+  }
+
+  // 1차 날짜 블록
+  const html=sortedDates.map(dk=>{
+    const items=dateGroups.get(dk);
+    const sk='date__'+dk;
+    const isOpen=_rcOpenState.has(sk)?_rcOpenState.get(sk):true;
+    const catBlocks=CATS.map(cat=>renderCatBlock(cat,items,dk)).join('');
+    const totalCnt=items.length;
+    const kstToday=toKstDate(new Date().toISOString());
+    const dayDiff=kstToday&&dk?Math.floor((new Date(kstToday).getTime()-new Date(dk).getTime())/86400000):0;
+    const dayLabel=dayDiff===0?'오늘':dayDiff===1?'어제':dayDiff+'일 전';
+    const safeKey=sk.replace(/[^a-zA-Z0-9]/g,'_');
+    return `<details ${isOpen?'open':''} style="margin-bottom:12px;border:1px solid var(--gray-200);border-radius:8px;overflow:hidden" ontoggle="rcSaveOpenState('${sk}',this.open)">
+      <summary style="list-style:none;padding:11px 16px;background:var(--gray-50);border-bottom:1px solid var(--gray-200);cursor:pointer;display:flex;align-items:center;gap:10px;user-select:none">
+        <span style="font-size:13px;font-weight:800;color:var(--navy)">📅 분배일 ${dk.replace(/(\d{4})-(\d{2})-(\d{2})/,'$1. $2. $3')}</span>
+        <span style="font-size:11px;color:var(--gray-500);background:var(--gray-200);border-radius:8px;padding:1px 8px">${dayLabel}</span>
+        <span style="font-size:11px;background:var(--err);color:#fff;border-radius:10px;padding:1px 9px;font-weight:700">총 ${totalCnt}건</span>
+        <span class="rc-hint-${safeKey}" style="font-size:10px;color:var(--gray-400);margin-left:auto">${isOpen?'▲ 접기':'▼ 펼치기'}</span>
+      </summary>
+      <div style="padding:10px 14px">${catBlocks}</div>
+    </details>`;
   }).join('');
+
+  container.innerHTML=html||'<div style="text-align:center;padding:40px;color:var(--gray-400)">✅ 회수대상 DB가 없습니다</div>';
+}
+
+function rcSaveOpenState(key,isOpen){
+  _rcOpenState.set(key,isOpen);
+  const safeKey=key.replace(/[^a-zA-Z0-9]/g,'_');
+  document.querySelectorAll('.rc-hint-'+safeKey).forEach(el=>{
+    el.textContent=isOpen?'▲ 접기':'▼ 펼치기';
+  });
+}
+
+// ── 범주 전체선택 ─────────────────────────────────────────────────────
+function rcCheckCat(chkEl){
+  const det=chkEl.closest('details');
+  if(!det) return;
+  det.querySelectorAll('tbody input[type=checkbox]').forEach(cb=>{
+    cb.checked=chkEl.checked;
+    const oc=cb.getAttribute('onchange')||'';
+    const m=oc.match(/rcToggleOne\('([^']+)'/);
+    if(m){ chkEl.checked?_rcSelected.add(m[1]):_rcSelected.delete(m[1]); }
+  });
 }
 
 // ── 선택 ──────────────────────────────────────────────────────────────
 function rcToggleOne(id,checked){checked?_rcSelected.add(id):_rcSelected.delete(id);}
 function rcCheckAll(checked){
   _rcTargets.forEach(t=>checked?_rcSelected.add(t.id):_rcSelected.delete(t.id));
-  document.querySelectorAll('#recall-tbody input[type=checkbox]').forEach(c=>c.checked=checked);
-  const ca=document.getElementById('recall-chk-all');if(ca)ca.checked=checked;
+  document.querySelectorAll('#recall-body tbody input[type=checkbox]').forEach(c=>c.checked=checked);
 }
 
 // ── 담당 팀장 일괄 알림전송 ───────────────────────────────────────────
