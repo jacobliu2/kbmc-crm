@@ -257,7 +257,7 @@ select option{background:#fff;color:var(--gray-900)}
   display:inline-block;padding:3px 8px;
   border-radius:6px;font-size:11px;font-weight:600;
 }
-.badge-contract{background:#e8faf2;color:#00a060}
+.badge-contract{background:#fff3e0;color:#e65100;font-weight:800;border:1px solid #ff9800}
 .badge-done{background:var(--blue-50);color:var(--blue)}
 .badge-consulting{background:#fff6e8;color:#c67c00}
 .badge-contacted{background:var(--gray-100);color:var(--gray-600)}
@@ -266,6 +266,7 @@ select option{background:#fff;color:var(--gray-900)}
 .badge-stage-green{background:rgba(0,192,115,.12);color:#00a060;font-weight:700}
 .badge-stage-sky{background:rgba(56,189,248,.12);color:#0284c7;font-weight:700}
 .badge-stage-blue{background:rgba(49,130,246,.12);color:#1d4ed8;font-weight:700}
+.badge-stage-contract{background:linear-gradient(135deg,#ff6f00,#ff8f00);color:#fff;font-weight:800;box-shadow:0 2px 6px rgba(255,111,0,.35);letter-spacing:.3px}
 .badge-stage-orange{background:rgba(245,158,11,.12);color:#b45309;font-weight:700}
 .badge-stage-red{background:rgba(239,68,68,.1);color:#ef4444;font-weight:700}
 .badge-pending{background:var(--gray-100);color:var(--gray-500)}
@@ -1227,6 +1228,7 @@ tbody tr.selected td{background:var(--blue-50)!important}
             <button class="btn btn-outline btn-sm" onclick="rcCheckAll(true)" style="font-size:12px">전체선택</button>
             <button class="btn btn-outline btn-sm" onclick="rcCheckAll(false)" style="font-size:12px">선택해제</button>
             <button class="btn btn-outline btn-sm" onclick="rcExportExcel()" style="font-size:12px;color:var(--ok);border-color:var(--ok)">📥 엑셀 다운로드</button>
+            <button class="btn btn-sm" style="background:#f59e0b;color:#fff;border-color:#f59e0b;font-size:12px" onclick="rcSendNotice()">📢 담당팀장 알림전송</button>
             <button class="btn btn-sm" style="background:var(--err);color:#fff;border-color:var(--err)" onclick="rcRecallSelected()">↩ 선택 회수 → 대전TM</button>
           </div>
         </div>
@@ -1238,14 +1240,15 @@ tbody tr.selected td{background:var(--blue-50)!important}
             <table class="db-table">
               <thead><tr>
                 <th style="width:32px"><input type="checkbox" id="recall-chk-all" onchange="rcCheckAll(this.checked)"></th>
-                <th style="width:160px">회사명</th>
-                <th style="width:80px">지점장</th>
-                <th style="width:100px">팀장</th>
-                <th style="width:120px">배정일시</th>
-                <th>회수 사유</th>
+                <th style="width:150px">회사명</th>
+                <th style="width:75px">지점장</th>
+                <th style="width:95px">팀장</th>
+                <th style="width:115px">배정일시</th>
+                <th style="width:180px">회수 사유</th>
+                <th>최근 진행내용</th>
                 <th style="width:70px">액션</th>
               </tr></thead>
-              <tbody id="recall-tbody"><tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-400)">로딩 중...</td></tr></tbody>
+              <tbody id="recall-tbody"><tr><td colspan="8" style="text-align:center;padding:40px;color:var(--gray-400)">로딩 중...</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -1651,11 +1654,16 @@ tbody tr.selected td{background:var(--blue-50)!important}
         </button>
       </div>
 
+      <!-- ── 컬럼 토글 ── -->
+      <div id="tm-col-toggle-bar" style="margin:10px 0 8px;background:var(--gray-50);border:1px solid var(--gray-200);border-radius:var(--r-sm);overflow:hidden">
+        <div id="tm-col-group-rows"></div>
+      </div>
+
       <!-- ── 테이블 ── -->
       <div class="card" style="padding:0;margin-top:0;border-radius:0 0 var(--r) var(--r)">
         <div class="db-wrap">
           <table class="db-table">
-            <thead><tr>
+            <thead id="tmv2-thead"><tr>
               <th style="width:160px">회사명</th>
               <th style="width:100px">신청자</th>
               <th style="width:120px">연락처</th>
@@ -4235,7 +4243,7 @@ function stageBadge(stage){
   // 구 단계명 표시 시 자동 변환
   const _stageMap={'관리고객':'관리','초기접촉':'접촉','미팅':'상담','협의':'제안','상담중':'접촉','제안완료':'제안'};
   const s=_stageMap[stage]||stage;
-  const cls={'배정':'badge-stage-green','접촉':'badge-stage-sky','상담':'badge-stage-sky','제안':'badge-stage-sky','계약':'badge-stage-blue','관리':'badge-stage-blue','보류':'badge-stage-orange','드랍':'badge-stage-red'}[s]||'badge-pending';
+  const cls={'배정':'badge-stage-green','접촉':'badge-stage-sky','상담':'badge-stage-sky','제안':'badge-stage-sky','계약':'badge-stage-contract','관리':'badge-stage-blue','보류':'badge-stage-orange','드랍':'badge-stage-red'}[s]||'badge-pending';
   return `<span class="badge ${cls}">${s}</span>`;
 }
 
@@ -5025,6 +5033,27 @@ const COL_GROUPS={
   tm:    {l:'대전TM',   clr:'var(--blue)'},
   progress:{l:'진행내용', clr:'#3684FF'},
 };
+// ── 대전TM 컬럼 정의 (전역 앞배치 — tmV2Render 참조 필요) ──────────────
+const TM_COL_LS = 'kbmc_v2_tm_col_vis';
+const TM_COLS = [
+  {k:'company_name', l:'회사명',   w:160, lock:true},
+  {k:'contact_name', l:'신청자',   w:100},
+  {k:'phone',        l:'연락처',   w:120, lock:true},
+  {k:'consult_type', l:'상담유형', w:140},
+  {k:'region',       l:'소재지',   w:90},
+  {k:'branch_name',  l:'지점장',   w:80},
+  {k:'team_name',    l:'팀장',     w:100},
+  {k:'current_stage',l:'진행단계', w:70},
+  {k:'tm_meeting',   l:'미팅일',   w:80},
+  {k:'assigned_at',  l:'배정일',   w:80},
+  {k:'last_content', l:'진행내용', w:200, lock:true},
+  {k:'action_btn',   l:'액션',     w:60,  lock:true},
+];
+const TM_DEFAULT_COLS = ['company_name','contact_name','phone','consult_type','region','branch_name','team_name','current_stage','tm_meeting','assigned_at','last_content','action_btn'];
+function getTmVisCols(){
+  try{const v=JSON.parse(localStorage.getItem(TM_COL_LS));if(v&&Array.isArray(v))return v;}catch(e){}
+  return [...TM_DEFAULT_COLS];
+}
 // 기본 표시 컬럼
 const DEFAULT_COLS=['company_name','contact_name','phone','consult_type','region','current_stage','branch_name','team_name','last_activity'];
 const COL_LS='kbmc_v2_col_vis';
@@ -5042,6 +5071,9 @@ function getVisibleCols(){
 }
 function saveVisibleCols(v){localStorage.setItem(COL_LS,JSON.stringify(v));}
 let _visCols=getVisibleCols();
+// TM 컬럼 가시성 (TM_COLS/getTmVisCols는 바로 위 COL_GROUPS 블록에 정의됨)
+let _tmVisCols = getTmVisCols();
+
 // localStorage 컬럼 마이그레이션: status 제거, current_stage 보장
 (function(){
   ['kbmc_v2_col_vis','kbmc_v2_my_col_vis'].forEach(key=>{
@@ -8377,6 +8409,15 @@ function showDailyBriefing(){
   // ── 미확인 알림 ──
   const notifs=getNs().filter(n=>!n.read).slice(0,5);
 
+  // ── 회수대상 알림 (notices에서 본인 타겟 is_recall_notice) ──
+  const _rcNotices = getNoticesV2().filter(n=>{
+    if(!n.is_recall_notice) return false;
+    if(!isCalVisibleTo(n, curUser)) return false;
+    const sd=n.start_date||'2000-01-01';
+    const ed=n.end_date||'2099-12-31';
+    return today>=sd&&today<=ed;
+  });
+
   // ── 오늘 일정 (Next Action) ──
   const todayNas=nas.filter(a=>a.due_date===today);
   const todayMeets=todayNas.filter(a=>a.action_type==='미팅');
@@ -8406,6 +8447,18 @@ function showDailyBriefing(){
         <span>${NICON[n.type]||'🔔'}</span>
         <div><div style="font-weight:600">${esc(n.title)}</div>
         <div style="font-size:11px;color:var(--gray-400)">${esc(n.body||'')}</div></div>
+      </div>`).join('')}
+    </div>`);
+  }
+
+  // 회수대상 알림 (최우선 표시)
+  if(_rcNotices.length){
+    sections.push(`<div style="padding:10px 14px;background:rgba(239,68,68,.07);border-radius:8px;border-left:3px solid var(--err)">
+      <div style="font-size:12px;font-weight:800;color:var(--err);margin-bottom:8px">⛔ 회수대상 알림 ${_rcNotices.length}건</div>
+      ${_rcNotices.map(n=>`<div style="font-size:12px;color:var(--gray-800);padding:5px 0;border-bottom:1px solid rgba(239,68,68,.1)">
+        <div style="font-weight:700;color:var(--err)">${esc(n.title)}</div>
+        <div style="font-size:11px;color:var(--gray-600);margin-top:2px;white-space:pre-wrap;line-height:1.5">${esc((n.content||'').slice(0,200))}${n.content&&n.content.length>200?'...':''}</div>
+        <div style="font-size:10px;color:var(--gray-400);margin-top:2px">발송일: ${n.start_date||''}</div>
       </div>`).join('')}
     </div>`);
   }
@@ -9527,56 +9580,62 @@ function tmV2Render(){
   const tbody=document.getElementById('tmv2-tbody');
   if(!tbody) return;
   _tmV2UpdateCounts();
+  renderTmColToggleBar();
 
   const rows=_tmV2Filter(_tmV2Tab);
+  const vc=new Set(_tmVisCols);
+
+  // 헤더 동적 렌더
+  const thead=document.getElementById('tmv2-thead');
+  if(thead){
+    thead.innerHTML='<tr>'+TM_COLS.filter(c=>vc.has(c.k)).map(c=>`<th style="width:${c.w}px">${c.l}</th>`).join('')+'</tr>';
+  }
+
+  const colCount = TM_COLS.filter(c=>vc.has(c.k)).length;
+
   if(!rows.length){
-    tbody.innerHTML='<tr><td colspan="12" class="empty" style="padding:40px">데이터 없음</td></tr>';
+    tbody.innerHTML=`<tr><td colspan="${colCount}" class="empty" style="padding:40px">데이터 없음</td></tr>`;
     return;
   }
 
   const acts=allActivities||[];
   const fmtShort=v=>{if(!v)return'-';const d=new Date(v);if(isNaN(d))return'-';return(d.getMonth()+1)+'/'+(d.getDate());};
+  const stageMap={'배정':'badge-stage-green','접촉':'badge-stage-sky','상담':'badge-stage-sky','제안':'badge-stage-sky','계약':'badge-stage-contract','관리':'badge-stage-blue','보류':'badge-stage-orange','드랍':'badge-stage-red'};
 
   tbody.innerHTML=rows.map(l=>{
-    // 마지막 활동 (assign/status_change 제외)
     const lastAct=acts.filter(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type))
       .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];
-    // acts 캐시 없을 때 DB 저장된 tm_content fallback
     const lastContent = lastAct?.content || l.tm_content || '';
-
-    // 지점장/팀장 표시 — 단독이면 대전/대전
     const branchDisp = l.branch_name||'대전';
     const teamDisp   = l.team_name||'대전센터';
-
-    // 진행단계 뱃지
-    const stageMap={'배정':'badge-stage-green','접촉':'badge-stage-sky','상담':'badge-stage-sky','제안':'badge-stage-sky','계약':'badge-stage-blue','관리':'badge-stage-blue','보류':'badge-stage-orange','드랍':'badge-stage-red'};
-    const stageBadge=l.current_stage?`<span class="badge ${stageMap[l.current_stage]||'badge-pending'}" style="font-size:10px">${esc(l.current_stage)}</span>`:'-';
-
-    // 미팅일 (tm_meeting)
+    const stageBadgeHtml=l.current_stage?`<span class="badge ${stageMap[l.current_stage]||'badge-pending'}" style="font-size:10px">${esc(l.current_stage)}</span>`:'-';
     const meetingDisp=l.tm_meeting?`<span style="color:var(--blue);font-weight:700;font-size:12px">${fmtShort(l.tm_meeting)}</span>`:'-';
-
-    // 통화완료 탭: 본사이관 버튼
     const actionBtn=_tmV2Tab==='contacted'
       ?`<button class="btn btn-xs" style="background:var(--navy);color:#fff;border:none;font-size:10px;white-space:nowrap" onclick="event.stopPropagation();tmToAdmin('${l.id}')">본사이관</button>`
       :`<button class="btn btn-primary btn-xs" onclick="event.stopPropagation();openTmInput('${l.id}','${esc(l.company_name||'')}')">기록</button>`;
 
+    // 컬럼별 TD 맵
+    const tdMap = {
+      company_name: `<td style="font-weight:700;color:var(--navy);padding:9px 12px">${esc(l.company_name||'-')}</td>`,
+      contact_name: `<td style="font-size:12px;padding:9px 10px">${esc(l.contact_name||'-')}</td>`,
+      phone:        `<td style="font-size:12px;padding:9px 10px">${esc(l.phone||'-')}</td>`,
+      consult_type: `<td style="font-size:11px;padding:9px 10px">${esc((l.consult_type||'-').slice(0,16))}</td>`,
+      region:       `<td style="font-size:11px;padding:9px 10px">${esc((l.region||'-').slice(0,10))}</td>`,
+      branch_name:  `<td style="font-size:12px;padding:9px 10px">${esc(branchDisp)}</td>`,
+      team_name:    `<td style="font-size:12px;padding:9px 10px">${esc(teamDisp)}</td>`,
+      current_stage:`<td style="padding:9px 10px">${stageBadgeHtml}</td>`,
+      tm_meeting:   `<td style="padding:9px 10px">${meetingDisp}</td>`,
+      assigned_at:  `<td style="font-size:11px;color:var(--gray-400);padding:9px 10px">${fmtShort(l.assigned_at||l.created_at)}</td>`,
+      last_content: `<td style="font-size:11px;color:var(--gray-600);padding:9px 10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(lastContent.slice(0,50)||'-')}</td>`,
+      action_btn:   `<td style="padding:9px 10px" onclick="event.stopPropagation()">${actionBtn}</td>`,
+    };
+
+    const tds = TM_COLS.filter(c=>vc.has(c.k)).map(c=>tdMap[c.k]||'<td>-</td>').join('');
+
     return`<tr style="cursor:pointer;border-bottom:1px solid var(--gray-100)"
       onclick="openTmInput('${l.id}','${esc(l.company_name||'')}')"
       onmouseover="this.style.background='var(--gray-50)'"
-      onmouseout="this.style.background=''">
-      <td style="font-weight:700;color:var(--navy);padding:9px 12px">${esc(l.company_name||'-')}</td>
-      <td style="font-size:12px;padding:9px 10px">${esc(l.contact_name||'-')}</td>
-      <td style="font-size:12px;padding:9px 10px">${esc(l.phone||'-')}</td>
-      <td style="font-size:11px;padding:9px 10px">${esc((l.consult_type||'-').slice(0,16))}</td>
-      <td style="font-size:11px;padding:9px 10px">${esc((l.region||'-').slice(0,10))}</td>
-      <td style="font-size:12px;padding:9px 10px">${esc(branchDisp)}</td>
-      <td style="font-size:12px;padding:9px 10px">${esc(teamDisp)}</td>
-      <td style="padding:9px 10px">${stageBadge}</td>
-      <td style="padding:9px 10px">${meetingDisp}</td>
-      <td style="font-size:11px;color:var(--gray-400);padding:9px 10px">${fmtShort(l.assigned_at||l.created_at)}</td>
-      <td style="font-size:11px;color:var(--gray-600);padding:9px 10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(lastContent.slice(0,50)||'-')}</td>
-      <td style="padding:9px 10px" onclick="event.stopPropagation()">${actionBtn}</td>
-    </tr>`;
+      onmouseout="this.style.background=''">${tds}</tr>`;
   }).join('');
 }
 
@@ -9739,6 +9798,8 @@ async function loadTmPanel(){
     if(lv) lv.style.display='none';
     // v2 렌더
     _tmV2Data = tmLeads;
+    _tmVisCols = getTmVisCols(); // 저장된 컬럼 설정 로드
+    renderTmColToggleBar();
     tmV2Render();
   }
 }
@@ -11844,7 +11905,7 @@ async function rcRender(){
   const sub   = document.getElementById('recall-sub');
   if(!tbody) return;
 
-  tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-400)">⏳ 회수 대상 산출 중...</td></tr>';
+  tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--gray-400)">⏳ 회수 대상 산출 중...</td></tr>';
 
   // 1. 후보 리드
   const cands = _rcCandidates();
@@ -11881,7 +11942,7 @@ async function rcRender(){
   if(cntEl) cntEl.textContent=cnt?'('+cnt+')':'';
 
   if(!cnt){
-    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-400)">✅ 회수대상 DB가 없습니다</td></tr>';
+    tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--gray-400)">✅ 회수대상 DB가 없습니다</td></tr>';
     return;
   }
 
@@ -11892,9 +11953,20 @@ async function rcRender(){
       +' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
   };
 
+  const _rcActs = allActivities || [];
+  const _rcRealTypes = new Set(['call','meeting','online','proposal','contract','email','note']);
+
   tbody.innerHTML=_rcTargets.map(t=>{
     const chk   = _rcSelected.has(t.id)?'checked':'';
     const rowBg = t._rcReason.bg?'background:'+t._rcReason.bg+';':'';
+    // 최근 진행내용: allActivities 캐시에서 실활동 최신 1건
+    const lastAct = _rcActs
+      .filter(a=>a.lead_id===t.id && _rcRealTypes.has(String(a.type||'').trim()))
+      .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];
+    const _actTypeLabel={'call':'📞통화','meeting':'🤝미팅','online':'💻온라인','proposal':'📄제안','contract':'🎉계약','email':'📧이메일','note':'📝메모'};
+    const lastActTxt = lastAct
+      ? `<span style="font-size:10px;color:var(--blue);font-weight:600;margin-right:4px">${_actTypeLabel[lastAct.type]||lastAct.type}</span><span style="font-size:10px;color:var(--gray-400);margin-right:4px">${fmtDt(lastAct.created_at).slice(5,16)}</span><span style="font-size:11px;color:var(--gray-700)">${esc((lastAct.content||'').slice(0,55))}</span>`
+      : '<span style="color:var(--gray-300);font-style:italic;font-size:11px">활동기록 없음</span>';
     return `<tr style="border-bottom:1px solid var(--gray-100);${rowBg}"
       onmouseover="this.style.background='var(--gray-50)'"
       onmouseout="this.style.background='${t._rcReason.bg||''}'">
@@ -11907,6 +11979,7 @@ async function rcRender(){
       <td style="padding:8px 10px;font-size:12px">${esc(t.team_name||'-')}</td>
       <td style="padding:8px 10px;font-size:11px;color:var(--gray-400)">${fmtDt(t.assigned_at)}</td>
       <td style="padding:8px 10px;font-size:12px;font-weight:600;color:var(--err)">${t._rcReason.text||''}</td>
+      <td style="padding:8px 10px;max-width:240px">${lastActTxt}</td>
       <td style="padding:8px 10px;white-space:nowrap" onclick="event.stopPropagation()">
         <button class="btn btn-sm btn-outline" style="color:var(--err);border-color:var(--err);font-size:11px"
           onclick="rcRecallOne('${t.id}')">↩ 회수</button>
@@ -11921,6 +11994,59 @@ function rcCheckAll(checked){
   _rcTargets.forEach(t=>checked?_rcSelected.add(t.id):_rcSelected.delete(t.id));
   document.querySelectorAll('#recall-tbody input[type=checkbox]').forEach(c=>c.checked=checked);
   const ca=document.getElementById('recall-chk-all');if(ca)ca.checked=checked;
+}
+
+// ── 담당 팀장 일괄 알림전송 ───────────────────────────────────────────
+function rcSendNotice(){
+  if(!_rcTargets||!_rcTargets.length){
+    showToast('회수대상이 없습니다','error'); return;
+  }
+  // 팀장별로 담당 건수 집계
+  const teamMap = new Map(); // teamName => {count, leads:[]}
+  for(const t of _rcTargets){
+    const tn = t.team_name||'미배정';
+    if(!teamMap.has(tn)) teamMap.set(tn,{count:0,leads:[]});
+    const e = teamMap.get(tn);
+    e.count++;
+    e.leads.push(t);
+  }
+  const teamNames = [...teamMap.keys()].filter(n=>n&&n!=='미배정');
+  if(!teamNames.length){showToast('담당 팀장이 없습니다','error');return;}
+
+  const today = new Date().toISOString().slice(0,10);
+  const endDate = new Date(Date.now()+3*86400000).toISOString().slice(0,10);
+
+  const notices = getNoticesV2();
+  let sentNames = [];
+
+  for(const tn of teamNames){
+    const e = teamMap.get(tn);
+    const cnt = e.count;
+    const title = '⛔ 회수대상 알림 — '+cnt+'건 미접촉 DB';
+    const leadLines = e.leads.map(t=>'· '+(t.company_name||'-')+' ('+(t._rcReason&&t._rcReason.text||'')+')').join('\n');
+    const content = tn+' 팀장님, 현재 담당 DB 중 '+cnt+'건이 미접촉으로 회수 대상입니다.\n\n활동기록을 남겨주시면 회수 대상에서 제외됩니다.\n\n[해당 DB]\n'+leadLines+'\n\n관리자 발송 · '+today;
+    const row = {
+      id: uuid(),
+      title: title,
+      content: content,
+      target_role: 'team',
+      target_roles: ['team'],
+      target_branches: [],
+      target_names: [tn],
+      start_date: today,
+      end_date: endDate,
+      author: curUser&&curUser.name||'관리자',
+      is_recall_notice: true,
+      created_at: new Date().toISOString()
+    };
+    notices.unshift(row);
+    sentNames.push(tn);
+  }
+
+  saveNoticesV2(notices);
+  renderAdminNoticeList();
+  const tail = sentNames.length>4?' 외 '+(sentNames.length-4)+'명':'';
+  showToast(sentNames.length+'명 팀장에게 회수대상 알림 전송 완료 ('+sentNames.slice(0,4).join('·')+tail+')','success');
 }
 
 // ── 회수 공통 패치 ────────────────────────────────────────────────────
@@ -13370,6 +13496,10 @@ function isCalVisibleTo(item, user){
   if(!user) return false;
   const role=item.target_role||'all';
   const branches=item.target_branches||[];
+  // 특정 이름 타겟 (rcSendNotice 전용 - target_names 배열)
+  if(Array.isArray(item.target_names)&&item.target_names.length>0){
+    return item.target_names.includes(user.name);
+  }
   // 역할 체크
   const roles=item.target_roles||[role];
   if(!roles.includes('all')&&!roles.includes(user.role)) return false;
@@ -14281,6 +14411,62 @@ function renderMyColChips(){ renderColToggleBar('my'); }
 // loadLeads 이후 초기 렌더 (미사용 _orig 변수 제거)
 // syncGroupBtns 대체
 function syncGroupBtns(target){ renderColToggleBar(target); }
+
+// ════════════════════════════════════════════════════════════
+// 대전TM 컬럼 토글 시스템 (TM_COLS/getTmVisCols는 5031 근처 앞배치)
+// ════════════════════════════════════════════════════════════
+function saveTmVisCols(v){ localStorage.setItem(TM_COL_LS,JSON.stringify(v)); _tmVisCols=v; }
+
+function renderTmColToggleBar(){
+  const el = document.getElementById('tm-col-group-rows'); if(!el) return;
+  const clr = 'var(--navy)';
+  const nonLocked = TM_COLS.filter(c=>!c.lock);
+  const allOn = nonLocked.every(c=>_tmVisCols.includes(c.k));
+
+  const groupBtn = `<button class="cg-btn ${allOn?'on':'off'}"
+    style="border-color:${clr};background:${allOn?clr:'#fff'};color:${allOn?'#fff':clr}"
+    onclick="toggleTmColGroupAll()">
+    전체 ${allOn?'▲':'▼'}
+  </button>`;
+
+  const chips = TM_COLS.map(c=>{
+    const on = _tmVisCols.includes(c.k)||c.lock;
+    const locked = c.lock?'locked':'';
+    const onclick = c.lock?'':` onclick="toggleOneTmCol('${c.k}')"`;
+    return `<span class="col-chip ${on?'on':''} ${locked}" style="--chip-clr:${clr}" ${onclick}
+      title="${c.lock?'항상 표시':''}">${c.l}</span>`;
+  }).join('');
+
+  el.innerHTML = `<div class="cg-row">${groupBtn}${chips}</div>`;
+}
+
+function toggleTmColGroupAll(){
+  const nonLocked = TM_COLS.filter(c=>!c.lock);
+  const allOn = nonLocked.every(c=>_tmVisCols.includes(c.k));
+  if(allOn){
+    _tmVisCols = TM_COLS.filter(c=>c.lock).map(c=>c.k);
+  } else {
+    _tmVisCols = TM_COLS.map(c=>c.k);
+  }
+  saveTmVisCols(_tmVisCols);
+  renderTmColToggleBar();
+  tmV2Render();
+}
+
+function toggleOneTmCol(key){
+  const c = TM_COLS.find(x=>x.k===key); if(!c||c.lock) return;
+  if(_tmVisCols.includes(key)){
+    _tmVisCols = _tmVisCols.filter(k=>k!==key);
+  } else {
+    // 원래 순서 유지하며 삽입
+    const order = TM_COLS.map(c=>c.k);
+    const merged = order.filter(k=>_tmVisCols.includes(k)||k===key);
+    _tmVisCols = merged;
+  }
+  saveTmVisCols(_tmVisCols);
+  renderTmColToggleBar();
+  tmV2Render();
+}
 
 // ════════════════════════════════════════════════════════════
 // JS7: 횡스크롤 네비게이터
