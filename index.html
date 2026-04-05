@@ -11933,10 +11933,10 @@ async function rcRender(){
     {code:'C',label:'③ 관리 후 30영업일 미기록',   clr:'#6366f1',bg:'rgba(99,102,241,.07)', border:'#6366f1'},
   ];
 
-  // 1차: 분배일별 그룹
+  // 1차: 분배일별 그룹 (key는 YYYY-MM-DD 원본으로 정렬 보장)
   const dateGroups=new Map();
   for(const t of _rcTargets){
-    const dk=fmtDate(t.assigned_at);
+    const dk=toKstDate(t.assigned_at)||'미정';
     if(!dateGroups.has(dk)) dateGroups.set(dk,[]);
     dateGroups.get(dk).push(t);
   }
@@ -12001,12 +12001,13 @@ async function rcRender(){
     const catBlocks=CATS.map(cat=>renderCatBlock(cat,items,dk)).join('');
     const totalCnt=items.length;
     const kstToday=toKstDate(new Date().toISOString());
-    const dayDiff=kstToday&&dk?Math.floor((new Date(kstToday).getTime()-new Date(dk).getTime())/86400000):0;
+    const dayDiff=kstToday&&dk&&dk!=='미정'?Math.floor((new Date(kstToday).getTime()-new Date(dk).getTime())/86400000):0;
     const dayLabel=dayDiff===0?'오늘':dayDiff===1?'어제':dayDiff+'일 전';
+    const dkDisp=dk&&dk!=='미정'?dk.replace(/(\d{4})-(\d{2})-(\d{2})/,'$1. $2. $3'):dk;
     const safeKey=sk.replace(/[^a-zA-Z0-9]/g,'_');
     return `<details ${isOpen?'open':''} style="margin-bottom:12px;border:1px solid var(--gray-200);border-radius:8px;overflow:hidden" ontoggle="rcSaveOpenState('${sk}',this.open)">
       <summary style="list-style:none;padding:11px 16px;background:var(--gray-50);border-bottom:1px solid var(--gray-200);cursor:pointer;display:flex;align-items:center;gap:10px;user-select:none">
-        <span style="font-size:13px;font-weight:800;color:var(--navy)">📅 분배일 ${dk.replace(/(\d{4})-(\d{2})-(\d{2})/,'$1. $2. $3')}</span>
+        <span style="font-size:13px;font-weight:800;color:var(--navy)">📅 분배일 ${dkDisp}</span>
         <span style="font-size:11px;color:var(--gray-500);background:var(--gray-200);border-radius:8px;padding:1px 8px">${dayLabel}</span>
         <span style="font-size:11px;background:var(--err);color:#fff;border-radius:10px;padding:1px 9px;font-weight:700">총 ${totalCnt}건</span>
         <span class="rc-hint-${safeKey}" style="font-size:10px;color:var(--gray-400);margin-left:auto">${isOpen?'▲ 접기':'▼ 펼치기'}</span>
