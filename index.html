@@ -13418,10 +13418,33 @@ function saveNoticesV2(n){localStorage.setItem(NOTICE_V2_KEY,JSON.stringify(n));
 async function _sbSaveNotice(row){
   if(testMode) return;
   try{
-    // upsert: id 기준 중복 시 update
+    // 실제 notices 테이블 컬럼에 정확히 맞춤
+    // 컬럼: id, title, content, type, start_date, end_date,
+    //        roles, branches, alarms, author, created_at,
+    //        target_roles(jsonb), target_branches(jsonb), target_names(jsonb), is_recall_notice(bool)
+    const payload={
+      id:               row.id,
+      title:            row.title||'',
+      content:          row.content||'',
+      type:             row.type||'notice',
+      start_date:       row.start_date||null,
+      end_date:         row.end_date||null,
+      roles:            row.target_role||'all',
+      branches:         Array.isArray(row.target_branches)?row.target_branches.join(','):(row.branches||''),
+      alarms:           row.alarms||'',
+      author:           row.author||curUser?.name||'관리자',
+      target_roles:     row.target_roles||[],
+      target_branches:  row.target_branches||[],
+      target_names:     row.target_names||null,
+      is_recall_notice: row.is_recall_notice||false,
+      created_at:       row.created_at||new Date().toISOString()
+    };
     const h={...sbH(),'Prefer':'resolution=merge-duplicates,return=minimal'};
-    const r=await fetch(SB_URL+'/rest/v1/notices',{method:'POST',headers:h,body:JSON.stringify(row)});
-    if(!r.ok){ const e=await r.text().catch(()=>''); console.error('sbSaveNotice err:',r.status,e); }
+    const r=await fetch(SB_URL+'/rest/v1/notices',{method:'POST',headers:h,body:JSON.stringify(payload)});
+    if(!r.ok){
+      const errText=await r.text().catch(()=>'');
+      console.error('sbSaveNotice err:',r.status, errText);
+    }
   }catch(e){ console.error('sbSaveNotice exception:',e); }
 }
 // Supabase notices 삭제
@@ -13440,7 +13463,17 @@ async function _sbLoadNotices(){
     if(!r.ok) return;
     const rows=await r.json();
     if(Array.isArray(rows)){
-      localStorage.setItem(NOTICE_V2_KEY,JSON.stringify(rows));
+      // 구 컬럼(roles/branches) → 신 필드(target_role/target_branches) 호환 매핑
+      const mapped = rows.map(n=>({
+        ...n,
+        target_role:    n.target_role || n.roles || 'all',
+        target_roles:   Array.isArray(n.target_roles)  ? n.target_roles
+                        : (n.roles ? n.roles.split(',').map(s=>s.trim()) : ['all']),
+        target_branches:Array.isArray(n.target_branches) ? n.target_branches
+                        : (n.branches ? n.branches.split(',').map(s=>s.trim()).filter(Boolean) : []),
+        target_names:   Array.isArray(n.target_names) ? n.target_names : null,
+      }));
+      localStorage.setItem(NOTICE_V2_KEY, JSON.stringify(mapped));
     }
   }catch(e){ console.error('sbLoadNotices exception:',e); }
 }
