@@ -11860,14 +11860,14 @@ function _rcJudge(lead, lastMs){
     return null;
   }
 
-  // ── A. 배정 단계 + 활동기록 없음 → 배정일 기준 48h ──────
+  // ── A. 배정 단계 + 활동기록 없음 → 배정일 기준 48 영업시간 (주말·공휴일 제외) ──
   if(lastMs===undefined){
     if(stage==='배정'||stage===''||!stage){
-      const diff = NOW - assignedMs;
-      if(diff > H48){
-        const h = Math.floor(diff/3600000);
+      const bizMs = bizElapsedMs(assignedMs, NOW); // 영업시간 기준 경과 ms
+      if(bizMs > H48){
+        const h = Math.floor(bizMs/3600000);
         return {code:'A',weight:1,
-          text:`⚠️ 분배 후 ${h}h 미기록 (기준: 48h)`,
+          text:`⚠️ 분배 후 영업 ${h}h 미기록 (기준: 48h, 주말·공휴일 제외)`,
           bg:'rgba(239,68,68,.07)'};
       }
     }
