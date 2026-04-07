@@ -2822,8 +2822,11 @@ function submitRemoveLeaderReq(){
   if(myLeads.length>0&&!transfer){showToast('담당 DB 이관 대상 팀장을 지정하세요','error');return;}
   if(!reason){showToast('삭제 사유를 입력하세요','error');return;}
   const reqs=getLeaderReqs();
-  reqs.unshift({id:uuid(),type:'remove',name:target,transfer:transfer||'',reason,branch:curUser.name,dbCount:myLeads.length,status:'pending',created_at:new Date().toISOString()});
+  const _req={id:uuid(),type:'remove',name:target,transfer:transfer||'',reason,branch:curUser.name,dbCount:myLeads.length,status:'pending',created_at:new Date().toISOString()};
+  reqs.unshift(_req);
   saveLeaderReqs(reqs);
+  // Supabase notices에 저장해 관리자가 다른 PC에서도 확인 가능
+  _sbSaveNotice({id:_req.id,title:'🗑 팀장삭제요청 — '+target,content:JSON.stringify(_req),type:'leader_req',target_role:'admin',target_roles:['admin'],target_branches:[],start_date:new Date().toISOString().slice(0,10),end_date:null,author:curUser.name,is_recall_notice:false,created_at:_req.created_at});
   closeOv('ov-remove-leader-req');
   showToast('삭제 요청 제출 완료 — 관리자 승인 후 처리됩니다','success');
   addN('system','🗑 팀장 삭제 요청',curUser.name+' → '+target+' 삭제 요청','leader_req:req');
@@ -2834,8 +2837,10 @@ function submitAddLeaderReq(){
   const reason=document.getElementById('new-leader-reason')?.value.trim();
   if(!name){showToast('팀장 이름을 입력하세요','error');return;}
   const reqs=getLeaderReqs();
-  reqs.unshift({id:uuid(),type:'add',name,reason,branch:curUser.name,status:'pending',created_at:new Date().toISOString()});
+  const _req2={id:uuid(),type:'add',name,reason,branch:curUser.name,status:'pending',created_at:new Date().toISOString()};
+  reqs.unshift(_req2);
   saveLeaderReqs(reqs);
+  _sbSaveNotice({id:_req2.id,title:'👤 팀장추가요청 — '+name,content:JSON.stringify(_req2),type:'leader_req',target_role:'admin',target_roles:['admin'],target_branches:[],start_date:new Date().toISOString().slice(0,10),end_date:null,author:curUser.name,is_recall_notice:false,created_at:_req2.created_at});
   closeOv('ov-add-leader-req');
   showToast('추가 요청 제출 완료 — 관리자 승인 후 반영됩니다','success');
   addN('system','👤 팀장 추가 요청',curUser.name+' → '+name,'leader_req:req');
@@ -3485,7 +3490,16 @@ function saveLeaderReqs(arr){localStorage.setItem(LEADER_REQ_KEY,JSON.stringify(
 
 // ── MC Potential helpers ───────────────────────────────────
 function getPotentials(){try{return JSON.parse(localStorage.getItem(MC_POTENTIAL_KEY)||'[]');}catch(e){return[];}}
-function savePotentials(arr){localStorage.setItem(MC_POTENTIAL_KEY,JSON.stringify(arr));}
+function savePotentials(arr){
+  localStorage.setItem(MC_POTENTIAL_KEY,JSON.stringify(arr));
+  // Supabase 저장 (관리자-팀장 공유)
+  if(!testMode){
+    const h={...sbH(),'Prefer':'resolution=merge-duplicates,return=minimal'};
+    fetch(SB_URL+'/rest/v1/profiles',{method:'POST',headers:h,
+      body:JSON.stringify({id:'potentials_'+curUser.name,data:JSON.stringify(arr),updated_at:new Date().toISOString()})
+    }).catch(()=>{});
+  }
+}
 
 // KBMC CRM v2 — GPT 설계서 기반 · ID-First · Supabase Native
 // ══════════════════════════════════════════════════════════
@@ -4168,6 +4182,21 @@ function startApp(){
   document.getElementById('app').style.display='block';
   // Supabase notices 로드 (다른 사용자가 저장한 공지 수신)
   _sbLoadNotices().then(()=>{ if(typeof renderAdminNoticeList==='function') renderAdminNoticeList(); });
+  // Supabase 프로필 데이터 로드 (goals, potentials, 1on1, contacts)
+  if(!testMode){ (async()=>{
+    const _keys=[
+      {id:'goals_admin', lsKey:LS.goals, field:'goals'},
+      {id:'potentials_'+curUser.name, lsKey:MC_POTENTIAL_KEY, field:'data'},
+      {id:'1on1_'+curUser.name, lsKey:ONETOONONE_KEY, field:'data'},
+      {id:'contacts_'+curUser.name, lsKey:CONTACT_KEY, field:'data'},
+    ];
+    for(const k of _keys){
+      try{
+        const r=await fetch(SB_URL+'/rest/v1/profiles?id=eq.'+encodeURIComponent(k.id)+'&select='+k.field,{headers:sbH()});
+        if(r.ok){const rows=await r.json();if(rows[0]?.[k.field]){try{localStorage.setItem(k.lsKey,rows[0][k.field]);}catch(e){}}}
+      }catch(e){}
+    }
+  })(); }
   (document.getElementById('user-name')||{}).textContent=curUser.name;
   (document.getElementById('user-avatar')||{}).textContent=curUser.name.charAt(0);
   (document.getElementById('ud-name')||{}).textContent=curUser.name;
@@ -4730,11 +4759,20 @@ function openGoalM(type,name){
   </div>`;
   ov.classList.add('open'); setTimeout(()=>document.getElementById('goal-v')?.select(),80);
 }
-function saveGoalM(type,name,ym){
+async function saveGoalM(type,name,ym){
   const v=parseInt(document.getElementById('goal-v')?.value)||0;
   if(!v){showToast('건수를 입력하세요.','error');return;}
   const goals=JSON.parse(localStorage.getItem(LS.goals)||'{}');
-  goals[type+':'+name+':'+ym]=v; localStorage.setItem(LS.goals,JSON.stringify(goals));
+  goals[type+':'+name+':'+ym]=v;
+  localStorage.setItem(LS.goals,JSON.stringify(goals));
+  // Supabase profiles에 goals 저장 (전사 공유)
+  if(!testMode){
+    try{
+      const h={...sbH(),'Prefer':'resolution=merge-duplicates,return=minimal'};
+      await fetch(SB_URL+'/rest/v1/profiles',{method:'POST',headers:h,
+        body:JSON.stringify({id:'goals_admin',goals:JSON.stringify(goals),updated_at:new Date().toISOString()})});
+    }catch(e){}
+  }
   closeOv('ov-goal'); showToast(name+' 목표 '+v+'건 저장','success'); loadAdmin();
 }
 
@@ -6700,7 +6738,15 @@ function brSaveEditTodo(id){
 // ══════════════════════════════════════════════════
 const ONETOONONE_KEY='kbmc_1on1';
 function get1on1All(){try{return JSON.parse(localStorage.getItem(ONETOONONE_KEY)||'{}');}catch(e){return{};}}
-function save1on1All(d){localStorage.setItem(ONETOONONE_KEY,JSON.stringify(d));}
+function save1on1All(d){
+  localStorage.setItem(ONETOONONE_KEY,JSON.stringify(d));
+  if(!testMode){
+    const h={...sbH(),'Prefer':'resolution=merge-duplicates,return=minimal'};
+    fetch(SB_URL+'/rest/v1/profiles',{method:'POST',headers:h,
+      body:JSON.stringify({id:'1on1_'+curUser.name,data:JSON.stringify(d),updated_at:new Date().toISOString()})
+    }).catch(()=>{});
+  }
+}
 function get1on1(name){return get1on1All()[name]||[];}
 
 function openAdd1on1(){
@@ -8084,14 +8130,22 @@ function editStage(i){const s=getStages();const nv=prompt('단계 이름 수정'
 function getNs2(){try{return JSON.parse(localStorage.getItem(LS.notices)||'[]');}catch(e){return[];}}
 function saveNs(n){localStorage.setItem(LS.notices,JSON.stringify(n));}
 function toggleNoticeSchedule(on){const e=document.getElementById('notice-scheduled-at');if(e)e.style.display=on?'block':'none';}
-function saveNotice(){
+async function saveNotice(){
   const target=document.getElementById('notice-target').value,title=document.getElementById('notice-title').value.trim(),content=document.getElementById('notice-content').value.trim();
   if(!title||!content){showToast('제목과 내용을 입력하세요.','error');return;}
   const useS=document.getElementById('notice-schedule-on')?.checked,sAt=document.getElementById('notice-scheduled-at')?.value;
   if(useS&&!sAt){showToast('예약 시간을 입력하세요.','error');return;}
   const ns=getNs2();
-  ns.unshift({id:uuid(),target,title,content,is_scheduled:!!useS,scheduled_at:useS?new Date(sAt).toISOString():null,created_at:new Date().toISOString(),read_by:[]});
+  const _roles=target==='all'?['all']:[target];
+  const _row={id:uuid(),target,title,content,
+    target_role:target,target_roles:_roles,target_branches:[],target_names:null,
+    is_scheduled:!!useS,scheduled_at:useS?new Date(sAt).toISOString():null,
+    start_date:new Date().toISOString().slice(0,10),end_date:null,
+    author:curUser.name,is_recall_notice:false,
+    created_at:new Date().toISOString(),read_by:[]};
+  ns.unshift(_row);
   saveNs(ns);
+  await _sbSaveNotice(_row); // Supabase 저장
   ['notice-title','notice-content'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   if(document.getElementById('notice-schedule-on'))document.getElementById('notice-schedule-on').checked=false;
   if(document.getElementById('notice-scheduled-at'))(()=>{const _e=document.getElementById('notice-scheduled-at');if(_e)_e.style.display='none';})();
@@ -8107,7 +8161,7 @@ function renderNoticeList(){
     <div style="font-size:10px;color:var(--gray-400);margin-top:2px">${n.is_scheduled?'⏰ '+fmtD(n.scheduled_at):'📅 '+fmtD(n.created_at)} · ${n.target}</div>
   </div>`).join('');
 }
-function delNotice(id){saveNs(getNs2().filter(n=>n.id!==id));renderNoticeList();}
+function delNotice(id){saveNs(getNs2().filter(n=>n.id!==id));_sbDeleteNotice(id);renderNoticeList();}
 
 // ── SQL 스키마 ─────────────────────────────────────────────
 function copySchema(){
@@ -8386,7 +8440,15 @@ function openSavedFilters(){
 // ── 즐겨찾기 ─────────────────────────────────────────────
 const FAV_KEY='kbmc_fav';
 function getFavs(){try{return JSON.parse(localStorage.getItem(FAV_KEY)||'[]');}catch(e){return[];}}
-function saveFavs(a){localStorage.setItem(FAV_KEY,JSON.stringify(a));}
+function saveFavs(a){
+  localStorage.setItem(FAV_KEY,JSON.stringify(a));
+  if(!testMode){
+    const h={...sbH(),'Prefer':'resolution=merge-duplicates,return=minimal'};
+    fetch(SB_URL+'/rest/v1/profiles',{method:'POST',headers:h,
+      body:JSON.stringify({id:'favs_'+curUser.name,data:JSON.stringify(a),updated_at:new Date().toISOString()})
+    }).catch(()=>{});
+  }
+}
 
 function toggleFavorite(){
   const id=window._panelLeadId; if(!id) return;
@@ -8746,7 +8808,15 @@ function getContactAnnivAlerts(){
   return alerts;
 }
 function getContacts(){try{return JSON.parse(localStorage.getItem(CONTACT_KEY)||'[]');}catch(e){return[];}}
-function saveContacts(arr){localStorage.setItem(CONTACT_KEY,JSON.stringify(arr));}
+function saveContacts(arr){
+  localStorage.setItem(CONTACT_KEY,JSON.stringify(arr));
+  if(!testMode){
+    const h={...sbH(),'Prefer':'resolution=merge-duplicates,return=minimal'};
+    fetch(SB_URL+'/rest/v1/profiles',{method:'POST',headers:h,
+      body:JSON.stringify({id:'contacts_'+curUser.name,data:JSON.stringify(arr),updated_at:new Date().toISOString()})
+    }).catch(()=>{});
+  }
+}
 function getGroups(){try{return JSON.parse(localStorage.getItem(GROUP_KEY)||'[]');}catch(e){return[];}}
 function saveGroups(arr){localStorage.setItem(GROUP_KEY,JSON.stringify(arr.slice(0,10)));}
 
@@ -13537,7 +13607,6 @@ async function _sbLoadNotices(){
     if(!r.ok) return;
     const rows=await r.json();
     if(Array.isArray(rows)){
-      // 구 컬럼(roles/branches) → 신 필드(target_role/target_branches) 호환 매핑
       const mapped = rows.map(n=>({
         ...n,
         target_role:    n.target_role || n.roles || 'all',
@@ -13548,6 +13617,33 @@ async function _sbLoadNotices(){
         target_names:   Array.isArray(n.target_names) ? n.target_names : null,
       }));
       localStorage.setItem(NOTICE_V2_KEY, JSON.stringify(mapped));
+      // type='leader_req' → leaderReqs에도 반영
+      const leaderReqRows = mapped.filter(n=>n.type==='leader_req');
+      if(leaderReqRows.length){
+        const existing = getLeaderReqs();
+        const existIds = new Set(existing.map(r=>r.id));
+        leaderReqRows.forEach(n=>{
+          if(!existIds.has(n.id)){
+            try{ const req=JSON.parse(n.content||'{}'); if(req.id) existing.unshift(req); }catch(e){}
+          }
+        });
+        saveLeaderReqs(existing);
+      }
+      // type='comp_cal' → getCompCals에도 반영 (전사 캘린더 동기화)
+      const compCalRows = mapped.filter(n=>n.type==='comp_cal');
+      if(compCalRows.length){
+        const existCals = getCompCals();
+        const existCalIds = new Set(existCals.map(c=>c.id));
+        let changed = false;
+        compCalRows.forEach(n=>{
+          if(!existCalIds.has(n.id)){ existCals.unshift(n); changed=true; }
+          else {
+            const i=existCals.findIndex(c=>c.id===n.id);
+            if(i>=0){ existCals[i]={...existCals[i],...n}; changed=true; }
+          }
+        });
+        if(changed) saveCompCals(existCals);
+      }
     }
   }catch(e){ console.error('sbLoadNotices exception:',e); }
 }
@@ -13695,7 +13791,7 @@ function openCompCalModal(dateStr){
   openM('modal-comp-cal');
 }
 
-function saveCompCal(){
+async function saveCompCal(){
   const title=document.getElementById('cc-title').value.trim();
   const start=document.getElementById('cc-start').value;
   if(!title||!start){showToast('제목과 시작일을 입력하세요.','error');return;}
@@ -13707,11 +13803,12 @@ function saveCompCal(){
   const cals=getCompCals();
   const row={id:eid||uuid(),title,content:document.getElementById('cc-content').value.trim(),
     start_date:start,end_date:document.getElementById('cc-end').value||null,
-    target_role:role,target_branches:branches,alarms,
-    author:curUser.name,created_at:new Date().toISOString()};
+    target_role:role,target_roles:ccRoles,target_branches:branches,alarms,
+    type:'comp_cal',author:curUser.name,created_at:new Date().toISOString()};
   if(eid){const i=cals.findIndex(c=>c.id===eid);if(i>=0)cals[i]=row;}
   else cals.unshift(row);
   saveCompCals(cals);
+  await _sbSaveNotice(row); // Supabase 저장 → 전사 공유
   closeM('modal-comp-cal'); showToast('일정 등록 완료','success');
   renderCompCal();
 }
@@ -13786,6 +13883,7 @@ function openEditCompCal(id){
 function delCompCal(id){
   if(!confirm('삭제?'))return;
   saveCompCals(getCompCals().filter(c=>c.id!==id));
+  _sbDeleteNotice(id); // Supabase에서도 삭제
   renderCompCal(); showToast('삭제됨');
 }
 
