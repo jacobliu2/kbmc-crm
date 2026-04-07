@@ -7390,6 +7390,7 @@ async function saveContract(){
 
 // ── _pending (엑셀 업로드 임시) ───────────────────────────
 let _pending=[];
+let _pendingPatch=[]; // 기존 lead 대전TM 이관 예약 목록
 function _parseKorDt(s){
   // '2026. 3. 23 오후 5:58:' / '2026. 3. 25 오후 12:58:05' 형식 → 로컬 timestamp
   const m=s.match(/^(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\s*(오전|오후)?\s*(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/);
@@ -7456,17 +7457,46 @@ async function importTmExcel(event){
     if(nm) _dbNameSet.add(nm);
   });
 
-  const existing=allLeads||[]; // 하위 호환용
-  const existSet=_dbPhoneSet;  // 기존 변수명 유지
+  // _dbLeadMap: 전화번호 → 기존 lead 객체 매핑 (이관용)
+  const _dbLeadMap = new Map();
+  (allLeads||[]).forEach(l=>{
+    const ph=String(l.phone||'').replace(/[^0-9]/g,'');
+    if(ph.length>=9) _dbLeadMap.set(ph, l);
+  });
+  // Supabase에서 가져온 건도 매핑 (allLeads에 없을 수 있음)
+  let _sbLeadRows=[];
+  try{
+    if(!testMode){
+      const _sr=await fetch(SB_URL+'/rest/v1/leads?select=id,phone,company_name,branch_name,team_name,status,current_stage,tm_transferred&status=neq.deleted',{
+        headers:{...sbH(),'Range-Unit':'items','Range':'0-9999','Prefer':'count=none'}
+      });
+      if(_sr.ok) _sbLeadRows=await _sr.json().catch(()=>[]);
+    }
+  }catch(e){}
+  _sbLeadRows.forEach(l=>{
+    const ph=String(l.phone||'').replace(/[^0-9]/g,'');
+    if(ph.length>=9&&!_dbLeadMap.has(ph)) _dbLeadMap.set(ph, l);
+  });
+
+  const _pendingPatch=[]; // 기존 lead에 대전TM 이관할 건들
+  const existSet=_dbPhoneSet; // 기존 변수명 유지
   for(let i=1;i<rows.length;i++){
     const row=rows[i];
     const map={};hdrs.forEach((h,j)=>{const k=hm[h.toLowerCase()];if(k)map[k]=row[j];else if(h)map[h]=row[j];});
     const co=String(map.company_name||'').trim();if(!co)continue;
     const ph=String(map.phone||'').trim().replace(/[^0-9]/g,'');
-    // 1순위: 전화번호 정규화 비교 (DB 직접 조회 기반)
     const _phNorm=ph.replace(/[^0-9]/g,'');
-    if(_phNorm.length>=9&&existSet.has(_phNorm)){dup++;continue;}
-    // 2순위: 전화번호 없으면 회사명 비교
+
+    // 기존 DB가 있으면 신규 생성 대신 기존 건을 대전TM으로 이관
+    if(_phNorm.length>=9&&_dbLeadMap.has(_phNorm)){
+      const existLead=_dbLeadMap.get(_phNorm);
+      // 이미 대전TM 이관 중인 건은 skip
+      if(existLead.tm_transferred===true||existLead.tm_transferred==='true'){dup++;continue;}
+      // 기존 건을 대전TM으로 이관 예약
+      _pendingPatch.push({id:existLead.id, company_name:existLead.company_name||co});
+      dup++;
+      continue;
+    }
     if(_phNorm.length<9&&co&&_dbNameSet.has(co)){dup++;continue;}
     _pending.push({
       id:uuid(),company_name:co,contact_name:String(map.contact_name||'').trim(),
@@ -7699,7 +7729,7 @@ async function importExcel(event){
   openM('modal-import');
 }
 async function confirmImport(){
-  if(!_pending.length){showToast('없음','error');return;}
+  if(!_pending.length&&!(_pendingPatch&&_pendingPatch.length)){showToast('없음','error');return;}
   closeM('modal-import');
   const total=_pending.length;
   const now=new Date().toISOString();
@@ -7710,6 +7740,21 @@ async function confirmImport(){
     ...r
   }));
   _pending=[];
+
+  // 기존 lead 대전TM 이관 처리 (중복 건)
+  if(_pendingPatch&&_pendingPatch.length){
+    const tmPatch={
+      branch_name:'대전', team_name:'대전센터',
+      tm_transferred:true, status:'assigned',
+      registered_by:'대전TM', assigned_at:now, updated_at:now
+    };
+    for(const p of _pendingPatch){
+      await dbU('leads', p.id, tmPatch);
+      await logActivity(p.id,'assign','대전TM 업로드 → 대전센터 이관 (기존 DB)','assigned','');
+    }
+    showToast(`기존 DB ${_pendingPatch.length}건 대전TM으로 이관됨`,'success');
+    _pendingPatch.length=0;
+  }
 
   if(testMode){
     // 로컬 모드: 한번에 저장
