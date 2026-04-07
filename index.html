@@ -5336,16 +5336,24 @@ function colVal(l, key, acts){
     case 'note':         return`<td style="font-size:11px;color:var(--gray-400)">${esc(l.note||'-')}</td>`;
     case 'branch_name': return(function(){
       if(l.yj_transferred) return '<td><span class="badge" style="font-size:10px;background:rgba(124,58,237,.1);color:#7c3aed">초도이관</span></td>';
+      // 본사이관완료 건 → 대전이관 태그 표시
+      const isHqTr=l.tm_hq_transferred===true||l.tm_hq_transferred==='true';
       // tm_transferred=true OR collab_branches에 대전TM 포함 → 대전 배지 표시
       const hasTm=(function(){
+        if(isHqTr) return true;
         if(l.tm_transferred===true||l.tm_transferred==='true') return true;
         try{return JSON.parse(l.collab_branches||'[]').includes('대전TM');}catch(e){return false;}
       })();
       const brBadge=l.branch_name?'<span class="badge badge-navy" style="font-size:10px">'+esc(l.branch_name)+'</span>':'';
-      const tmBadge=hasTm?'<span class="badge" style="font-size:10px;background:rgba(124,58,237,.1);color:#7c3aed;margin-left:3px">대전</span>':'';
+      const tmBadge=hasTm?'<span class="badge" style="font-size:10px;background:rgba(0,192,115,.12);color:#00a060;margin-left:3px">대전이관</span>':'';
       return '<td>'+(brBadge||tmBadge?brBadge+tmBadge:'-')+'</td>';
     })();
-    case 'team_name':    return`<td>${l.team_name?`<span class="badge badge-blue" style="font-size:10px">${esc(l.team_name.slice(0,8))}</span>`:'-'}</td>`;
+    case 'team_name': return(function(){
+      const isHqTr=l.tm_hq_transferred===true||l.tm_hq_transferred==='true';
+      if(l.team_name) return`<td><span class="badge badge-blue" style="font-size:10px">${esc(l.team_name.slice(0,8))}</span></td>`;
+      if(isHqTr) return'<td><span class="badge" style="font-size:10px;background:rgba(0,192,115,.12);color:#00a060">대전이관</span></td>';
+      return'<td>-</td>';
+    })();
     case 'status':       return`<td>${stageBadge(l.current_stage)}</td>`;
     // 대전TM
     case 'tm_result':    {const _TML={pending:'미배정',assigned:'배정',contacted:'통화완료',no_answer:'부재중',drop:'드랍',consulting:'상담중'};return`<td style="font-size:11px;color:var(--gray-600)">${esc(_TML[l.tm_result]||l.tm_result||'-')}</td>`;}
