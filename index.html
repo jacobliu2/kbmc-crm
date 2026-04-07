@@ -10865,15 +10865,23 @@ async function tmToAdmin(lid){
     team_name: '',
     team_names: JSON.stringify([]),
     tm_transferred: false,
-    tm_done: false,           // 미배정 화면에 다시 뜨도록 false 유지
-    tm_hq_transferred: true,  // 본사이관 추적 플래그 (대전TM 본사이관탭에서 계속 보임)
+    tm_done: false,
+    tm_hq_transferred: true,
     assigned_at: new Date().toISOString(),
     status: 'pending',
+    current_stage: '배정',  // null 방지
     collab_branches: null
   };
   await dbU('leads', lid, patch);
-  // 로컬 캐시 즉시 반영 — 중복 표시 방지
-  if(allLeads){ const i=allLeads.findIndex(x=>x.id===lid); if(i>=0) allLeads[i]={...allLeads[i],...patch}; }
+  // 로컬 캐시 즉시 반영
+  const _patchedLead = {...lead, ...patch};
+  if(allLeads){
+    const i=allLeads.findIndex(x=>x.id===lid);
+    if(i>=0) allLeads[i]=_patchedLead;
+    else allLeads.unshift(_patchedLead); // allLeads에 없으면 추가 (대전TM 로그인 시)
+  } else {
+    allLeads = [_patchedLead]; // allLeads 자체가 없으면 초기화
+  }
   if(tmLeads){ const i=tmLeads.findIndex(x=>x.id===lid); if(i>=0) tmLeads.splice(i,1); }
   await logActivity(lid, 'assign', '대전TM 완료 → 관리자 신규배정 풀 이관 (미배정)', 'pending', '');
   closePanel();
@@ -10885,7 +10893,7 @@ async function tmToAdmin(lid){
     <div style="font-size:18px;font-weight:800;color:var(--navy);margin-bottom:8px">이관 완료</div>
     <div style="font-size:14px;color:var(--gray-700);margin-bottom:4px"><strong>${esc(lead.company_name)}</strong></div>
     <div style="font-size:13px;color:var(--gray-500);margin-bottom:24px">관리자 신규배정 풀로 이동됐습니다.<br>TM 활동기록은 유지됩니다.</div>
-    <button class="btn btn-primary" style="width:100%" onclick="closeOv('ov-tm-done');loadTmPanel()">확인</button>
+    <button class="btn btn-primary" style="width:100%" onclick="closeOv('ov-tm-done');loadTmPanel();if(typeof loadLeads==='function'&&typeof allLeads!=='undefined')loadLeads();">확인</button>
   </div>`;
   ov.classList.add('open');
   }finally{ _tmToAdminRunning.delete(lid); }
