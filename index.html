@@ -3847,10 +3847,9 @@ function _trackLocalId(id){
 // 공명의 순서 원칙: 코드가 먼저 대응, SQL은 이후
 function isTmCompleted(lead){
   if(!lead) return false;
-  // tm_completed_at: Supabase 컬럼 추가 후 활성화 예정
-  // if(lead.tm_completed_at) return true;
-  // 현재는 tm_done만 사용
-  return lead.tm_done===true||lead.tm_done==='true';
+  // tm_hq_transferred=true → 본사이관 완료 (현재 기준)
+  // tm_done은 오작동 원인으로 사용 중단
+  return lead.tm_hq_transferred===true||lead.tm_hq_transferred==='true';
 }
 // TM 이관완료 조건: 완료 + 미전환 + 재배정 대기
 function isTmDoneLead(lead){
