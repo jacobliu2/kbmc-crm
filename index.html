@@ -1643,6 +1643,10 @@ tbody tr.selected td{background:var(--blue-50)!important}
           style="padding:10px 20px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit;white-space:nowrap">
           ❌ 드랍 <span id="tmv2-cnt-drop" style="font-size:11px;padding:1px 6px;background:var(--gray-100);color:var(--gray-500);border-radius:8px;margin-left:3px">0</span>
         </button>
+        <button class="tm-v2-tab" id="tmv2-tab-hqtransfer" onclick="tmV2SwitchTab('hqtransfer',this)"
+          style="padding:10px 20px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit;white-space:nowrap">
+          🏢 본사이관완료 <span id="tmv2-cnt-hqtransfer" style="font-size:11px;padding:1px 6px;background:var(--gray-100);color:var(--gray-500);border-radius:8px;margin-left:3px">0</span>
+        </button>
       </div>
 
       <!-- ── 컬럼 토글 ── -->
@@ -1957,7 +1961,125 @@ tbody tr.selected td{background:var(--blue-50)!important}
           <div class="section-title" style="margin:0">📋 Supabase SQL 스키마</div>
           <button class="btn btn-outline btn-sm" onclick="copySchema()">📋 복사</button>
         </div>
-        <div id="schema-box" style="background:var(--gray-900);color:#93c5fd;padding:18px;border-radius:var(--r-sm);font-family:monospace;font-size:11px;line-height:1.7;max-height:400px;overflow-y:auto;white-space:pre"></div>
+        <div id="schema-box" style="background:var(--gray-900);color:#93c5fd;padding:18px;border-radius:var(--r-sm);font-family:monospace;font-size:11px;line-height:1.7;max-height:400px;overflow-y:auto;white-space:pre">-- ══ KBMC CRM Supabase 전체 스키마 ══
+
+-- leads 테이블
+CREATE TABLE IF NOT EXISTS leads (
+  id text PRIMARY KEY,
+  company_name text, contact_name text, phone text, email text,
+  region text, industry text, revenue text, consult_type text,
+  inflow text, tax_delinquent text, note text,
+  branch_name text, team_name text, team_names text,
+  status text DEFAULT 'pending',
+  current_stage text DEFAULT '배정',
+  distributed_at text, assigned_at timestamptz,
+  applied_at text,
+  drop_reason text, drop_stage text,
+  proposal text, doc_received text,
+  yj_transferred boolean DEFAULT false,
+  yj_done boolean DEFAULT false,
+  yj_from_role text, yj_from_branch text,
+  tm_transferred boolean DEFAULT false,
+  tm_done boolean DEFAULT false,
+  tm_hq_transferred boolean DEFAULT false,
+  tm_result text, tm_date text, tm_meeting text,
+  tm_content text, tm_happycall text,
+  happycall_date text, happycall_done boolean DEFAULT false,
+  collab_branches text,
+  auto_recalled boolean DEFAULT false,
+  auto_recall_reason text,
+  registered_by text,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+ALTER TABLE leads ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "leads_all" ON leads FOR ALL USING (true) WITH CHECK (true);
+
+-- activities 테이블
+CREATE TABLE IF NOT EXISTS activities (
+  id text PRIMARY KEY,
+  lead_id text, type text, content text,
+  stage text, author text, date text,
+  next_action text, next_action_date text,
+  created_at timestamptz DEFAULT now()
+);
+ALTER TABLE activities ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "activities_all" ON activities FOR ALL USING (true) WITH CHECK (true);
+
+-- accounts 테이블
+CREATE TABLE IF NOT EXISTS accounts (
+  id text PRIMARY KEY,
+  name text, role text, branch text, pw text,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+ALTER TABLE accounts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "accounts_all" ON accounts FOR ALL USING (true) WITH CHECK (true);
+
+-- contracts 테이블
+CREATE TABLE IF NOT EXISTS contracts (
+  id text PRIMARY KEY, lead_id text,
+  company_name text, contract_date text,
+  service text, amount text, note text,
+  team_name text, branch_name text,
+  created_at timestamptz DEFAULT now()
+);
+ALTER TABLE contracts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "contracts_all" ON contracts FOR ALL USING (true) WITH CHECK (true);
+
+-- next_actions 테이블
+CREATE TABLE IF NOT EXISTS next_actions (
+  id text PRIMARY KEY, lead_id text,
+  type text, scheduled_at text, note text,
+  status text DEFAULT '예정',
+  team_leader text,
+  created_at timestamptz DEFAULT now()
+);
+ALTER TABLE next_actions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "next_actions_all" ON next_actions FOR ALL USING (true) WITH CHECK (true);
+
+-- notices 테이블
+CREATE TABLE IF NOT EXISTS notices (
+  id text PRIMARY KEY,
+  title text, content text, type text,
+  start_date text, end_date text,
+  roles text, branches text, alarms text,
+  author text, is_recall_notice boolean DEFAULT false,
+  target_roles jsonb, target_branches jsonb, target_names jsonb,
+  created_at timestamptz DEFAULT now()
+);
+ALTER TABLE notices ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "notices_all" ON notices FOR ALL USING (true) WITH CHECK (true);
+
+-- notice_reads 테이블
+CREATE TABLE IF NOT EXISTS notice_reads (
+  id text PRIMARY KEY,
+  notice_id text, user_id text,
+  user_name text, user_role text,
+  read_at timestamptz DEFAULT now()
+);
+ALTER TABLE notice_reads ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "notice_reads_all" ON notice_reads FOR ALL USING (true) WITH CHECK (true);
+
+-- profiles 테이블
+CREATE TABLE IF NOT EXISTS profiles (
+  id text PRIMARY KEY,
+  data text, goals text,
+  updated_at timestamptz DEFAULT now()
+);
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "profiles_all" ON profiles FOR ALL USING (true) WITH CHECK (true);
+
+-- ══ 기존 테이블 컬럼 추가 (누락분) ══
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS tm_hq_transferred boolean DEFAULT false;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS tm_meeting text;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS tm_result text;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS tm_content text;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS tm_date text;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS tm_done boolean DEFAULT false;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS collab_branches text;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recalled boolean DEFAULT false;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
       </div>
     </div>
 
@@ -3620,6 +3742,7 @@ function handleRealtimeChange(table, payload){
       if(typeof _tmV2Data!=='undefined'&&allLeads){
         _tmV2Data=allLeads.filter(l=>{
           if(l.status==='deleted') return false;
+          if(l.tm_hq_transferred===true||l.tm_hq_transferred==='true') return true; // 본사이관완료 건 포함
           if(l.tm_transferred===true||l.tm_transferred==='true') return true;
           try{const cb=JSON.parse(l.collab_branches||'[]');if(cb.includes('대전TM'))return true;}catch(e){}
           return false;
@@ -3649,6 +3772,7 @@ function handleRealtimeChange(table, payload){
       if(typeof _tmV2Data!=='undefined'&&allLeads){
         _tmV2Data=allLeads.filter(l=>{
           if(l.status==='deleted') return false;
+          if(l.tm_hq_transferred===true||l.tm_hq_transferred==='true') return true; // 본사이관완료 건 포함
           if(l.tm_transferred===true||l.tm_transferred==='true') return true;
           try{const cb=JSON.parse(l.collab_branches||'[]');if(cb.includes('대전TM'))return true;}catch(e){}
           return false;
@@ -9709,7 +9833,7 @@ function tmV2SwitchTab(tab, btn){
     b.style.fontWeight='600';
   });
   if(btn){
-    const activeColor = tab==='manage'?'var(--navy)':tab==='pending'?'var(--blue)':tab==='collab'?'#7c3aed':tab==='contacted'?'var(--ok)':tab==='happycall'?'var(--blue)':'var(--err)';
+    const activeColor = tab==='manage'?'var(--navy)':tab==='pending'?'var(--blue)':tab==='collab'?'#7c3aed':tab==='contacted'?'var(--ok)':tab==='happycall'?'#0891b2':tab==='hqtransfer'?'#f97316':'var(--err)';
     btn.style.color=activeColor;
     btn.style.borderBottom='2px solid '+activeColor;
     btn.style.fontWeight='700';
@@ -9743,21 +9867,25 @@ function _tmV2Filter(tab){
     const isPending  = l.status==='assigned'&&!isDrop;
     const hasHappycall= !!(l.tm_happycall||l.happycall_date);
 
+    // 본사이관완료 여부
+    const isHqTransferred = l.tm_hq_transferred===true||l.tm_hq_transferred==='true';
+
     switch(tab){
-      case 'manage':    return isAnyTm&&!isDrop;
-      case 'pending':   return isTmSolo&&isPending;
-      case 'collab':    return isCollab&&!isDrop;
-      case 'contacted': return isTmSolo&&isContacted;
-      case 'happycall': return isAnyTm&&hasHappycall&&!isDrop;
-      case 'drop':      return isAnyTm&&isDrop;
-      default:          return isAnyTm;
+      case 'manage':       return isAnyTm&&!isDrop&&!isHqTransferred;
+      case 'pending':      return isTmSolo&&isPending&&!isHqTransferred;
+      case 'collab':       return isCollab&&!isDrop&&!isHqTransferred;
+      case 'contacted':    return isTmSolo&&isContacted&&!isHqTransferred;
+      case 'happycall':    return isAnyTm&&hasHappycall&&!isDrop&&!isHqTransferred;
+      case 'drop':         return isAnyTm&&isDrop&&!isHqTransferred;
+      case 'hqtransfer':   return isHqTransferred; // 본사이관완료 — 모두 표시
+      default:             return isAnyTm;
     }
   });
 }
 
 // ── 카운트 갱신 ───────────────────────────────────────────────────────────
 function _tmV2UpdateCounts(){
-  const tabs=['manage','pending','collab','contacted','happycall','drop'];
+  const tabs=['manage','pending','collab','contacted','happycall','drop','hqtransfer'];
   tabs.forEach(tab=>{
     const cnt=_tmV2Filter(tab).length;
     const el=document.getElementById('tmv2-cnt-'+tab);
@@ -9805,6 +9933,8 @@ function tmV2Render(){
     const meetingDisp=l.tm_meeting?`<span style="color:var(--blue);font-weight:700;font-size:12px">${fmtShort(l.tm_meeting)}</span>`:'-';
     const actionBtn=_tmV2Tab==='contacted'
       ?`<button class="btn btn-xs" style="background:var(--navy);color:#fff;border:none;font-size:10px;white-space:nowrap" onclick="event.stopPropagation();tmToAdmin('${l.id}')">본사이관</button>`
+      :_tmV2Tab==='hqtransfer'
+      ?`<button class="btn btn-xs" style="background:var(--gray-100);color:var(--gray-600);border:none;font-size:10px;white-space:nowrap" onclick="event.stopPropagation();openTmInput('${l.id}','${esc(l.company_name||'')}')">기록보기</button>`
       :`<button class="btn btn-primary btn-xs" onclick="event.stopPropagation();openTmInput('${l.id}','${esc(l.company_name||'')}')">기록</button>`;
 
     // 컬럼별 TD 맵
@@ -9814,8 +9944,12 @@ function tmV2Render(){
       phone:        `<td style="font-size:12px;padding:9px 10px">${esc(l.phone||'-')}</td>`,
       consult_type: `<td style="font-size:11px;padding:9px 10px">${esc((l.consult_type||'-').slice(0,16))}</td>`,
       region:       `<td style="font-size:11px;padding:9px 10px">${esc((l.region||'-').slice(0,10))}</td>`,
-      branch_name:  `<td style="font-size:12px;padding:9px 10px">${esc(branchDisp)}</td>`,
-      team_name:    `<td style="font-size:12px;padding:9px 10px">${esc(teamDisp)}</td>`,
+      branch_name:  _tmV2Tab==='hqtransfer'
+        ?`<td style="font-size:12px;padding:9px 10px;font-weight:700;color:${l.branch_name&&l.branch_name!=='대전'?'var(--navy)':'var(--gray-400)'}">${l.branch_name&&l.branch_name!=='대전'?esc(l.branch_name):'미배정'}</td>`
+        :`<td style="font-size:12px;padding:9px 10px">${esc(branchDisp)}</td>`,
+      team_name:    _tmV2Tab==='hqtransfer'
+        ?`<td style="font-size:12px;padding:9px 10px;font-weight:700;color:${l.team_name&&l.team_name!=='대전센터'?'var(--blue)':'var(--gray-400)'}">${l.team_name&&l.team_name!=='대전센터'?esc(l.team_name):'미배정'}</td>`
+        :`<td style="font-size:12px;padding:9px 10px">${esc(teamDisp)}</td>`,
       current_stage:`<td style="padding:9px 10px">${stageBadgeHtml}</td>`,
       tm_meeting:   `<td style="padding:9px 10px">${meetingDisp}</td>`,
       assigned_at:  `<td style="font-size:11px;color:var(--gray-400);padding:9px 10px">${fmtShort(l.assigned_at||l.created_at)}</td>`,
@@ -9848,6 +9982,8 @@ async function loadTmPanel(){
   // TM 대상 필터
   const _tmRaw=_allUniq.filter(l=>{
     if(l.status==='deleted') return false;
+    // 본사이관 완료된 건 → 본사이관탭에서 계속 볼 수 있도록 포함
+    if(l.tm_hq_transferred===true||l.tm_hq_transferred==='true') return true;
     if(isTmCompleted(l)&&!(l.tm_transferred===true||l.tm_transferred==='true')) return false;
     if(l.tm_transferred===true||l.tm_transferred==='true') return true;
     try{ const cb=JSON.parse(l.collab_branches||'[]'); if(cb.includes('대전TM')) return true; }catch(e){}
@@ -9924,7 +10060,7 @@ async function loadTmPanel(){
   setTQ('tq-scheduled',cntScheduled);
   setTQ('tq-done',cntDone);
   setTQ('tq-hc',cntHC+(cntHCPending>0?` (+${cntHCPending}예정)`:''));
-  const cntTmDone=tmLeads.filter(l=>isTmCompleted(l)).length;
+  const cntTmDone=tmLeads.filter(l=>l.tm_hq_transferred===true||l.tm_hq_transferred==='true').length;
   setTQ('tq-drop',cntDrop);
   setTQ('tq-recalldone',cntRecallDone);
   setTQ('tq-tmdone',cntTmDone);
@@ -10106,7 +10242,7 @@ function toggleTmView(){
   if(label) label.textContent=_tmViewMode==='list'?'카드뷰':'목록뷰';
 
   // 카드뷰/목록뷰 전환
-  const tabs=['all','new','contacted','happycall','drop','recalldone'];
+  const tabs=['all','new','contacted','happycall','drop','recalldone','tmdone'];
   const listView=document.getElementById('tm-list-view');
 
   if(_tmViewMode==='list'){
@@ -10141,20 +10277,21 @@ function renderTmListView(){
   }
   const TML={pending:'미배정',assigned:'배정',contacted:'통화완료',no_answer:'부재중',drop:'드랍'};
   const acts=allActivities||[];
+  const isTmDoneTab=_tmMainTab==='tmdone';
   wrap.innerHTML=`<div class="db-wrap" style="overflow-x:auto">
     <table class="db-table" style="width:100%;border-collapse:collapse">
       <thead><tr style="background:var(--navy);color:#fff;font-size:12px">
         <th style="padding:8px 12px;text-align:left;white-space:nowrap">회사명</th>
         <th style="padding:8px 12px;text-align:left;white-space:nowrap">신청자</th>
         <th style="padding:8px 12px;text-align:left;white-space:nowrap">연락처</th>
-        <th style="padding:8px 12px;text-align:left;white-space:nowrap">지점</th>
-        <th style="padding:8px 12px;text-align:left;white-space:nowrap">팀장</th>
-        <th style="padding:8px 12px;text-align:left;white-space:nowrap">상태</th>
+        <th style="padding:8px 12px;text-align:left;white-space:nowrap">${isTmDoneTab?'배정지점':'지점'}</th>
+        <th style="padding:8px 12px;text-align:left;white-space:nowrap">${isTmDoneTab?'배정팀장':'팀장'}</th>
+        <th style="padding:8px 12px;text-align:left;white-space:nowrap">${isTmDoneTab?'진행단계':'상태'}</th>
         <th style="padding:8px 12px;text-align:left;white-space:nowrap">TM결과</th>
         <th style="padding:8px 12px;text-align:left;white-space:nowrap">TM날짜</th>
         <th style="padding:8px 12px;text-align:left;white-space:nowrap">1차미팅일</th>
         <th style="padding:8px 12px;text-align:left;white-space:nowrap">최근활동</th>
-        <th style="padding:8px 12px;text-align:left;white-space:nowrap">기록</th>
+        <th style="padding:8px 12px;text-align:left;white-space:nowrap">${isTmDoneTab?'본사이관일':'기록'}</th>
       </tr></thead>
       <tbody>
         ${data.map(l=>{
@@ -10208,8 +10345,8 @@ function _filterForTab(tab,s,br){
       return !l.happycall_date||l.happycall_date<=today;
     }
     if(tab==='drop') return l.status==='drop';
-    // 이관완료: TM이 완료 처리 후 본사로 보낸 건
-    if(tab==='tmdone') return isTmCompleted(l);
+    // 이관완료: 본사이관 완료된 건 (tm_hq_transferred 플래그 기준)
+    if(tab==='tmdone') return l.tm_hq_transferred===true||l.tm_hq_transferred==='true';
     // 재콜: 팀장 활동기록이 있는 건 + tm_transferred=true (팀장→대전TM 재이관)
     if(tab==='recalldone'){
       if(!(l.tm_transferred===true||l.tm_transferred==='true')) return false;
@@ -10342,7 +10479,63 @@ function _renderTmCardsToGrid(gridId, data){
     grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--gray-400);font-size:14px">해당 DB 없음</div>';
     return;
   }
-  grid.innerHTML=data.map(l=>_buildTmCard(l,acts)).join('');
+  // 본사이관 탭: 전용 카드 빌더 사용
+  const isTmDoneGrid = gridId==='tm-card-grid-tmdone';
+  grid.innerHTML=data.map(l=>isTmDoneGrid?_buildTmHqCard(l,acts):_buildTmCard(l,acts)).join('');
+}
+
+// 본사이관 전용 카드: 이관 후 배정·팀장·진행단계 확인용
+function _buildTmHqCard(l,acts){
+  const leadActs=acts.filter(a=>a.lead_id===l.id&&a.type!=='assign')
+    .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  const lastAct=leadActs[0];
+  const actCount=leadActs.length;
+  // 이관 후 상태 색상
+  const hasBranch=!!(l.branch_name&&l.branch_name!=='대전'&&l.branch_name!=='대전센터');
+  const hasTeam=!!(l.team_name&&l.team_name!=='대전센터');
+  const stageClr={'배정':'#3182f6','접촉':'#0ea5e9','상담':'#0ea5e9','제안':'#7c3aed','계약':'#f97316','관리':'#00c073','보류':'#f59e0b','드랍':'#ef4444'}[l.current_stage||'']||'#94a3b8';
+  const borderClr=hasTeam?'#00c073':hasBranch?'#3182f6':'#f59e0b'; // 팀장배정=초록, 지점배정=파랑, 미배정=노랑
+  const bgClr=hasTeam?'#f0fdf4':hasBranch?'#eff6ff':'#fffbeb';
+
+  const statusBadge=hasBranch||hasTeam
+    ?`<span style="font-size:10px;font-weight:700;color:${borderClr};background:${borderClr}22;padding:2px 8px;border-radius:20px">${hasTeam?'팀장배정':'지점배정'}</span>`
+    :`<span style="font-size:10px;font-weight:700;color:#f59e0b;background:#fef3c7;padding:2px 8px;border-radius:20px">⏳ 미배정</span>`;
+
+  const assignInfo=`<div style="display:flex;align-items:center;gap:6px;padding:8px 10px;background:rgba(0,0,0,.03);border-radius:8px;margin-bottom:9px">
+    <span style="font-size:11px;color:#64748b">📍</span>
+    ${hasBranch?`<span style="font-size:12px;font-weight:700;color:#1e3a5f">${esc(l.branch_name)}</span>`:'<span style="font-size:12px;color:#94a3b8">지점 미배정</span>'}
+    ${hasBranch?'<span style="color:#cbd5e1">›</span>':''}
+    ${hasTeam?`<span style="font-size:12px;font-weight:700;color:#3182f6">${esc(l.team_name)}</span>`:'<span style="font-size:12px;color:#94a3b8">팀장 미배정</span>'}
+    ${l.current_stage?`<span style="margin-left:auto;font-size:11px;font-weight:700;color:${stageClr};background:${stageClr}22;padding:2px 8px;border-radius:12px">${esc(l.current_stage)}</span>`:''}
+  </div>`;
+
+  const lastActRow=lastAct
+    ?`<div style="display:flex;align-items:flex-start;gap:6px;padding:6px 9px;background:#f8fafc;border-radius:6px;margin-bottom:8px">
+        <span style="font-size:11px;color:#64748b;flex-shrink:0">${fmtD(lastAct.created_at)}</span>
+        <span style="font-size:11px;color:#475569;line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${esc((lastAct.content||'').slice(0,80)||'-')}</span>
+      </div>`
+    :`<div style="font-size:11px;color:#94a3b8;padding:4px 0 8px">아직 팀장 활동기록 없음</div>`;
+
+  return`<div style="background:${bgClr};border-radius:10px;padding:14px 15px;
+    box-shadow:0 1px 4px rgba(0,0,0,.07);border-left:4px solid ${borderClr};cursor:pointer;transition:box-shadow .15s"
+    onclick="openTmDetail('${l.id}')"
+    onmouseover="this.style.boxShadow='0 4px 14px rgba(0,0,0,.12)'"
+    onmouseout="this.style.boxShadow='0 1px 4px rgba(0,0,0,.07)'">
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+      <div style="font-size:14px;font-weight:800;color:#1e3a5f;flex:1">${esc(l.company_name||'-')}</div>
+      <div style="display:flex;gap:4px;flex-shrink:0">${statusBadge}</div>
+    </div>
+    <div style="display:flex;gap:10px;margin-bottom:8px;font-size:12px;color:#475569">
+      ${l.contact_name?`<span>👤 ${esc(l.contact_name)}</span>`:''}
+      ${l.phone?`<span>📞 ${esc(l.phone)}</span>`:''}
+    </div>
+    ${assignInfo}
+    ${lastActRow}
+    <div style="font-size:10px;color:#94a3b8;display:flex;justify-content:space-between">
+      <span>본사이관 ${fmtD(l.assigned_at)}</span>
+      ${actCount?`<span style="color:#3182f6">${actCount}회 활동기록</span>`:''}
+    </div>
+  </div>`;
 }
 function renderTmCards(){
   const activeTab=_tmMainTab||'new';
@@ -10354,7 +10547,7 @@ function renderTmCards(){
 function renderAllTmTabs(){
   const s=(document.getElementById('tm-search')?.value||'').toLowerCase();
   const br=document.getElementById('tm-branch-filter')?.value||'';
-  ['all','new','contacted','happycall','drop','recalldone'].forEach(tab=>{
+  ['all','new','contacted','happycall','drop','recalldone','tmdone'].forEach(tab=>{
     _renderTmCardsToGrid('tm-card-grid-'+tab, _filterForTab(tab,s,br));
   });
 }
@@ -10597,11 +10790,11 @@ async function tmToAdmin(lid){
     team_name: '',
     team_names: JSON.stringify([]),
     tm_transferred: false,
-    tm_done: false,       // 미배정 화면에 다시 뜨도록 false 유지
+    tm_done: false,           // 미배정 화면에 다시 뜨도록 false 유지
+    tm_hq_transferred: true,  // 본사이관 추적 플래그 (대전TM 본사이관탭에서 계속 보임)
     assigned_at: new Date().toISOString(),
     status: 'pending',
-    collab_branches: null,
-    current_stage: lead.current_stage||'배정' // 기존 단계 유지
+    collab_branches: null
   };
   await dbU('leads', lid, patch);
   // 로컬 캐시 즉시 반영 — 중복 표시 방지
