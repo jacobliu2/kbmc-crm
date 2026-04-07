@@ -3847,9 +3847,9 @@ function _trackLocalId(id){
 // 공명의 순서 원칙: 코드가 먼저 대응, SQL은 이후
 function isTmCompleted(lead){
   if(!lead) return false;
-  // tm_hq_transferred=true → 본사이관 완료 (현재 기준)
-  // tm_done은 오작동 원인으로 사용 중단
-  return lead.tm_hq_transferred===true||lead.tm_hq_transferred==='true';
+  // tm_done=true: 구버전 완료 플래그 (현재 DB에서 거의 사용 안 함)
+  // tm_hq_transferred는 별도 체크 (미배정 풀로 들어오므로 isTmCompleted에서 제외)
+  return lead.tm_done===true||lead.tm_done==='true';
 }
 // TM 이관완료 조건: 완료 + 미전환 + 재배정 대기
 function isTmDoneLead(lead){
@@ -3944,9 +3944,11 @@ async function sbPostBatch(table, rows, BATCH_SIZE=50){
   for(let i=0;i<rows.length;i+=BATCH_SIZE){
     const batch=rows.slice(i,i+BATCH_SIZE);
     try{
+      // upsert: id 중복 시 기존 레코드 유지 (ignore duplicates)
+      const h={...sbH(),'Prefer':'resolution=ignore-duplicates,return=minimal'};
       const r=await fetch(SB_URL+'/rest/v1/'+table,{
         method:'POST',
-        headers:{...sbH(),'Prefer':'return=minimal'},
+        headers:h,
         body:JSON.stringify(batch)
       });
       if(r.ok){ ok+=batch.length; }
@@ -5088,9 +5090,9 @@ function filterLeads(){
   filtered=allLeads.filter(l=>{
     // 팀장: 드랍·보류 DB 숨김 (드랍DB탭/보류는 관리자·지점장만 봄)
     if(curUser.role==='team'&&(l.status==='drop'||l.current_stage==='보류'||l.current_stage==='드랍')) return false;
-    // TM이관완료(tm_done=true, tm_transferred=false) 건 — 전체DB 목록에서 제외
-    // reassign 빠른탭에서 별도 표시됨. 관리자는 전체DB에서도 숨김(배정전 풀로 이동됐으므로)
-    if(isTmCompleted(l)&&!(l.tm_transferred===true||l.tm_transferred==='true')) return false;
+    // TM이관완료 건: tm_hq_transferred=true인 건은 미배정 풀이므로 전체DB에 표시
+    // 구버전 tm_done=true(현재 미사용)인 건만 제외
+    if((l.tm_done===true||l.tm_done==='true')&&!(l.tm_hq_transferred===true||l.tm_hq_transferred==='true')&&!(l.tm_transferred===true||l.tm_transferred==='true')) return false;
     // YJ초도상담완료(yj_done=true) 건 — 재배정 탭에서 별도 표시 (전체DB 숨김)
     if((l.yj_done===true||l.yj_done==='true')&&!(l.tm_transferred===true||l.tm_transferred==='true')&&!isTmCompleted(l)) return false;
     if(s&&!(l.company_name||'').toLowerCase().includes(s)&&!(l.contact_name||'').toLowerCase().includes(s)&&!(l.phone||'').includes(s))return false;
@@ -7441,15 +7443,13 @@ async function importTmExcel(event){
     }
   }catch(e){ console.warn('중복체크 조회 실패, 캐시 fallback:', e.message); }
 
-  // 캐시 fallback (Supabase 실패 시)
-  if(!_dbPhoneSet.size){
-    (allLeads||[]).forEach(l=>{
-      const ph=String(l.phone||'').replace(/[^0-9]/g,'');
-      if(ph.length>=9) _dbPhoneSet.add(ph);
-      const nm=String(l.company_name||'').trim();
-      if(nm) _dbNameSet.add(nm);
-    });
-  }
+  // allLeads 캐시도 항상 병합 (대전TM은 allLeads 미로드 가능 → Supabase 조회와 합산)
+  (allLeads||[]).forEach(l=>{
+    const ph=String(l.phone||'').replace(/[^0-9]/g,'');
+    if(ph.length>=9) _dbPhoneSet.add(ph);
+    const nm=String(l.company_name||'').trim();
+    if(nm) _dbNameSet.add(nm);
+  });
 
   const existing=allLeads||[]; // 하위 호환용
   const existSet=_dbPhoneSet;  // 기존 변수명 유지
@@ -7618,15 +7618,13 @@ async function importExcel(event){
     }
   }catch(e){ console.warn('중복체크 조회 실패, 캐시 fallback:', e.message); }
 
-  // 캐시 fallback (Supabase 실패 시)
-  if(!_dbPhoneSet.size){
-    (allLeads||[]).forEach(l=>{
-      const ph=String(l.phone||'').replace(/[^0-9]/g,'');
-      if(ph.length>=9) _dbPhoneSet.add(ph);
-      const nm=String(l.company_name||'').trim();
-      if(nm) _dbNameSet.add(nm);
-    });
-  }
+  // allLeads 캐시도 항상 병합 (대전TM은 allLeads 미로드 가능 → Supabase 조회와 합산)
+  (allLeads||[]).forEach(l=>{
+    const ph=String(l.phone||'').replace(/[^0-9]/g,'');
+    if(ph.length>=9) _dbPhoneSet.add(ph);
+    const nm=String(l.company_name||'').trim();
+    if(nm) _dbNameSet.add(nm);
+  });
 
   const existing=allLeads||[]; // 하위 호환용
   const existSet=_dbPhoneSet;  // 기존 변수명 유지
@@ -9940,7 +9938,7 @@ function tmV2Render(){
     const stageBadgeHtml=l.current_stage?`<span class="badge ${stageMap[l.current_stage]||'badge-pending'}" style="font-size:10px">${esc(l.current_stage)}</span>`:'-';
     const meetingDisp=l.tm_meeting?`<span style="color:var(--blue);font-weight:700;font-size:12px">${fmtShort(l.tm_meeting)}</span>`:'-';
     const actionBtn=_tmV2Tab==='contacted'
-      ?`<button class="btn btn-xs" style="background:var(--navy);color:#fff;border:none;font-size:10px;white-space:nowrap" onclick="event.stopPropagation();tmToAdmin('${l.id}')">본사이관</button>`
+      ?`<button class="btn btn-xs" style="background:var(--navy);color:#fff;border:none;font-size:10px;white-space:nowrap" onclick="event.stopPropagation();if(this.disabled)return;this.disabled=true;this.textContent='이관중...';tmToAdmin('${l.id}').finally(()=>{this.disabled=false;this.textContent='본사이관'})">본사이관</button>`
       :_tmV2Tab==='hqtransfer'
       ?`<button class="btn btn-xs" style="background:var(--gray-100);color:var(--gray-600);border:none;font-size:10px;white-space:nowrap" onclick="event.stopPropagation();openTmInput('${l.id}','${esc(l.company_name||'')}')">기록보기</button>`
       :`<button class="btn btn-primary btn-xs" onclick="event.stopPropagation();openTmInput('${l.id}','${esc(l.company_name||'')}')">기록</button>`;
@@ -9992,7 +9990,7 @@ async function loadTmPanel(){
     if(l.status==='deleted') return false;
     // 본사이관 완료된 건 → 본사이관탭에서 계속 볼 수 있도록 포함
     if(l.tm_hq_transferred===true||l.tm_hq_transferred==='true') return true;
-    if(isTmCompleted(l)&&!(l.tm_transferred===true||l.tm_transferred==='true')) return false;
+    if((l.tm_done===true||l.tm_done==='true')&&!(l.tm_transferred===true||l.tm_transferred==='true')&&!(l.tm_hq_transferred===true||l.tm_hq_transferred==='true')) return false;
     if(l.tm_transferred===true||l.tm_transferred==='true') return true;
     try{ const cb=JSON.parse(l.collab_branches||'[]'); if(cb.includes('대전TM')) return true; }catch(e){}
     return false;
@@ -10788,11 +10786,71 @@ function openTmPanel(lid){
 }
 
 // 대전TM → 관리자 이관 (완료건)
+const _tmToAdminRunning=new Set();
 async function tmToAdmin(lid){
+  // 중복 실행 방지
+  if(_tmToAdminRunning.has(lid)){showToast('이관 처리 중입니다...','warn');return;}
+  _tmToAdminRunning.add(lid);
+  try{
   const allCache=allLeads||[];
   const lead=tmLeads.find(l=>l.id===lid)||allCache.find(l=>l.id===lid);
-  if(!lead){showToast('리드를 찾을 수 없습니다','error');return;}
-  if(!confirm(`"${lead.company_name}" 를 관리자 신규배정 풀로 이관하시겠습니까?\n(TM 활동기록은 유지됩니다)`)) return;
+  if(!lead){showToast('리드를 찾을 수 없습니다','error');_tmToAdminRunning.delete(lid);return;}
+
+  // 같은 전화번호 중복 DB 확인
+  const phoneNorm=(lead.phone||'').replace(/[^0-9]/g,'');
+  const dupLead = phoneNorm ? allCache.find(l=>
+    l.id!==lid &&
+    l.status!=='deleted' &&
+    (l.phone||'').replace(/[^0-9]/g,'')===phoneNorm
+  ) : null;
+
+  let confirmMsg = `"${lead.company_name}" 를 관리자 신규배정 풀로 이관하시겠습니까?\n(TM 활동기록은 유지됩니다)`;
+  if(dupLead){
+    confirmMsg = `"${lead.company_name}" 를 본사로 이관합니다.\n\n⚠️ 동일 전화번호 DB가 이미 존재합니다.\n기존 DB(${dupLead.company_name})에 TM 활동기록을 병합하고\n현재 TM DB는 삭제됩니다.`;
+  }
+  if(!confirm(confirmMsg)) return;
+
+  // 중복 DB가 있으면 기존 건에 TM 정보 병합 후 현재 건 삭제
+  if(dupLead){
+    // 기존 건에 TM 정보 복사
+    await dbU('leads', dupLead.id, {
+      tm_hq_transferred: true,
+      tm_result: lead.tm_result||dupLead.tm_result||'',
+      tm_content: lead.tm_content||dupLead.tm_content||'',
+      tm_date: lead.tm_date||dupLead.tm_date||'',
+      tm_meeting: lead.tm_meeting||dupLead.tm_meeting||'',
+      tm_happycall: lead.tm_happycall||dupLead.tm_happycall||'',
+      status: 'pending',
+      branch_name: '',
+      team_name: '',
+      team_names: JSON.stringify([]),
+      tm_transferred: false,
+      tm_done: false,
+      collab_branches: null,
+      assigned_at: new Date().toISOString()
+    });
+    // 현재 TM DB의 활동기록을 기존 건으로 이전
+    const tmActs=(allActivities||[]).filter(a=>a.lead_id===lid);
+    for(const a of tmActs){
+      await fetch(SB_URL+'/rest/v1/activities?id=eq.'+a.id,{
+        method:'PATCH',headers:sbH(),body:JSON.stringify({lead_id:dupLead.id})
+      });
+    }
+    await logActivity(dupLead.id,'assign','대전TM 완료 → 관리자 신규배정 풀 이관 (TM DB 병합)','pending','');
+    // 현재 TM DB 삭제(soft delete)
+    await dbU('leads',lid,{status:'deleted',deleted_at:new Date().toISOString()});
+    // 캐시 갱신
+    if(allLeads){
+      const i=allLeads.findIndex(x=>x.id===lid);
+      if(i>=0) allLeads.splice(i,1);
+    }
+    if(tmLeads){const i=tmLeads.findIndex(x=>x.id===lid);if(i>=0) tmLeads.splice(i,1);}
+    closePanel();
+    showToast(`${lead.company_name} 이관 완료 (기존 DB에 병합)`,'success');
+    await loadTmPanel();
+    return;
+  }
+
   const patch = {
     branch_name: '',
     team_name: '',
@@ -10821,6 +10879,7 @@ async function tmToAdmin(lid){
     <button class="btn btn-primary" style="width:100%" onclick="closeOv('ov-tm-done');loadTmPanel()">확인</button>
   </div>`;
   ov.classList.add('open');
+  }finally{ _tmToAdminRunning.delete(lid); }
 }
 
 // 해피콜 결과 선택
