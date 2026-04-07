@@ -5309,14 +5309,11 @@ function colVal(l, key, acts){
   switch(key){
     case 'company_name': {
       const isRecall=l.tm_transferred&&isTmCompleted(l);
-      const isTmDone=isTmDoneLead(l); // 이관완료 → 관리자 대기
-      const clr=isRecall?'#7c3aed':isTmDone?'var(--ok)':'var(--navy)';
+      // 재콜 배지만 표시, 텍스트는 항상 검정(navy)
       const tag=isRecall
         ?'<span style="font-size:9px;font-weight:700;color:#7c3aed;background:rgba(124,58,237,.08);padding:1px 5px;border-radius:6px;margin-left:4px">재콜</span>'
-        :isTmDone
-        ?'<span style="font-size:9px;font-weight:700;color:var(--ok);background:rgba(0,192,115,.1);padding:1px 5px;border-radius:6px;margin-left:4px">TM완료</span>'
         :'';
-      return `<td style="font-weight:700;color:${clr}">${esc(l.company_name||'-')}${tag}</td>`;
+      return `<td style="font-weight:700;color:var(--navy)">${esc(l.company_name||'-')}${tag}</td>`;
     }
     case 'contact_name': return`<td>${esc(l.contact_name||'-')}</td>`;
     case 'phone':        return`<td style="font-size:12px">${esc(formatPhone(l.phone)||'-')}</td>`;
@@ -5336,11 +5333,11 @@ function colVal(l, key, acts){
     case 'note':         return`<td style="font-size:11px;color:var(--gray-400)">${esc(l.note||'-')}</td>`;
     case 'branch_name': return(function(){
       if(l.yj_transferred) return '<td><span class="badge" style="font-size:10px;background:rgba(124,58,237,.1);color:#7c3aed">초도이관</span></td>';
-      // 본사이관완료 건 → 대전이관 태그 표시
       const isHqTr=l.tm_hq_transferred===true||l.tm_hq_transferred==='true';
-      // tm_transferred=true OR collab_branches에 대전TM 포함 → 대전 배지 표시
+      const hasBranch=!!(l.branch_name);
+      // 대전이관 태그: 지점장 미배정인 경우에만 표시
       const hasTm=(function(){
-        if(isHqTr) return true;
+        if(isHqTr&&!hasBranch) return true; // 본사이관 + 지점 미배정
         if(l.tm_transferred===true||l.tm_transferred==='true') return true;
         try{return JSON.parse(l.collab_branches||'[]').includes('대전TM');}catch(e){return false;}
       })();
@@ -5351,7 +5348,8 @@ function colVal(l, key, acts){
     case 'team_name': return(function(){
       const isHqTr=l.tm_hq_transferred===true||l.tm_hq_transferred==='true';
       if(l.team_name) return`<td><span class="badge badge-blue" style="font-size:10px">${esc(l.team_name.slice(0,8))}</span></td>`;
-      if(isHqTr) return'<td><span class="badge" style="font-size:10px;background:rgba(0,192,115,.12);color:#00a060">대전이관</span></td>';
+      // 팀장 미배정 + 지점장도 미배정인 경우에만 대전이관 태그
+      if(isHqTr&&!l.branch_name) return'<td><span class="badge" style="font-size:10px;background:rgba(0,192,115,.12);color:#00a060">대전이관</span></td>';
       return'<td>-</td>';
     })();
     case 'status':       return`<td>${stageBadge(l.current_stage)}</td>`;
