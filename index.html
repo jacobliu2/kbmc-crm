@@ -7355,8 +7355,12 @@ async function openTmExport(){
 async function downloadTmTemplate(){
   if(!window.XLSX){await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
   const wb=XLSX.utils.book_new();
-  const ws=XLSX.utils.aoa_to_sheet([['회사명','신청자','연락처','이메일','소재지','상담유형','유입경로','매출','체납여부','비고','상담신청시간','TM결과','TM날짜','1차미팅일','해피콜내용']]);
-  ws['!cols']=[{wch:20},{wch:10},{wch:14},{wch:22},{wch:20},{wch:22},{wch:10},{wch:16},{wch:8},{wch:14},{wch:18}];
+  // 관리자 업로드 양식과 동일한 컬럼 구성
+  const ws=XLSX.utils.aoa_to_sheet([
+    ['회사명','신청자','연락처','이메일','소재지','업종','유입경로','매출','체납여부','비고','상담신청시간','상담유형','TM결과','TM날짜','1차미팅일','해피콜내용'],
+    ['(주)예시기업','홍길동','010-1234-5678','hong@ex.com','수도권(서울,경기,인천)','제조업','홈페이지','10억~20억_미만','없음','','2024-01-15T09:30:00','경영컨설팅','','','','']
+  ]);
+  ws['!cols']=[{wch:20},{wch:10},{wch:14},{wch:22},{wch:20},{wch:14},{wch:10},{wch:16},{wch:8},{wch:14},{wch:20},{wch:16},{wch:10},{wch:12},{wch:12},{wch:20}];
   XLSX.utils.book_append_sheet(wb,ws,'TM 업로드 양식');
   XLSX.writeFile(wb,'대전TM_업로드양식.xlsx');
   showToast('양식 다운로드 완료','success');
@@ -8474,8 +8478,20 @@ async function openNoticeReadDetail(nid){
   if(!ov){ov=document.createElement('div');ov.id='ov-notice-read';ov.className='ov-bg';document.body.appendChild(ov);}
   const notices=getNoticesV2();
   const n=notices.find(x=>x.id===nid)||{};
-  ov.innerHTML=`<div class="ov-box" style="width:400px;max-width:96vw">
-    <div style="font-size:16px;font-weight:800;color:var(--navy);margin-bottom:4px">👁 읽음 확인</div>
+  const total=_noticeTargetCount(n);
+  const pct=total>0?Math.round(readers.length/total*100):0;
+  const barColor=pct>=80?'#00c073':pct>=40?'#f59e0b':'#3182f6';
+  ov.innerHTML=`<div class="ov-box" style="width:440px;max-width:96vw">
+    <div style="font-size:16px;font-weight:800;color:var(--navy);margin-bottom:4px">👁 읽음 현황</div>
+    <div style="font-size:13px;color:var(--gray-600);margin-bottom:10px">${esc(n.title||'')}</div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+      <span style="font-size:22px;font-weight:900;color:${barColor}">${readers.length}</span>
+      <span style="font-size:14px;color:var(--gray-500)">/ ${total}명 읽음</span>
+      <span style="font-size:13px;font-weight:700;color:${barColor}">(${pct}%)</span>
+    </div>
+    <div style="height:8px;background:var(--gray-100);border-radius:4px;overflow:hidden;margin-bottom:14px">
+      <div style="height:100%;width:${pct}%;background:${barColor};border-radius:4px"></div>
+    </div>
     <div style="font-size:13px;color:var(--gray-500);margin-bottom:14px">${esc(n.title||'')}</div>
     ${!readers.length?'<div style="text-align:center;padding:20px;color:var(--gray-400);font-size:13px">아직 읽은 사람이 없습니다</div>'
     :`<div style="display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto;margin-bottom:14px">
@@ -10511,11 +10527,11 @@ async function tmToAdmin(lid){
     team_name: '',
     team_names: JSON.stringify([]),
     tm_transferred: false,
-    tm_done: true,
-    // tm_completed_at: new Date().toISOString(), // Supabase 컬럼 추가 후 활성화
+    tm_done: false,       // 미배정 화면에 다시 뜨도록 false 유지
     assigned_at: new Date().toISOString(),
     status: 'pending',
-    collab_branches: null
+    collab_branches: null,
+    current_stage: lead.current_stage||'배정' // 기존 단계 유지
   };
   await dbU('leads', lid, patch);
   // 로컬 캐시 즉시 반영 — 중복 표시 방지
@@ -13588,30 +13604,65 @@ async function saveNoticeV2(){
   renderAdminNoticeList();
 }
 
-function renderAdminNoticeList(){
+// 공지 수신 대상 총 인원 계산
+function _noticeTargetCount(n){
+  const accs = getAccs()||[];
+  const roles = Array.isArray(n.target_roles)&&n.target_roles.length ? n.target_roles : [n.target_role||'all'];
+  const branches = Array.isArray(n.target_branches) ? n.target_branches : [];
+  if(roles.includes('all')) return accs.filter(a=>a.role!=='admin').length;
+  let targets = accs.filter(a=>roles.includes(a.role));
+  if(branches.length) targets = targets.filter(a=>!a.branch||branches.includes(a.branch));
+  // target_names로 특정인만 지정된 경우
+  if(Array.isArray(n.target_names)&&n.target_names.length) return n.target_names.length;
+  return targets.length||0;
+}
+
+async function renderAdminNoticeList(){
   const el=document.getElementById('admin-notice-list');if(!el)return;
-  const notices=getNoticesV2().slice(0,5);
+  const notices=getNoticesV2().slice(0,10);
   if(!notices.length){el.innerHTML='<div style="font-size:12px;color:var(--gray-300);text-align:center;padding:16px">등록된 공지 없음</div>';return;}
-  const RL={all:'전체',branch:'지점장',team:'팀장',tm:'대전TM'};
-  el.innerHTML=notices.map(n=>`
+  const RL={all:'전체',branch:'지점장',team:'팀장',tm:'대전TM',dbmanager:'DB관리자'};
+
+  // 각 공지 읽음 수 비동기 로드 (캐시 사용)
+  const readCounts = await Promise.all(notices.map(async n=>{
+    const readers = await _sbLoadNoticeReads(n.id);
+    return {id:n.id, count:readers.length, total:_noticeTargetCount(n)};
+  }));
+  const rcMap = Object.fromEntries(readCounts.map(r=>[r.id,r]));
+
+  el.innerHTML=notices.map(n=>{
+    const rc = rcMap[n.id]||{count:0,total:0};
+    const pct = rc.total>0 ? Math.round(rc.count/rc.total*100) : 0;
+    const barColor = pct>=80?'var(--ok)':pct>=40?'var(--warn)':'var(--blue)';
+    return `
     <div style="border:1px solid var(--gray-200);border-radius:var(--r-sm);padding:11px 14px;margin-bottom:8px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-        <span style="font-size:13px;font-weight:700;color:var(--navy)">${esc(n.title)}</span>
-        <div style="display:flex;gap:4px;align-items:center">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:6px;gap:8px">
+        <span style="font-size:13px;font-weight:700;color:var(--navy);flex:1">${esc(n.title)}</span>
+        <div style="display:flex;gap:4px;align-items:center;flex-shrink:0">
           ${(n.target_roles&&n.target_roles.length?n.target_roles:[n.target_role||'all']).map(r=>`<span class="badge badge-blue" style="font-size:10px">${RL[r]||r}</span>`).join('')}
           ${n.target_branches?.length?`<span class="badge badge-gray" style="font-size:10px">${n.target_branches.join('·')}</span>`:''}
-          <button class="btn btn-outline btn-xs" onclick="openNoticeReadDetail('${n.id}')" title="읽음 확인">
-            👁 읽음 <span style="font-size:10px;background:var(--blue);color:#fff;border-radius:8px;padding:1px 5px">${getNoticeReadCount(n.id)}</span>
-          </button>
-          <button class="btn btn-outline btn-xs" onclick="openNoticeModal('${n.id}')">수정</button>
+          <button class="btn btn-outline btn-xs" onclick="openNoticeReadDetail('${n.id}')">수정</button>
           <button class="btn btn-danger btn-xs" onclick="delNoticeV2('${n.id}')">삭제</button>
         </div>
       </div>
-      <div style="font-size:11px;color:var(--gray-500)">
-        ${n.start_date?fmtD(n.start_date):''}${n.end_date?' ~ '+fmtD(n.end_date):''}
-        <span style="margin-left:8px;color:var(--gray-300)">${fmtD(n.created_at)}</span>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:5px">
+        <button onclick="openNoticeReadDetail('${n.id}')" style="background:none;border:none;cursor:pointer;padding:0;display:flex;align-items:center;gap:5px" title="읽음 상세">
+          <span style="font-size:11px;color:var(--gray-500)">👁 읽음</span>
+          <span style="font-size:12px;font-weight:800;color:${barColor}">${rc.count}</span>
+          <span style="font-size:11px;color:var(--gray-400)">/ ${rc.total}명</span>
+          <span style="font-size:10px;color:${barColor};font-weight:700">(${pct}%)</span>
+        </button>
+        <div style="flex:1;height:5px;background:var(--gray-100);border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:${barColor};border-radius:3px;transition:width .4s"></div>
+        </div>
       </div>
-    </div>`).join('');
+      <div style="font-size:11px;color:var(--gray-400)">
+        ${n.start_date?fmtD(n.start_date):''}${n.end_date?' ~ '+fmtD(n.end_date):''}
+        · ${n.author||'관리자'}
+        <span style="margin-left:6px;color:var(--gray-300)">${fmtD(n.created_at)}</span>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function delNoticeV2(id){
