@@ -5311,11 +5311,11 @@ let _tmVisCols = getTmVisCols();
 function colVal(l, key, acts){
   switch(key){
     case 'company_name': {
-      // 재콜: 대전TM 업로드 건 또는 본사이관완료 건
-      // registered_by='대전TM' OR branch_name='대전'(TM이관건) OR tm_hq_transferred=true
-      const isRecall=(l.registered_by==='대전TM')
-        ||(l.tm_hq_transferred===true||l.tm_hq_transferred==='true')
-        ||((l.branch_name==='대전'||l.branch_name==='대전TM')&&(l.tm_transferred===true||l.tm_transferred==='true'));
+      // 재콜: 현재 대전이 실제 관여 중인 건만
+      const isRecall=
+        (l.tm_hq_transferred===true||l.tm_hq_transferred==='true') ||
+        (l.tm_transferred===true||l.tm_transferred==='true') ||
+        (()=>{try{return JSON.parse(l.collab_branches||'[]').includes('대전TM');}catch(e){return false;}})();
       // 재콜 배지만 표시, 텍스트는 항상 검정(navy)
       const tag=isRecall
         ?'<span style="font-size:9px;font-weight:700;color:#7c3aed;background:rgba(124,58,237,.08);padding:1px 5px;border-radius:6px;margin-left:4px">재콜</span>'
@@ -5340,11 +5340,11 @@ function colVal(l, key, acts){
     case 'note':         return`<td style="font-size:11px;color:var(--gray-400)">${esc(l.note||'-')}</td>`;
     case 'branch_name': return(function(){
       if(l.yj_transferred) return '<td><span class="badge" style="font-size:10px;background:rgba(124,58,237,.1);color:#7c3aed">초도이관</span></td>';
-      // 대전 관여 여부: tm_transferred / tm_hq_transferred / collab_branches / registered_by 중 하나라도
+      // 대전 관여 여부: 현재도 대전이 실제 관여 중인 경우만 표시
+      // registered_by='대전TM'만으로는 표시 안 함 (재배정 후 대전 제외된 경우)
       const _hasDaejeon=(
         (l.tm_transferred===true||l.tm_transferred==='true') ||
         (l.tm_hq_transferred===true||l.tm_hq_transferred==='true') ||
-        l.registered_by==='대전TM' ||
         (()=>{try{return JSON.parse(l.collab_branches||'[]').includes('대전TM');}catch(e){return false;}})()
       );
       const brBadge=l.branch_name?'<span class="badge badge-navy" style="font-size:10px">'+esc(l.branch_name)+'</span>':'';
@@ -10357,11 +10357,11 @@ function renderTmListView(){
       <tbody>
         ${data.map(l=>{
           const lastAct=acts.filter(a=>a.lead_id===l.id&&a.type!=='assign').sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];
-          // 재콜: 대전TM 업로드 건 또는 본사이관완료 건
-      // registered_by='대전TM' OR branch_name='대전'(TM이관건) OR tm_hq_transferred=true
-      const isRecall=(l.registered_by==='대전TM')
-        ||(l.tm_hq_transferred===true||l.tm_hq_transferred==='true')
-        ||((l.branch_name==='대전'||l.branch_name==='대전TM')&&(l.tm_transferred===true||l.tm_transferred==='true'));
+          // 재콜: 현재 대전이 실제 관여 중인 건만
+      const isRecall=
+        (l.tm_hq_transferred===true||l.tm_hq_transferred==='true') ||
+        (l.tm_transferred===true||l.tm_transferred==='true') ||
+        (()=>{try{return JSON.parse(l.collab_branches||'[]').includes('대전TM');}catch(e){return false;}})();
           const rowStyle=isRecall?'background:rgba(124,58,237,.04)':'';
           return `<tr onclick="openTmDetail('${l.id}')" style="border-bottom:1px solid var(--gray-100);cursor:pointer;${rowStyle}" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background='${isRecall?'rgba(124,58,237,.04)':''}'" >
             <td style="padding:9px 12px;font-weight:700;color:var(--navy);font-size:13px">
