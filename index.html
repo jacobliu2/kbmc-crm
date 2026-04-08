@@ -5352,8 +5352,21 @@ function colVal(l, key, acts){
       return '<td>'+(brBadge||tmBadge?brBadge+tmBadge:'-')+'</td>';
     })();
     case 'team_name': return(function(){
-      if(l.team_name) return`<td><span class="badge badge-blue" style="font-size:10px">${esc(l.team_name.slice(0,8))}</span></td>`;
-      return'<td>-</td>';
+      // team_names 배열에서 전체 이름 파싱
+      let names=[];
+      try{names=JSON.parse(l.team_names||'[]');}catch(e){}
+      if(!names.length&&l.team_name) names=l.team_name.split(',').map(s=>s.trim()).filter(Boolean);
+      // 지점장 직배정 여부: branch_name이 있는데 팀장 배정이 없거나, team_name에 지점장 이름 포함
+      const branchLeaders=new Set(BRANCHES||[]);
+      const isDirectBranch=l.branch_name&&(names.length===0||names.some(n=>branchLeaders.has(n)));
+      if(isDirectBranch&&names.length===0){
+        // 지점장만 있고 팀장 없는 경우 → 지점장 직배정 표시
+        return`<td><span class="badge" style="font-size:10px;background:rgba(124,58,237,.1);color:#7c3aed">${esc(l.branch_name)} (직배정)</span></td>`;
+      }
+      if(!names.length) return'<td>-</td>';
+      // 복수배정: 모든 이름 표시
+      const badges=names.map(n=>`<span class="badge badge-blue" style="font-size:10px;margin-right:2px">${esc(n)}</span>`).join('');
+      return`<td style="white-space:nowrap">${badges}</td>`;
     })();
     case 'status':       return`<td>${stageBadge(l.current_stage)}</td>`;
     // 대전TM
@@ -13382,7 +13395,7 @@ async function confirmDistribute(){
     return Object.entries(TEAM_MAP).find(([,v])=>v.includes(t))?.[0]||null;
   }).filter(Boolean))];
 
-  const teamDisplay=teamOnly.length===0?'':teamOnly.length===1?teamOnly[0]:teamOnly[0]+' 외 '+(teamOnly.length-1)+'명';
+  const teamDisplay=teamOnly.length===0?'':teamOnly.join(', '); // 복수배정 전체 이름 표시
   const assignData={branch_name:_selBranch,assigned_at:new Date().toISOString(),status:'assigned',yj_transferred:false,yj_done:false,yj_from_role:'',yj_from_branch:''};
   if(teamOnly.length>0){
     assignData.team_name=teamDisplay;
@@ -13418,8 +13431,66 @@ async function confirmDistribute(){
 
 // ── [7] 활동 화면 JS ──────────────────────────────────────
 const ACT_LS='kbmc_v2_activities_cal';
-function getActEntries(){try{return JSON.parse(localStorage.getItem(ACT_LS)||'[]');}catch(e){return[];}}
-function saveActEntries(a){localStorage.setItem(ACT_LS,JSON.stringify(a));}
+function getActEntries(){
+  // localStorage + allActivities에서 schedule 타입 합산
+  let local=[];try{local=JSON.parse(localStorage.getItem(ACT_LS)||'[]');}catch(e){}
+  // allActivities에서 schedule 타입도 포함
+  const sbSchedules=(allActivities||[])
+    .filter(a=>a.type==='schedule'&&a.date)
+    .map(a=>({
+      id:a.id, date:a.date, time:a.time||'', type:'schedule',
+      author:a.author||'', company:a.content?.split('|')[0]||'',
+      content:a.content||'', companions:[], _fromSb:true
+    }));
+  // 중복 제거 (id 기준)
+  const allIds=new Set(local.map(e=>e.id));
+  const merged=[...local, ...sbSchedules.filter(e=>!allIds.has(e.id))];
+  return merged;
+}
+async function saveActEntries(a){
+  localStorage.setItem(ACT_LS,JSON.stringify(a));
+}
+// 일정 저장: Supabase activities에 type='schedule'로 저장
+async function saveActEntry(entry){
+  const row={
+    id:entry.id||uuid(),
+    lead_id:null,
+    type:'schedule',
+    content:(entry.company||'')+' | '+(entry.content||''),
+    date:entry.date,
+    time:entry.time||null,
+    author:curUser?.name||'',
+    stage:null,
+    created_at:new Date().toISOString()
+  };
+  // localStorage에도 저장
+  const local=getActEntries().filter(e=>!e._fromSb);
+  const idx=local.findIndex(e=>e.id===row.id);
+  if(idx>=0) local[idx]={...local[idx],...entry,id:row.id};
+  else local.unshift({...entry, id:row.id});
+  localStorage.setItem(ACT_LS,JSON.stringify(local));
+  // Supabase 저장
+  if(!testMode){
+    const h={...sbH(),'Prefer':'resolution=merge-duplicates,return=minimal'};
+    await fetch(SB_URL+'/rest/v1/activities',{method:'POST',headers:h,body:JSON.stringify(row)}).catch(()=>{});
+  }
+  // allActivities 캐시 즉시 반영
+  if(allActivities){
+    const i=allActivities.findIndex(x=>x.id===row.id);
+    if(i>=0) allActivities[i]={...allActivities[i],...row};
+    else allActivities.unshift(row);
+  }
+  return row.id;
+}
+// 일정 삭제: Supabase에서도 삭제
+async function deleteActEntry(id){
+  const local=getActEntries().filter(e=>e.id!==id&&!e._fromSb);
+  localStorage.setItem(ACT_LS,JSON.stringify(local));
+  if(!testMode){
+    await fetch(SB_URL+'/rest/v1/activities?id=eq.'+id,{method:'DELETE',headers:sbH()}).catch(()=>{});
+  }
+  if(allActivities){const i=allActivities.findIndex(x=>x.id===id);if(i>=0)allActivities.splice(i,1);}
+}
 
 let actCalYear=new Date().getFullYear(), actCalMonth=new Date().getMonth();
 const ACT_TYPE_LABEL={call:'전화',meeting:'미팅',online:'화상',proposal:'제안서',contract:'계약',internal:'내부미팅',other:'기타'};
@@ -13515,7 +13586,7 @@ function getFilteredActEntries(){
   let entries=getActEntries();
 
   // activities 테이블의 meeting·online 타입을 캘린더에 자동 표시
-  const autoTypes=['meeting','online'];
+  const autoTypes=['meeting','online','schedule'];
   const autoActs=(allActivities||[])
     .filter(a=>autoTypes.includes(a.type) && a.date)
     .map(a=>{
@@ -13538,8 +13609,9 @@ function getFilteredActEntries(){
   if(scope.type==='team') entries=entries.filter(a=>a.author===scope.name||a.companions?.includes(scope.name));
   else if(scope.type==='branch') entries=entries.filter(a=>{
     const allTeams=TEAM_MAP[scope.name]||[];
-    return allTeams.includes(a.author)||a.author===scope.name;
+    return allTeams.includes(a.author)||a.author===scope.name||a.branch===scope.name;
   });
+  // 관리자는 모든 일정 표시 (scope.type==='admin' 또는 빈 경우)
   // 활동 유형 필터
   const typeF=document.getElementById('act-type-filter')?.value||'';
   if(typeF) entries=entries.filter(a=>a.type===typeF);
@@ -13683,7 +13755,7 @@ function editActEntry(id){
     (document.getElementById('ae-companion-selected')||{}).textContent=_selCompanions.size?'동행: '+[..._selCompanions].join(', '):'';
   openM('modal-act-entry');
 }
-function saveActEntry(){
+async function saveActEntry(){
   const date=document.getElementById('ae-date').value;
   const content=document.getElementById('ae-content').value.trim();
   if(!date){showToast('날짜를 입력하세요.','error');return;}
@@ -13698,19 +13770,42 @@ function saveActEntry(){
     companions, author:curUser.name, branch:curUser.branch||curUser.name,
     created_at:eid?undefined:new Date().toISOString()
   };
-  const entries=getActEntries();
+  // Supabase activities에 schedule 타입으로 저장 (지점장·관리자도 볼 수 있도록)
+  const sbRow={
+    id:row.id,
+    lead_id:null,
+    type:'schedule',
+    content:(row.company?row.company+' | ':'')+row.content+(companions.length?' [동행:'+companions.join(',')+']':''),
+    date:row.date,
+    author:row.author,
+    stage:null,
+    created_at:row.created_at||new Date().toISOString()
+  };
+  if(!testMode){
+    const h={...sbH(),'Prefer':'resolution=merge-duplicates,return=minimal'};
+    await fetch(SB_URL+'/rest/v1/activities',{method:'POST',headers:h,body:JSON.stringify(sbRow)}).catch(()=>{});
+    // allActivities 캐시 즉시 반영
+    if(allActivities){const i=allActivities.findIndex(x=>x.id===sbRow.id);if(i>=0)allActivities[i]={...allActivities[i],...sbRow};else allActivities.unshift(sbRow);}
+  }
+  // localStorage에도 저장
+  const entries=getActEntries().filter(e=>!e._fromSb);
   if(eid){const i=entries.findIndex(e=>e.id===eid);if(i>=0)entries[i]={...entries[i],...row};}
   else entries.unshift(row);
-  saveActEntries(entries);
+  localStorage.setItem(ACT_LS,JSON.stringify(entries));
   // 동행 요청 알림 발송
   companions.forEach(c=>addN('companion_req','👥 동행 요청',`${curUser.name}: ${fmtD(date)} ${ACT_TYPE_LABEL[row.type]||''} "${content.slice(0,40)}"`,null));
   closeM('modal-act-entry');
   showToast('활동 등록 완료'+(companions.length?` · 동행 요청 ${companions.length}명`:''),'success');
   renderActCal(); renderActList();
 }
-function delActEntry(id){
+async function delActEntry(id){
   if(!confirm('삭제?'))return;
-  saveActEntries(getActEntries().filter(e=>e.id!==id));
+  const entries=getActEntries().filter(e=>e.id!==id&&!e._fromSb);
+  localStorage.setItem(ACT_LS,JSON.stringify(entries));
+  if(!testMode){
+    await fetch(SB_URL+'/rest/v1/activities?id=eq.'+id,{method:'DELETE',headers:sbH()}).catch(()=>{});
+    if(allActivities){const i=allActivities.findIndex(x=>x.id===id);if(i>=0)allActivities.splice(i,1);}
+  }
   showToast('삭제됨'); renderActCal(); renderActList();
 }
 
