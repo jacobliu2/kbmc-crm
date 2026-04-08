@@ -5357,11 +5357,12 @@ function colVal(l, key, acts){
       try{names=JSON.parse(l.team_names||'[]');}catch(e){}
       if(!names.length&&l.team_name) names=l.team_name.split(',').map(s=>s.trim()).filter(Boolean);
       if(!names.length) return'<td>-</td>';
-      const branchLeaders=new Set(BRANCHES||[]);
-      // 이름 뱃지 렌더: 지점장 이름이면 보라색(직배정), 팀장이면 파란색
+      // 지점장 판별: BRANCHES + TEAM_MAP keys 모두 사용
+      const branchLeaders=new Set([...(BRANCHES||[]),...Object.keys(TEAM_MAP||{})]);
+      // 이름 뱃지 렌더: 지점장 이름이면 보라색, 팀장이면 파란색
       const badges=names.map(n=>{
         if(branchLeaders.has(n))
-          return`<span class="badge" style="font-size:10px;background:rgba(124,58,237,.1);color:#7c3aed;margin-right:2px">${esc(n)} (직배정)</span>`;
+          return`<span class="badge" style="font-size:10px;background:rgba(124,58,237,.1);color:#7c3aed;margin-right:2px">${esc(n)}</span>`;
         return`<span class="badge badge-blue" style="font-size:10px;margin-right:2px">${esc(n)}</span>`;
       }).join('');
       return`<td style="white-space:nowrap">${badges}</td>`;
@@ -11974,25 +11975,18 @@ async function confirmBrAssignPopup(){
   // 복수 표시명
   const teamDisplay=teams.length===1?teams[0]:teams.join(', ');
 
+  // 지점장 본인 포함 시 teams 전체 저장 (본인 제외 없음)
+  const finalTeams = selfIncluded ? [curUser.name, ...teamOnly] : teamOnly;
+
   for(const id of ids){
     const updateData={
-      team_name:teamOnly.length?teamOnly.join(', '):'',
-      team_names:JSON.stringify(teamOnly),
+      team_name:finalTeams.length?finalTeams.join(', '):'',
+      team_names:JSON.stringify(finalTeams),
       assigned_at:new Date().toISOString(),
       status:'assigned',
       yj_transferred:false,yj_from_role:'',yj_from_branch:'',
       collab_branches:isCollab?JSON.stringify(collabBranches):null
     };
-    if(selfIncluded && !teamOnly.length){
-      // 지점장 본인만 선택 → team_name에 지점장 이름 명시
-      updateData.team_name=curUser.name;
-      updateData.team_names=JSON.stringify([curUser.name]);
-    } else if(selfIncluded){
-      // 지점장 본인 + 팀장 선택 → 팀장 목록에 지점장 포함
-      const allTeams=[curUser.name,...teamOnly];
-      updateData.team_name=allTeams.join(', ');
-      updateData.team_names=JSON.stringify(allTeams);
-    }
     // 재배정DB에서 배정됐으면 auto_recalled 초기화
     if(allLeads?.find(l=>l.id===id)?.auto_recalled){
       updateData.auto_recalled=false;
