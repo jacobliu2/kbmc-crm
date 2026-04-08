@@ -11985,7 +11985,10 @@ async function confirmBrAssignPopup(){
       assigned_at:new Date().toISOString(),
       status:'assigned',
       yj_transferred:false,yj_from_role:'',yj_from_branch:'',
-      collab_branches:isCollab?JSON.stringify(collabBranches):null
+      collab_branches:isCollab?JSON.stringify(collabBranches):null,
+      // 대전TM 이관 플래그 초기화 (재배정 시 대전 관여 제거)
+      tm_transferred:false,
+      tm_hq_transferred:false
     };
     // 재배정DB에서 배정됐으면 auto_recalled 초기화
     if(allLeads?.find(l=>l.id===id)?.auto_recalled){
@@ -13388,7 +13391,8 @@ async function confirmDistribute(){
   }).filter(Boolean))];
 
   const teamDisplay=teamOnly.length===0?'':teamOnly.join(', '); // 복수배정 전체 이름 표시
-  const assignData={branch_name:_selBranch,assigned_at:new Date().toISOString(),status:'assigned',yj_transferred:false,yj_done:false,yj_from_role:'',yj_from_branch:''};
+  const assignData={branch_name:_selBranch,assigned_at:new Date().toISOString(),status:'assigned',yj_transferred:false,yj_done:false,yj_from_role:'',yj_from_branch:'',
+    tm_transferred:false,tm_hq_transferred:false}; // 대전TM 이관 플래그 초기화
   if(teamOnly.length>0){
     assignData.team_name=teamDisplay;
     assignData.team_names=JSON.stringify(teamOnly);
