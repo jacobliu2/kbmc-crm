@@ -5356,16 +5356,14 @@ function colVal(l, key, acts){
       let names=[];
       try{names=JSON.parse(l.team_names||'[]');}catch(e){}
       if(!names.length&&l.team_name) names=l.team_name.split(',').map(s=>s.trim()).filter(Boolean);
-      // 지점장 직배정 여부: branch_name이 있는데 팀장 배정이 없거나, team_name에 지점장 이름 포함
-      const branchLeaders=new Set(BRANCHES||[]);
-      const isDirectBranch=l.branch_name&&(names.length===0||names.some(n=>branchLeaders.has(n)));
-      if(isDirectBranch&&names.length===0){
-        // 지점장만 있고 팀장 없는 경우 → 지점장 직배정 표시
-        return`<td><span class="badge" style="font-size:10px;background:rgba(124,58,237,.1);color:#7c3aed">${esc(l.branch_name)} (직배정)</span></td>`;
-      }
       if(!names.length) return'<td>-</td>';
-      // 복수배정: 모든 이름 표시
-      const badges=names.map(n=>`<span class="badge badge-blue" style="font-size:10px;margin-right:2px">${esc(n)}</span>`).join('');
+      const branchLeaders=new Set(BRANCHES||[]);
+      // 이름 뱃지 렌더: 지점장 이름이면 보라색(직배정), 팀장이면 파란색
+      const badges=names.map(n=>{
+        if(branchLeaders.has(n))
+          return`<span class="badge" style="font-size:10px;background:rgba(124,58,237,.1);color:#7c3aed;margin-right:2px">${esc(n)} (직배정)</span>`;
+        return`<span class="badge badge-blue" style="font-size:10px;margin-right:2px">${esc(n)}</span>`;
+      }).join('');
       return`<td style="white-space:nowrap">${badges}</td>`;
     })();
     case 'status':       return`<td>${stageBadge(l.current_stage)}</td>`;
