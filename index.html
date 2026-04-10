@@ -4733,7 +4733,7 @@ async function loadAdmin(){
       <span style="font-size:20px">🚨</span>
       <div><div style="font-size:13px;font-weight:700;color:var(--err)">이탈 위험 고객 ${atriskLeads.length}건 — 14일 이상 미접촉</div>
       <div style="font-size:11px;color:var(--gray-500);margin-top:2px">${atriskLeads.slice(0,3).map(l=>esc(l.company_name)).join(', ')}${atriskLeads.length>3?' 외 '+(atriskLeads.length-3)+'건':''}</div></div>
-      <button class="btn btn-sm" style="margin-left:auto;background:var(--err);color:#fff;border-color:var(--err)" onclick="filterByStatus('contacted')">확인하기</button>
+      <button class="btn btn-sm" style="margin-left:auto;background:var(--err);color:#fff;border-color:var(--err)" onclick="showAtriskLeads()">확인하기</button>
     </div>`;
   } await renderMonthlyChart(all);
   // 지점별 실적
@@ -5089,8 +5089,10 @@ function filterLeads(){
   // 유영준 전용 필터: 초도이관(관리자발) vs 일반DB(지점장발)
   const yjF=document.getElementById('leads-yj-filter')?.value||'';
   filtered=allLeads.filter(l=>{
-    // 팀장: 드랍·보류 DB 숨김 (드랍DB탭/보류는 관리자·지점장만 봄)
-    if(curUser.role==='team'&&(l.status==='drop'||l.current_stage==='보류'||l.current_stage==='드랍')) return false;
+    // 드랍·삭제 건은 전체DB에서 제외 (드랍DB 탭에서만 표시)
+    if(l.status==='drop') return false;
+    // 팀장: 보류 DB 숨김
+    if(curUser.role==='team'&&(l.current_stage==='보류'||l.current_stage==='드랍')) return false;
     // TM이관완료 건: tm_hq_transferred=true인 건은 미배정 풀이므로 전체DB에 표시
     // 구버전 tm_done=true(현재 미사용)인 건만 제외
     if((l.tm_done===true||l.tm_done==='true')&&!(l.tm_hq_transferred===true||l.tm_hq_transferred==='true')&&!(l.tm_transferred===true||l.tm_transferred==='true')) return false;
@@ -5510,6 +5512,29 @@ function updateAbar(){
 }
 function fByStage(stage){_stageFilter=stage;showScreen('leads',document.querySelector('.nb[data-s="leads"]'));setTimeout(()=>filterLeads(),120);}
 function filterByStatus(s){_stageFilter='';showScreen('leads',document.querySelector('.nb[data-s="leads"]'));setTimeout(()=>{document.getElementById('leads-status').value=s;filterLeads();},120);}
+
+// 이탈위험 고객 확인: DB관리 화면으로 이동 후 해당 건만 필터
+function showAtriskLeads(){
+  const all=allLeads||[];
+  const acts=allActivities||[];
+  const atrisk=checkAtrisk(all.filter(l=>l.team_name&&!['drop','deleted'].includes(l.status)),acts);
+  if(!atrisk.length){showToast('이탈위험 고객이 없습니다','success');return;}
+  const ids=new Set(atrisk.map(l=>l.id));
+  showScreen('leads',document.querySelector('.nb[data-s="leads"]'));
+  setTimeout(()=>{
+    // 검색/필터 초기화
+    ['leads-search','leads-branch','leads-team','leads-type'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+    _stageFilter=''; _quickTab='';
+    document.querySelectorAll('[id^="qtab-"]').forEach(b=>{b.style.background='';b.style.color='';b.style.borderColor='';});
+    // 이탈위험 건만 필터
+    filtered=(allLeads||[]).filter(l=>ids.has(l.id));
+    const sub=document.getElementById('leads-sub');
+    if(sub) sub.textContent=filtered.length+'건 (이탈위험)';
+    curPage=1;
+    renderLeadsTable();
+    updateAbar?.();
+  },120);
+}
 // ── 관리자 전용 일괄 상태변경 ─────────────────────────────
 function openAdminStatusChange(){
   if(curUser?.role!=='admin'){showToast('관리자 전용 기능입니다.','error');return;}
