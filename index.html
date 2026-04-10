@@ -4717,6 +4717,7 @@ async function loadAdmin(){
     &&!(l.tm_transferred===true||l.tm_transferred==='true')
     &&!(l.yj_done===true||l.yj_done==='true')
     &&!(l.tm_done===true||l.tm_done==='true')
+    &&!(l.tm_hq_transferred===true||l.tm_hq_transferred==='true')
     &&l.status!=='drop'
     &&!['드랍','보류'].includes(l.current_stage||'')
   ).length;
@@ -5121,23 +5122,25 @@ function filterLeads(){
   if(_stageFilter) filtered=filtered.filter(l=>l.current_stage===_stageFilter);
   if(_quickTab==='unassigned'){
     if(curUser.role==='branch'){
-      // 지점장: 팀장 기준 미배정 (드랍·보류·유영준이관·TM이관 제외)
+      // 지점장: 팀장 기준 미배정 (드랍·보류·유영준이관·TM이관·본사이관완료 제외)
       filtered=filtered.filter(l=>
         (!l.team_name||l.team_name.trim()==='')
         &&!['drop','deleted'].includes(l.status)
         &&!['드랍','보류'].includes(l.current_stage||'')
         &&!(l.yj_transferred===true||l.yj_transferred==='true')
         &&!(l.tm_transferred===true||l.tm_transferred==='true')
+        &&!(l.tm_hq_transferred===true||l.tm_hq_transferred==='true')
         &&!(l.yj_done===true||l.yj_done==='true')
       );
     } else {
-      // 관리자: 지점 기준 미배정 (드랍·보류·유영준이관·TM이관 제외)
+      // 관리자: 지점 기준 미배정 (드랍·보류·유영준이관·TM이관·본사이관완료 제외)
       filtered=filtered.filter(l=>
         (!l.branch_name||l.branch_name==='')
         &&!['drop','deleted'].includes(l.status)
         &&!['드랍','보류'].includes(l.current_stage||'')
         &&!(l.yj_transferred===true||l.yj_transferred==='true')
         &&!(l.tm_transferred===true||l.tm_transferred==='true')
+        &&!(l.tm_hq_transferred===true||l.tm_hq_transferred==='true')
         &&!(l.yj_done===true||l.yj_done==='true')
       );
     }
@@ -7201,6 +7204,7 @@ async function loadMyLeads(){
   const [all, nas] = await Promise.all([dbQ('leads'), dbQ('next_actions')]);
   myLeads=all.filter(l=>{
     if(l.status==='deleted') return false;
+    if(l.status==='drop') return false; // 드랍 DB는 팀장 화면에서 숨김
     if(l.team_name===curUser.name) return true;
     // 협업/공동배정: team_names에 내 이름 포함
     try{ return JSON.parse(l.team_names||'[]').includes(curUser.name); }catch(e){ return false; }
@@ -9993,7 +9997,7 @@ function tmV2Render(){
     const stageBadgeHtml=l.current_stage?`<span class="badge ${stageMap[l.current_stage]||'badge-pending'}" style="font-size:10px">${esc(l.current_stage)}</span>`:'-';
     const meetingDisp=l.tm_meeting?`<span style="color:var(--blue);font-weight:700;font-size:12px">${fmtShort(l.tm_meeting)}</span>`:'-';
     const actionBtn=_tmV2Tab==='contacted'
-      ?`<button class="btn btn-xs" style="background:var(--navy);color:#fff;border:none;font-size:10px;white-space:nowrap" onclick="event.stopPropagation();if(this.disabled)return;this.disabled=true;this.textContent='이관중...';tmToAdmin('${l.id}').finally(()=>{this.disabled=false;this.textContent='본사이관'})">본사이관</button>`
+      ?`<button class="btn btn-xs" style="background:var(--navy);color:#fff;border:none;font-size:10px;white-space:nowrap" onclick="event.stopPropagation();openTmTransferModal('${l.id}')">본사이관</button>`
       :_tmV2Tab==='hqtransfer'
       ?`<button class="btn btn-xs" style="background:var(--gray-100);color:var(--gray-600);border:none;font-size:10px;white-space:nowrap" onclick="event.stopPropagation();openTmInput('${l.id}','${esc(l.company_name||'')}')">기록보기</button>`
       :`<button class="btn btn-primary btn-xs" onclick="event.stopPropagation();openTmInput('${l.id}','${esc(l.company_name||'')}')">기록</button>`;
@@ -10495,8 +10499,8 @@ function _buildTmCard(l,acts){
     </button>
     ${l.status==='contacted'?`
     <button style="display:inline-flex;align-items:center;gap:4px;padding:6px 13px;font-size:12px;font-weight:700;color:#fff;background:#00c073;border:none;border-radius:7px;cursor:pointer;white-space:nowrap;line-height:1"
-      onclick="event.stopPropagation();tmToAdmin('${l.id}')">
-      <span style="font-size:13px">✅</span> 이관
+      onclick="event.stopPropagation();openTmTransferModal('${l.id}')">
+      <span style="font-size:13px">📤</span> 이관
     </button>`:''
     }
   </div>`;
@@ -10845,6 +10849,69 @@ function openTmPanel(lid){
 }
 
 // 대전TM → 관리자 이관 (완료건)
+// 본사이관 선택 모달: 배정요청 / 드랍
+function openTmTransferModal(lid){
+  const lead=tmLeads.find(l=>l.id===lid)||allLeads?.find(l=>l.id===lid);
+  if(!lead){showToast('리드를 찾을 수 없습니다','error');return;}
+  let ov=document.getElementById('ov-tm-transfer-modal');
+  if(!ov){ov=document.createElement('div');ov.id='ov-tm-transfer-modal';ov.className='ov-bg';document.body.appendChild(ov);}
+  ov.innerHTML=`<div class="ov-box" style="width:380px;max-width:96vw;text-align:center;padding:32px 28px">
+    <div style="font-size:20px;margin-bottom:8px">📤</div>
+    <div style="font-size:17px;font-weight:800;color:var(--navy);margin-bottom:6px">본사 이관</div>
+    <div style="font-size:13px;color:var(--gray-600);margin-bottom:24px"><strong>${esc(lead.company_name)}</strong>를 어떻게 처리할까요?</div>
+    <div style="display:flex;gap:10px;justify-content:center">
+      <button onclick="closeOv('ov-tm-transfer-modal');tmToAdmin('${lid}')"
+        style="flex:1;padding:14px 10px;background:var(--navy);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">
+        ✅ 배정요청<br><span style="font-size:11px;font-weight:400;opacity:.8">본사 미배정 풀로 이관</span>
+      </button>
+      <button onclick="closeOv('ov-tm-transfer-modal');openTmDrop('${lid}')"
+        style="flex:1;padding:14px 10px;background:#ef4444;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">
+        🚫 드랍<br><span style="font-size:11px;font-weight:400;opacity:.8">드랍 처리</span>
+      </button>
+    </div>
+    <button onclick="closeOv('ov-tm-transfer-modal')" style="margin-top:14px;background:none;border:none;color:var(--gray-400);font-size:13px;cursor:pointer">취소</button>
+  </div>`;
+  ov.classList.add('open');
+}
+
+// 대전TM 드랍 처리
+async function openTmDrop(lid){
+  const lead=tmLeads.find(l=>l.id===lid)||allLeads?.find(l=>l.id===lid);
+  if(!lead){showToast('리드를 찾을 수 없습니다','error');return;}
+  let ov=document.getElementById('ov-tm-drop-modal');
+  if(!ov){ov=document.createElement('div');ov.id='ov-tm-drop-modal';ov.className='ov-bg';document.body.appendChild(ov);}
+  ov.innerHTML=`<div class="ov-box" style="width:380px;max-width:96vw;padding:28px">
+    <div style="font-size:17px;font-weight:800;color:var(--navy);margin-bottom:4px">🚫 드랍 처리</div>
+    <div style="font-size:13px;color:var(--gray-500);margin-bottom:16px">${esc(lead.company_name)}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+      ${['보험 기피','가격 불만족','서비스 내용 불만족','연락두절','TM 판단','기타'].map(r=>
+        `<button onclick="this.parentNode.querySelectorAll('button').forEach(b=>{b.style.background='';b.style.color=''});this.style.background='#ef4444';this.style.color='#fff';document.getElementById('tm-drop-reason-text').value='${r}'"
+          style="padding:5px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;cursor:pointer">${r}</button>`
+      ).join('')}
+    </div>
+    <textarea id="tm-drop-reason-text" rows="2" placeholder="드랍 사유 입력 (필수)"
+      style="width:100%;padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:8px;font-size:13px;font-family:inherit;resize:none;box-sizing:border-box"></textarea>
+    <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">
+      <button onclick="closeOv('ov-tm-drop-modal')" class="btn btn-outline">취소</button>
+      <button onclick="confirmTmDrop('${lid}')" class="btn btn-danger">드랍 처리</button>
+    </div>
+  </div>`;
+  ov.classList.add('open');
+}
+
+async function confirmTmDrop(lid){
+  const reason=document.getElementById('tm-drop-reason-text')?.value.trim();
+  if(!reason){showToast('드랍 사유를 입력하세요','error');return;}
+  const now=new Date().toISOString();
+  await dbU('leads',lid,{status:'drop',drop_reason:reason,drop_category:'TM드랍',dropped_at:now,current_stage:'드랍'});
+  await logActivity(lid,'status_change','TM 드랍: '+reason,'drop','드랍');
+  if(allLeads){const i=allLeads.findIndex(x=>x.id===lid);if(i>=0)allLeads.splice(i,1);}
+  if(tmLeads){const i=tmLeads.findIndex(x=>x.id===lid);if(i>=0)tmLeads.splice(i,1);}
+  closeOv('ov-tm-drop-modal');
+  showToast('드랍 처리 완료','success');
+  await loadTmPanel();
+}
+
 const _tmToAdminRunning=new Set();
 async function tmToAdmin(lid){
   // 중복 실행 방지
@@ -11591,7 +11658,7 @@ async function loadBranchScreen(){
   const all=await dbQ('leads');
   const myTeams=new Set(TEAM_MAP[curUser.name]||[]);
   brAllLeads=all.filter(l=>{
-    if(l.status==='deleted'||l.yj_transferred) return false;
+    if(l.status==='deleted'||l.status==='drop'||l.yj_transferred) return false; // 드랍 제외
     if(l.branch_name===curUser.name) return true;
     try{const arr=JSON.parse(l.team_names||'[]');if(arr.length&&arr.some(t=>myTeams.has(t)))return true;}catch(e){}
     if(l.team_name){const names=l.team_name.split(', ').map(s=>s.trim());if(names.some(n=>myTeams.has(n)))return true;}
@@ -12244,6 +12311,7 @@ function _rcCandidates(){
     if(l.yj_transferred===true||l.yj_transferred==='true') return false;
     if(l.yj_done===true||l.yj_done==='true')               return false;
     if(isTmCompleted(l))                return false;
+    if(l.tm_hq_transferred===true||l.tm_hq_transferred==='true') return false; // 본사이관완료 건 제외
     const st=String(l.status||'');
     if(st==='drop'||st==='deleted') return false;
     const sg=String(l.current_stage||'');
@@ -13446,47 +13514,7 @@ function getActEntries(){
 async function saveActEntries(a){
   localStorage.setItem(ACT_LS,JSON.stringify(a));
 }
-// 일정 저장: Supabase activities에 type='schedule'로 저장
-async function saveActEntry(entry){
-  const row={
-    id:entry.id||uuid(),
-    lead_id:null,
-    type:'schedule',
-    content:(entry.company||'')+' | '+(entry.content||''),
-    date:entry.date,
-    time:entry.time||null,
-    author:curUser?.name||'',
-    stage:null,
-    created_at:new Date().toISOString()
-  };
-  // localStorage에도 저장
-  const local=getActEntries().filter(e=>!e._fromSb);
-  const idx=local.findIndex(e=>e.id===row.id);
-  if(idx>=0) local[idx]={...local[idx],...entry,id:row.id};
-  else local.unshift({...entry, id:row.id});
-  localStorage.setItem(ACT_LS,JSON.stringify(local));
-  // Supabase 저장
-  if(!testMode){
-    const h={...sbH(),'Prefer':'resolution=merge-duplicates,return=minimal'};
-    await fetch(SB_URL+'/rest/v1/activities',{method:'POST',headers:h,body:JSON.stringify(row)}).catch(()=>{});
-  }
-  // allActivities 캐시 즉시 반영
-  if(allActivities){
-    const i=allActivities.findIndex(x=>x.id===row.id);
-    if(i>=0) allActivities[i]={...allActivities[i],...row};
-    else allActivities.unshift(row);
-  }
-  return row.id;
-}
-// 일정 삭제: Supabase에서도 삭제
-async function deleteActEntry(id){
-  const local=getActEntries().filter(e=>e.id!==id&&!e._fromSb);
-  localStorage.setItem(ACT_LS,JSON.stringify(local));
-  if(!testMode){
-    await fetch(SB_URL+'/rest/v1/activities?id=eq.'+id,{method:'DELETE',headers:sbH()}).catch(()=>{});
-  }
-  if(allActivities){const i=allActivities.findIndex(x=>x.id===id);if(i>=0)allActivities.splice(i,1);}
-}
+// saveActEntry: UI 저장 함수는 하단에 정의됨
 
 let actCalYear=new Date().getFullYear(), actCalMonth=new Date().getMonth();
 const ACT_TYPE_LABEL={call:'전화',meeting:'미팅',online:'화상',proposal:'제안서',contract:'계약',internal:'내부미팅',other:'기타'};
