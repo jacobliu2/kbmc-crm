@@ -4724,7 +4724,8 @@ async function loadAdmin(){
   const dropEl=document.getElementById('s-drop');if(dropEl)dropEl.textContent=all.filter(l=>l.status==='drop').length;
   // 이탈 위험 고객 알림
   const acts_admin=allActivities||[];
-  const atriskLeads=checkAtrisk(all.filter(l=>l.team_name&&!['drop','deleted'].includes(l.status)),acts_admin);
+  _atriskLeads=checkAtrisk(all.filter(l=>l.team_name&&!['drop','deleted'].includes(l.status)),acts_admin);
+  const atriskLeads=_atriskLeads;
   if(atriskLeads.length>0){
     const existBanner=document.getElementById('admin-atrisk-banner');
     const banner=existBanner||document.createElement('div');
@@ -5515,25 +5516,32 @@ function filterByStatus(s){_stageFilter='';showScreen('leads',document.querySele
 
 // 이탈위험 고객 확인: DB관리 화면으로 이동 후 해당 건만 필터
 function showAtriskLeads(){
-  const all=allLeads||[];
-  const acts=allActivities||[];
-  const atrisk=checkAtrisk(all.filter(l=>l.team_name&&!['drop','deleted'].includes(l.status)),acts);
+  // _atriskLeads: loadAdmin에서 계산된 캐시 우선 사용
+  // 없으면 allLeads로 재계산
+  let atrisk=_atriskLeads||[];
+  if(!atrisk.length&&allLeads?.length){
+    const acts=allActivities||[];
+    atrisk=checkAtrisk((allLeads||[]).filter(l=>l.team_name&&!['drop','deleted'].includes(l.status)),acts);
+  }
   if(!atrisk.length){showToast('이탈위험 고객이 없습니다','success');return;}
-  const ids=new Set(atrisk.map(l=>l.id));
-  showScreen('leads',document.querySelector('.nb[data-s="leads"]'));
-  setTimeout(()=>{
-    // 검색/필터 초기화
+  const _atriskIds=new Set(atrisk.map(l=>l.id));
+  const _doFilter=()=>{
     ['leads-search','leads-branch','leads-team','leads-type'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
     _stageFilter=''; _quickTab='';
     document.querySelectorAll('[id^="qtab-"]').forEach(b=>{b.style.background='';b.style.color='';b.style.borderColor='';});
-    // 이탈위험 건만 필터
-    filtered=(allLeads||[]).filter(l=>ids.has(l.id));
+    filtered=(allLeads||[]).filter(l=>_atriskIds.has(l.id));
     const sub=document.getElementById('leads-sub');
     if(sub) sub.textContent=filtered.length+'건 (이탈위험)';
-    curPage=1;
-    renderLeadsTable();
-    updateAbar?.();
-  },120);
+    curPage=1; renderLeadsTable(); updateAbar?.();
+  };
+  // allLeads 없으면 loadLeads 후 필터, 있으면 바로 필터
+  if(!allLeads?.length){
+    showScreen('leads',document.querySelector('.nb[data-s="leads"]'));
+    loadLeads().then(()=>setTimeout(_doFilter,100));
+  } else {
+    showScreen('leads',document.querySelector('.nb[data-s="leads"]'));
+    setTimeout(_doFilter,120);
+  }
 }
 // ── 관리자 전용 일괄 상태변경 ─────────────────────────────
 function openAdminStatusChange(){
@@ -8592,6 +8600,7 @@ function calcLeadGrade(lead, acts){
 }
 
 // 이탈 위험 감지 (14일 이상 미접촉)
+let _atriskLeads = []; // 이탈위험 고객 전역 캐시
 function checkAtrisk(leads, acts){
   const now=Date.now();
   return (leads||[]).filter(l=>{
