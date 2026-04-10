@@ -5719,7 +5719,7 @@ async function confirmDropWithReason(ids){
   const stdReasons=['보험 기피','가격 불만족','서비스 내용 불만족','연락두절','팀장 판단'];
   const category=stdReasons.includes(reason)?reason:'기타';
   const now=new Date().toISOString();
-  const dropData={status:'drop',drop_reason:reason,drop_category:category,dropped_at:now,updated_at:now};
+  const dropData={status:'drop',current_stage:'드랍',drop_reason:reason,drop_category:category,dropped_at:now,updated_at:now};
   if(!testMode){
     // 병렬 PATCH
     await Promise.all(ids.map(id=>{ _trackLocalId(id); return sbPatch('leads',id,dropData); }));
@@ -12173,7 +12173,7 @@ async function confirmBrDropWithReason(ids){
   if(!reason){showToast('드랍 사유를 입력하세요.','error');return;}
   for(const id of ids){
     await dbU('leads',id,{drop_reason:reason});
-    await changeStatus(id,'drop','',reason);
+    await changeStatus(id,'drop','드랍',reason);
   }
   closeOv('ov-br-drop-reason'); clearBrSel();
   showToast(ids.length+'건 드랍','success'); loadBranchScreen();
