@@ -4726,17 +4726,9 @@ async function loadAdmin(){
   const acts_admin=allActivities||[];
   _atriskLeads=checkAtrisk(all.filter(l=>l.team_name&&!['drop','deleted'].includes(l.status)),acts_admin);
   const atriskLeads=_atriskLeads;
-  if(atriskLeads.length>0){
-    const existBanner=document.getElementById('admin-atrisk-banner');
-    const banner=existBanner||document.createElement('div');
-    if(!existBanner){banner.id='admin-atrisk-banner';document.getElementById('screen-admin')?.querySelector('.stat-grid')?.after(banner);}
-    banner.innerHTML=`<div style="margin-bottom:14px;padding:12px 16px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:var(--r);display:flex;align-items:center;gap:12px">
-      <span style="font-size:20px">🚨</span>
-      <div><div style="font-size:13px;font-weight:700;color:var(--err)">이탈 위험 고객 ${atriskLeads.length}건 — 14일 이상 미접촉</div>
-      <div style="font-size:11px;color:var(--gray-500);margin-top:2px">${atriskLeads.slice(0,3).map(l=>esc(l.company_name)).join(', ')}${atriskLeads.length>3?' 외 '+(atriskLeads.length-3)+'건':''}</div></div>
-      <button class="btn btn-sm" style="margin-left:auto;background:var(--err);color:#fff;border-color:var(--err)" onclick="showAtriskLeads()">확인하기</button>
-    </div>`;
-  } await renderMonthlyChart(all);
+  // 이탈위험 배너 제거 (기능 미작동으로 삭제)
+  const existBanner=document.getElementById('admin-atrisk-banner');
+  if(existBanner) existBanner.remove(); await renderMonthlyChart(all);
   // 지점별 실적
   let tbl='<div class="tbl-wrap"><table><thead><tr>';
   ['지점','전체','계약','상담중','완료','미접촉','전환율'].forEach(h=>tbl+=`<th style="padding:10px 12px">${h}</th>`);
@@ -12577,7 +12569,10 @@ async function rcRender(){
       <td style="padding:7px 10px;font-size:12px;white-space:nowrap">${esc(t.branch_name||'-')}</td>
       <td style="padding:7px 10px;font-size:12px;white-space:nowrap">${esc(t.team_name||'-')}</td>
       <td style="padding:7px 10px;max-width:260px">${laTxt}</td>
-      <td style="padding:7px 10px;white-space:nowrap" onclick="event.stopPropagation()"><button class="btn btn-sm btn-outline" style="color:var(--err);border-color:var(--err);font-size:11px" onclick="rcRecallOne('${id}')">↩ 회수</button></td>
+      <td style="padding:7px 10px;white-space:nowrap" onclick="event.stopPropagation()">
+        <button class="btn btn-sm btn-outline" style="color:var(--err);border-color:var(--err);font-size:11px;margin-right:4px" onclick="rcRecallOne('${id}')">↩ 회수</button>
+        <button class="btn btn-sm btn-outline" style="color:#ef4444;border-color:#ef4444;font-size:11px;background:rgba(239,68,68,.06)" onclick="rcDropOne('${id}','${esc(t.company_name||'')}')" title="드랍 처리">🚫 드랍</button>
+      </td>
     </tr>`;
   }
 
@@ -12752,6 +12747,45 @@ function _rcBuildPatch(reason){
 }
 
 // ── 단건 회수 ─────────────────────────────────────────────────────────
+// 회수대상에서 바로 드랍 처리
+function rcDropOne(id, companyName){
+  let ov=document.getElementById('ov-rc-drop');
+  if(!ov){ov=document.createElement('div');ov.id='ov-rc-drop';ov.className='ov-bg';document.body.appendChild(ov);}
+  ov.innerHTML=`<div class="ov-box" style="width:380px;max-width:96vw;padding:28px">
+    <div style="font-size:17px;font-weight:800;color:var(--navy);margin-bottom:4px">🚫 드랍 처리</div>
+    <div style="font-size:13px;color:var(--gray-500);margin-bottom:16px">${esc(companyName)}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px" id="rc-drop-presets">
+      ${['보험 기피','가격 불만족','서비스 내용 불만족','연락두절','팀장 판단','기타'].map(r=>
+        `<button onclick="this.closest('#rc-drop-presets').querySelectorAll('button').forEach(b=>{b.style.background='';b.style.color=''});this.style.background='#ef4444';this.style.color='#fff';document.getElementById('rc-drop-reason').value='${r}'"
+          style="padding:5px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;cursor:pointer">${r}</button>`
+      ).join('')}
+    </div>
+    <textarea id="rc-drop-reason" rows="2" placeholder="드랍 사유 입력 (필수)"
+      style="width:100%;padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:8px;font-size:13px;font-family:inherit;resize:none;box-sizing:border-box"></textarea>
+    <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">
+      <button onclick="closeOv('ov-rc-drop')" class="btn btn-outline">취소</button>
+      <button onclick="rcDropOneConfirm('${id}')" class="btn btn-danger">드랍 처리</button>
+    </div>
+  </div>`;
+  ov.classList.add('open');
+  setTimeout(()=>document.getElementById('rc-drop-reason')?.focus(),80);
+}
+
+async function rcDropOneConfirm(id){
+  const reason=document.getElementById('rc-drop-reason')?.value.trim();
+  if(!reason){showToast('드랍 사유를 입력하세요','error');return;}
+  const stdReasons=['보험 기피','가격 불만족','서비스 내용 불만족','연락두절','팀장 판단'];
+  const category=stdReasons.includes(reason)?reason:'기타';
+  const now=new Date().toISOString();
+  const dropData={status:'drop',current_stage:'드랍',drop_reason:reason,drop_category:category,dropped_at:now,updated_at:now};
+  await dbU('leads',id,dropData);
+  await sbPost('activities',{id:uuid(),lead_id:id,type:'status_change',content:`드랍: ${reason}`,stage:'',author:curUser?.name||'',created_at:now,date:now.slice(0,10)});
+  if(allLeads){const i=allLeads.findIndex(l=>l.id===id);if(i>=0)allLeads.splice(i,1);}
+  closeOv('ov-rc-drop');
+  showToast('드랍 처리 완료','success');
+  filterLeads(); await rcRender();
+}
+
 async function rcRecallOne(id){
   const t=_rcTargets.find(x=>x.id===id);
   if(!t){showToast('대상 없음','error');return;}
