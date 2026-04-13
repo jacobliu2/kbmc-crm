@@ -1037,14 +1037,17 @@ tbody tr.selected td{background:var(--blue-50)!important}
           <div style="font-size:11px;color:var(--gray-400);margin-top:2px">상담 → 계약</div>
         </div>
       </div>
-      <!-- 드랍 분포 + 팀장별 활동 -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
-        <div class="card">
+      <!-- 드랍 분포 + 팀장별 활동 (세로 2단 → 스크롤 없이 전체 표시) -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;align-items:start">
+        <div class="card" style="height:auto">
           <div class="section-title">🚫 드랍 사유 분포</div>
           <div id="drop-dist-chart" style="display:flex;flex-direction:column;gap:6px"></div>
         </div>
-        <div class="card">
-          <div class="section-title">📊 팀장별 이번주 활동</div>
+        <div class="card" style="height:auto">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <div class="section-title" style="margin:0">📊 팀장별 월별 활동</div>
+            <select id="team-act-month" onchange="renderTeamActChart()" style="font-size:11px;padding:3px 8px;border:1px solid var(--gray-200);border-radius:6px;background:#fff;color:var(--navy);font-weight:600"></select>
+          </div>
           <div id="team-act-chart" style="display:flex;flex-direction:column;gap:5px"></div>
         </div>
       </div>
@@ -2521,9 +2524,22 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
 
 <!-- 내보내기 모달 -->
 <div class="modal-overlay" id="modal-export">
-  <div class="modal" style="width:500px;max-height:90vh;overflow-y:auto">
-    <div class="mh"><div class="mt">📥 데이터 내보내기</div><button class="mc" onclick="closeM('modal-export')">✕</button></div>
-    <div style="display:flex;flex-direction:column;gap:14px">
+  <div class="modal" style="width:520px;max-height:90vh;overflow-y:auto">
+    <div class="mh"><div class="mt">📥 엑셀 내보내기</div><button class="mc" onclick="closeM('modal-export')">✕</button></div>
+    <!-- 내보내기 유형 선택 -->
+    <div style="display:flex;gap:8px;margin-bottom:16px;background:var(--gray-50);padding:4px;border-radius:8px">
+      <button id="exp-type-db" onclick="switchExpType('db')"
+        style="flex:1;padding:8px;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;background:var(--navy);color:#fff">
+        🗄️ DB 내보내기
+      </button>
+      <button id="exp-type-stat" onclick="switchExpType('stat')"
+        style="flex:1;padding:8px;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;background:transparent;color:var(--gray-500)">
+        📊 통계 내보내기
+      </button>
+    </div>
+
+    <!-- DB 내보내기 패널 -->
+    <div id="exp-panel-db" style="display:flex;flex-direction:column;gap:14px">
       <div><div style="font-size:12px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">기간</div>
         <div style="display:flex;gap:8px;align-items:center">
           <input type="date" id="exp-from" style="flex:1;padding:9px 11px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--gray-900)">
@@ -2546,12 +2562,45 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
       </div>
       <div id="exp-preview" style="padding:10px 14px;background:var(--gray-50);border-radius:var(--r-sm);font-size:13px;color:var(--gray-600);font-weight:600;text-align:center"></div>
     </div>
-    <div class="mf"><button class="btn btn-outline" onclick="closeM('modal-export')">취소</button><button class="btn btn-primary" onclick="doExport()">📥 엑셀 내보내기</button></div>
+
+    <!-- 통계 내보내기 패널 -->
+    <div id="exp-panel-stat" style="display:none;flex-direction:column;gap:12px">
+      <div style="font-size:12px;color:var(--gray-500);margin-bottom:4px">기준 연월을 선택하면 해당 월의 통계를 엑셀로 내보냅니다.</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <label style="font-size:12px;font-weight:700;color:var(--gray-600);white-space:nowrap">기준 연월</label>
+        <select id="exp-stat-month" style="flex:1;padding:9px 11px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--gray-900)"></select>
+      </div>
+      <div style="background:var(--gray-50);border-radius:8px;padding:12px 14px">
+        <div style="font-size:12px;font-weight:700;color:var(--gray-600);margin-bottom:8px">포함 항목</div>
+        <div style="display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--gray-500)">
+          <div>✅ 팀장별 월별 활동건수</div>
+          <div>✅ 지점별 실적 (전체·계약·상담·전환율)</div>
+          <div>✅ 드랍 사유 분포</div>
+          <div>✅ 진행단계별 현황</div>
+          <div>✅ 계약 전환율</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mf">
+      <button class="btn btn-outline" onclick="closeM('modal-export')">취소</button>
+      <button id="exp-confirm-btn" class="btn btn-primary" onclick="doExportByType()">📥 내보내기</button>
+    </div>
   </div>
 </div>
 
 
 <!-- ── 활동 화면 ── -->
+<!-- 공지함 화면 -->
+<div id="screen-notices" class="screen">
+  <div style="padding:24px 20px 12px;max-width:800px;margin:0 auto">
+    <div style="font-size:20px;font-weight:800;color:var(--navy);margin-bottom:4px">📢 공지함</div>
+    <div style="font-size:13px;color:var(--gray-400);margin-bottom:20px">전체 공지사항 목록입니다.</div>
+    <div id="notices-list-wrap" style="display:flex;flex-direction:column;gap:10px"></div>
+    <div id="notices-empty" style="display:none;text-align:center;padding:60px 0;color:var(--gray-300);font-size:14px">공지사항이 없습니다</div>
+  </div>
+</div>
+
 <div id="screen-activity" class="screen">
   <!-- 오늘 할 일 위젯 (팀장/지점장) -->
   <div id="act-todo-widget" style="display:none;margin-bottom:16px"></div>
@@ -4290,10 +4339,10 @@ function doLogout(){
 // ── 앱 시작 ──────────────────────────────────────────────
 const NAV_CFG = {
   admin:[{id:'admin',l:'📊 대시보드'},{id:'leads',l:'🗄️ DB관리'},{id:'activity',l:'📅 활동'},{id:'settings',l:'⚙️ 설정'}],
-  dbmanager:[{id:'leads',l:'🗄️ DB관리'},{id:'activity',l:'📅 활동'}],
-  branch:[{id:'branch',l:'🏢 지점관리'},{id:'leads',l:'🗄️ DB관리'},{id:'my-clients',l:'🏆 고객관리'},{id:'activity',l:'📅 활동'}],
-  team:[{id:'leads',l:'🗄️ DB관리'},{id:'my-clients',l:'🏆 고객관리'},{id:'activity',l:'📅 활동'}],
-  tm:[{id:'tm-panel',l:'📞 관리 DB'}],
+  dbmanager:[{id:'leads',l:'🗄️ DB관리'},{id:'activity',l:'📅 활동'},{id:'notices',l:'📢 공지함'}],
+  branch:[{id:'branch',l:'🏢 지점관리'},{id:'leads',l:'🗄️ DB관리'},{id:'my-clients',l:'🏆 고객관리'},{id:'activity',l:'📅 활동'},{id:'notices',l:'📢 공지함'}],
+  team:[{id:'leads',l:'🗄️ DB관리'},{id:'my-clients',l:'🏆 고객관리'},{id:'activity',l:'📅 활동'},{id:'notices',l:'📢 공지함'}],
+  tm:[{id:'tm-panel',l:'📞 관리 DB'},{id:'notices',l:'📢 공지함'}],
 };
 const RL={admin:'관리자',dbmanager:'DB관리자',branch:'지점장',team:'팀장',tm:'대전TM'};
 
@@ -4371,7 +4420,7 @@ function showScreen(id, btn){
   closePanel();
   ({
     'admin':loadAdmin,'leads':loadLeads,'my-leads':loadMyLeads,'my-clients':loadMyClients,
-    'settings':loadSettings,'tm-panel':loadTmPanel,'branch':loadBranchScreen,'activity':loadActivityScreen
+    'settings':loadSettings,'tm-panel':loadTmPanel,'branch':loadBranchScreen,'activity':loadActivityScreen,'notices':loadNoticesScreen
   }[id]||function(){})();
 }
 
@@ -4832,33 +4881,60 @@ function renderKpiDashboard(leads){
     }
   }
 
-  // 팀장별 이번주 활동
+  // 팀장별 월별 활동 - 드롭다운 초기화
+  (function(){
+    const sel=document.getElementById('team-act-month');
+    if(!sel) return;
+    const cur=new Date();
+    let opts='';
+    for(let i=0;i<12;i++){
+      const d=new Date(cur.getFullYear(),cur.getMonth()-i,1);
+      const ym=d.toISOString().slice(0,7);
+      const lbl=ym.replace('-','년 ')+'월';
+      opts+=`<option value="${ym}">${lbl}</option>`;
+    }
+    if(!sel.innerHTML) sel.innerHTML=opts;
+  })();
+  renderTeamActChart();
+}
+
+function renderTeamActChart(){
+  const sel=document.getElementById('team-act-month');
+  const ym=sel?.value||new Date().toISOString().slice(0,7);
+  const acts=allActivities||[];
+  const monthActs=acts.filter(a=>!['assign','status_change'].includes(a.type)&&(a.created_at||'').startsWith(ym));
   const allTeams=Object.values(TEAM_MAP).flat();
+  // 모든 팀장 표시 (활동 없어도 0건으로)
   const teamActCts=allTeams.map(t=>({
     name:t,
-    cnt:weekActs.filter(a=>a.author===t).length,
-  })).filter(x=>x.cnt>0).sort((a,b)=>b.cnt-a.cnt).slice(0,8);
+    branch:Object.entries(TEAM_MAP).find(([,v])=>v.includes(t))?.[0]||'',
+    cnt:monthActs.filter(a=>a.author===t).length,
+  })).sort((a,b)=>b.cnt-a.cnt||a.name.localeCompare(b.name));
   const maxTeamAct=Math.max(...teamActCts.map(x=>x.cnt),1);
   const teamEl=document.getElementById('team-act-chart');
-  if(teamEl){
-    if(!teamActCts.length){
-      teamEl.innerHTML='<div style="color:var(--gray-300);font-size:12px;text-align:center;padding:16px">이번주 활동 없음</div>';
-    } else {
-      const allInfo=typeof getLInfoAll==='function'?getLInfoAll():{};
-      teamEl.innerHTML=teamActCts.map(x=>{
-        const pct=Math.round(x.cnt/maxTeamAct*100);
-        const clr=allInfo[x.name]?.color||'var(--blue)';
-        return`<div style="display:flex;align-items:center;gap:8px">
-          <div style="font-size:11px;font-weight:600;color:var(--gray-700);min-width:60px;text-align:right">${x.name}</div>
-          <div style="flex:1;height:16px;background:var(--gray-100);border-radius:3px;overflow:hidden">
-            <div style="height:100%;width:${pct}%;background:${clr};border-radius:3px;transition:width .4s;display:flex;align-items:center;padding-left:6px">
-              <span style="font-size:10px;font-weight:700;color:#fff;white-space:nowrap">${x.cnt}건</span>
-            </div>
-          </div>
-        </div>`;
-      }).join('');
-    }
+  if(!teamEl) return;
+  if(!teamActCts.length){
+    teamEl.innerHTML='<div style="color:var(--gray-300);font-size:12px;text-align:center;padding:16px">팀장 없음</div>';
+    return;
   }
+  const allInfo=typeof getLInfoAll==='function'?getLInfoAll():{};
+  const branchColors={'신상국':'#3182f6','정명구':'#00c073','정혜윤':'#f59e0b','최종길':'#ef4444'};
+  teamEl.innerHTML=teamActCts.map(x=>{
+    const pct=x.cnt>0?Math.round(x.cnt/maxTeamAct*100):0;
+    const clr=allInfo[x.name]?.color||branchColors[x.branch]||'var(--blue)';
+    const barStyle=pct>0
+      ?`height:100%;width:${pct}%;background:${clr};border-radius:3px;transition:width .4s;display:flex;align-items:center;padding-left:6px`
+      :'height:100%;width:2px;background:var(--gray-200);border-radius:3px';
+    return`<div style="display:flex;align-items:center;gap:8px">
+      <div style="font-size:11px;font-weight:600;color:var(--gray-700);min-width:58px;text-align:right;white-space:nowrap">${esc(x.name)}</div>
+      <div style="flex:1;height:16px;background:var(--gray-100);border-radius:3px;overflow:hidden">
+        <div style="${barStyle}">
+          ${x.cnt>0?`<span style="font-size:10px;font-weight:700;color:#fff;white-space:nowrap">${x.cnt}건</span>`:''}
+        </div>
+      </div>
+      ${x.cnt===0?`<span style="font-size:10px;color:var(--gray-300);min-width:24px">0</span>`:`<span style="font-size:10px;color:var(--gray-500);min-width:24px;font-weight:600">${x.cnt}</span>`}
+    </div>`;
+  }).join('');
 }
 
 function openGoalM(type,name){
@@ -7817,7 +7893,45 @@ function openExport(){
   const now=new Date();
   (document.getElementById('exp-from')||{}).value=new Date(now.getFullYear(),now.getMonth(),1).toISOString().slice(0,10);
   (document.getElementById('exp-to')||{}).value=now.toISOString().slice(0,10);
-  updateExpPreview(); openM('modal-export');
+  // 통계 연월 드롭다운 초기화
+  const statSel=document.getElementById('exp-stat-month');
+  if(statSel&&!statSel.innerHTML){
+    let opts='';
+    for(let i=0;i<24;i++){
+      const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+      const ym=d.toISOString().slice(0,7);
+      opts+=`<option value="${ym}">${ym.replace('-','년 ')}월</option>`;
+    }
+    statSel.innerHTML=opts;
+  }
+  switchExpType('db');
+  updateExpPreview();
+  openM('modal-export');
+}
+
+let _expType='db';
+function switchExpType(type){
+  _expType=type;
+  const dbBtn=document.getElementById('exp-type-db');
+  const statBtn=document.getElementById('exp-type-stat');
+  const dbPanel=document.getElementById('exp-panel-db');
+  const statPanel=document.getElementById('exp-panel-stat');
+  if(type==='db'){
+    if(dbBtn){dbBtn.style.background='var(--navy)';dbBtn.style.color='#fff';}
+    if(statBtn){statBtn.style.background='transparent';statBtn.style.color='var(--gray-500)';}
+    if(dbPanel) dbPanel.style.display='flex';
+    if(statPanel) statPanel.style.display='none';
+  } else {
+    if(statBtn){statBtn.style.background='var(--navy)';statBtn.style.color='#fff';}
+    if(dbBtn){dbBtn.style.background='transparent';dbBtn.style.color='var(--gray-500)';}
+    if(dbPanel) dbPanel.style.display='none';
+    if(statPanel) statPanel.style.display='flex';
+  }
+}
+
+async function doExportByType(){
+  if(_expType==='stat') await exportStatExcel();
+  else await doExport();
 }
 function setExpMonth(){
   const now=new Date();
@@ -7837,6 +7951,99 @@ async function getExpData(){
   if(st)data=data.filter(l=>l.current_stage===st);
   return data;
 }
+// ── 통계 엑셀 내보내기 ──────────────────────────────────
+async function exportStatExcel(){
+  const ym=document.getElementById('exp-stat-month')?.value||new Date().toISOString().slice(0,7);
+  const [yr,mo]=ym.split('-').map(Number);
+  const monthLabel=yr+'년 '+mo+'월';
+  const all=allLeads||[];
+  const acts=allActivities||[];
+
+  // SheetJS 로드
+  if(!window.XLSX){
+    await new Promise((res,rej)=>{
+      const sc=document.createElement('script');
+      sc.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      sc.onload=res; sc.onerror=rej; document.head.appendChild(sc);
+    });
+  }
+  const WB=window.XLSX.utils.book_new();
+
+  // ── 시트1: 팀장별 월별 활동 ──
+  const monthActs=acts.filter(a=>!['assign','status_change'].includes(a.type)&&(a.created_at||'').startsWith(ym));
+  const allTeams=Object.values(TEAM_MAP).flat();
+  const sheet1Data=[['지점','팀장','활동건수']];
+  BRANCHES.forEach(br=>{
+    (TEAM_MAP[br]||[]).forEach(t=>{
+      sheet1Data.push([br,t,monthActs.filter(a=>a.author===t).length]);
+    });
+  });
+  sheet1Data.push([]);
+  sheet1Data.push(['합계','',monthActs.length]);
+  const ws1=window.XLSX.utils.aoa_to_sheet(sheet1Data);
+  window.XLSX.utils.book_append_sheet(WB,ws1,'팀장별 활동');
+
+  // ── 시트2: 지점별 실적 ──
+  const activeLeads=all.filter(l=>!['drop','deleted'].includes(l.status));
+  const sheet2Data=[['지점','전체DB','계약','상담중','관리','전환율(%)']];
+  BRANCHES.forEach(br=>{
+    const bl=activeLeads.filter(l=>l.branch_name===br);
+    const ct=bl.filter(l=>l.current_stage==='계약').length;
+    const cons=bl.filter(l=>['상담','제안'].includes(l.current_stage||'')).length;
+    const mgmt=bl.filter(l=>l.current_stage==='관리').length;
+    const conv=bl.length?Math.round(ct/bl.length*100):0;
+    sheet2Data.push([br,bl.length,ct,cons,mgmt,conv]);
+  });
+  const ws2=window.XLSX.utils.aoa_to_sheet(sheet2Data);
+  window.XLSX.utils.book_append_sheet(WB,ws2,'지점별 실적');
+
+  // ── 시트3: 드랍 사유 분포 ──
+  const dropReasons={};
+  all.filter(l=>l.status==='drop').forEach(l=>{
+    const r=l.drop_category||l.drop_reason||'미입력';
+    dropReasons[r]=(dropReasons[r]||0)+1;
+  });
+  const totalDrop=Object.values(dropReasons).reduce((a,b)=>a+b,0)||1;
+  const sheet3Data=[['드랍 사유','건수','비율(%)']];
+  Object.entries(dropReasons).sort((a,b)=>b[1]-a[1]).forEach(([r,cnt])=>{
+    sheet3Data.push([r,cnt,Math.round(cnt/totalDrop*100)]);
+  });
+  sheet3Data.push(['합계',totalDrop,100]);
+  const ws3=window.XLSX.utils.aoa_to_sheet(sheet3Data);
+  window.XLSX.utils.book_append_sheet(WB,ws3,'드랍 사유 분포');
+
+  // ── 시트4: 진행단계별 현황 ──
+  const stages=['배정','접촉','상담','제안','계약','관리','보류','드랍'];
+  const sheet4Data=[['진행단계','건수','비율(%)']];
+  stages.forEach(s=>{
+    const cnt=all.filter(l=>l.current_stage===s).length;
+    sheet4Data.push([s,cnt,all.length?Math.round(cnt/all.length*100):0]);
+  });
+  const ws4=window.XLSX.utils.aoa_to_sheet(sheet4Data);
+  window.XLSX.utils.book_append_sheet(WB,ws4,'진행단계 현황');
+
+  // ── 시트5: 계약 전환율 ──
+  const contracts=activeLeads.filter(l=>l.current_stage==='계약');
+  const proposals=activeLeads.filter(l=>['제안','계약','관리'].includes(l.current_stage||''));
+  const sheet5Data=[
+    ['항목','수치'],
+    ['전체 DB',activeLeads.length],
+    ['계약 건수',contracts.length],
+    ['제안 이상 진행',proposals.length],
+    ['전체 전환율(%)',activeLeads.length?Math.round(contracts.length/activeLeads.length*100):0],
+    ['제안→계약 전환율(%)',proposals.length?Math.round(contracts.length/proposals.length*100):0],
+    ['드랍 건수',all.filter(l=>l.status==='drop').length],
+    ['드랍률(%)',all.length?Math.round(all.filter(l=>l.status==='drop').length/all.length*100):0],
+  ];
+  const ws5=window.XLSX.utils.aoa_to_sheet(sheet5Data);
+  window.XLSX.utils.book_append_sheet(WB,ws5,'전환율');
+
+  const fname=`KBMC_통계_${ym}.xlsx`;
+  window.XLSX.writeFile(WB,fname);
+  closeM('modal-export');
+  showToast(`통계 내보내기 완료 (${monthLabel})`, 'success');
+}
+
 async function doExport(){
   const data=await getExpData();if(!data.length){showToast('내보낼 데이터 없음','error');return;}
 
@@ -13591,6 +13798,45 @@ const LEADER_INFO_KEY='kbmc_v2_leader_info';
 function getLInfoAll(){try{return JSON.parse(localStorage.getItem(LEADER_INFO_KEY)||'{}');}catch(e){return{};}}
 function saveLInfoAll(d){localStorage.setItem(LEADER_INFO_KEY,JSON.stringify(d));}
 function getLInfo(name){return getLInfoAll()[name]||{};}
+
+// 공지함 화면 로드
+async function loadNoticesScreen(){
+  const wrap=document.getElementById('notices-list-wrap');
+  const empty=document.getElementById('notices-empty');
+  if(!wrap) return;
+  wrap.innerHTML='<div style="text-align:center;padding:40px;color:var(--gray-300)">⏳ 로딩 중...</div>';
+  // Supabase에서 최신 공지 로드
+  await _sbLoadNotices();
+  const today=new Date().toISOString().slice(0,10);
+  const notices=getNoticesV2().filter(n=>{
+    if(!isCalVisibleTo(n,curUser)) return false;
+    const sd=n.start_date||'2000-01-01';
+    const ed=n.end_date||'2099-12-31';
+    return today>=sd; // 종료일 지난 것도 표시 (보관함)
+  }).sort((a,b)=>new Date(b.created_at||b.start_date||0)-new Date(a.created_at||a.start_date||0));
+  if(!notices.length){
+    wrap.innerHTML='';
+    if(empty) empty.style.display='';
+    return;
+  }
+  if(empty) empty.style.display='none';
+  wrap.innerHTML=notices.map(n=>{
+    const sd=fmtD(n.start_date); const ed=n.end_date?fmtD(n.end_date):'';
+    const isActive=today>=(n.start_date||'')&&today<=(n.end_date||'9999');
+    const statusBadge=isActive
+      ?'<span style="font-size:10px;padding:2px 8px;background:rgba(0,192,115,.12);color:#00a060;border-radius:10px;font-weight:700">진행중</span>'
+      :'<span style="font-size:10px;padding:2px 8px;background:var(--gray-100);color:var(--gray-400);border-radius:10px">종료</span>';
+    return`<div style="background:#fff;border:1px solid var(--gray-200);border-radius:10px;padding:16px 18px;${isActive?'border-left:3px solid var(--navy);':'opacity:.7'}">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        ${statusBadge}
+        <span style="font-size:11px;color:var(--gray-400)">${sd}${ed?' ~ '+ed:''}</span>
+        <span style="font-size:11px;color:var(--gray-400);margin-left:auto">by ${esc(n.author||'관리자')}</span>
+      </div>
+      <div style="font-size:15px;font-weight:700;color:var(--navy);margin-bottom:8px">${esc(n.title||'')}</div>
+      <div style="font-size:13px;color:var(--gray-700);line-height:1.8;white-space:pre-wrap">${esc(n.content||'')}</div>
+    </div>`;
+  }).join('');
+}
 
 async function loadActivityScreen(){
   // 오늘 할 일 위젯
