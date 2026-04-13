@@ -5355,11 +5355,12 @@ function colVal(l, key, acts){
       try{names=JSON.parse(l.team_names||'[]');}catch(e){}
       if(!names.length&&l.team_name) names=l.team_name.split(',').map(s=>s.trim()).filter(Boolean);
       if(!names.length) return'<td>-</td>';
-      // 지점장 판별: BRANCHES + TEAM_MAP keys 모두 사용
-      const branchLeaders=new Set([...(BRANCHES||[]),...Object.keys(TEAM_MAP||{})]);
-      // 이름 뱃지 렌더: 지점장 이름이면 보라색, 팀장이면 파란색
+      // 지점장 판별: TEAM_MAP의 팀장 Set에 없으면 지점장 (BRANCHES 로드 여부 무관)
+      const allTeamNames=new Set(Object.values(TEAM_MAP||{}).flat());
+      // 이름 뱃지 렌더: 팀장 목록에 없는 이름 = 지점장 → 보라색, 팀장 → 파란색
       const badges=names.map(n=>{
-        if(branchLeaders.has(n))
+        const isBranchLeader=!allTeamNames.has(n)||(BRANCHES||[]).includes(n)||(Object.keys(TEAM_MAP||{}).includes(n));
+        if(isBranchLeader)
           return`<span class="badge" style="font-size:10px;background:rgba(124,58,237,.1);color:#7c3aed;margin-right:2px">${esc(n)}</span>`;
         return`<span class="badge badge-blue" style="font-size:10px;margin-right:2px">${esc(n)}</span>`;
       }).join('');
