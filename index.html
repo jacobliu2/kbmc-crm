@@ -4886,25 +4886,29 @@ function renderKpiDashboard(leads){
     }
   }
 
-  // 팀장별 월별 활동 - 드롭다운 초기화 (매번 갱신)
+  // 팀장별 월별 활동 - 드롭다운 초기화 (매번 갱신, KST 기준)
   (function(){
     const sel=document.getElementById('team-act-month');
     if(!sel) return;
-    const cur=new Date();
-    // KST 기준 연월 (UTC+9 보정)
-    const _kst=new Date(cur.getTime()+9*3600*1000);
-    const thisYm=_kst.toISOString().slice(0,7);
-    const prevVal=sel.value; // 현재 선택값 보존
+    const now=new Date();
+    // KST 연/월 직접 계산
+    const kstNow=new Date(now.getTime()+9*3600*1000);
+    const kstYear=kstNow.getUTCFullYear();
+    const kstMonth=kstNow.getUTCMonth(); // 0-indexed
+    const pad=n=>String(n).padStart(2,'0');
+    const toYm=(y,m)=>y+'-'+pad(m+1);
+    const thisYm=toYm(kstYear,kstMonth);
+    const prevVal=sel.value;
     let opts='';
     for(let i=0;i<13;i++){
-      const d=new Date(cur.getFullYear(),cur.getMonth()-i,1);
-      const ym=d.toISOString().slice(0,7);
-      const isThis=ym===thisYm;
+      let m=kstMonth-i, y=kstYear;
+      while(m<0){m+=12;y--;}
+      const ym=toYm(y,m);
+      const isThis=i===0;
       const lbl=ym.replace('-','년 ')+'월'+(isThis?' (이번달)':'');
       opts+=`<option value="${ym}"${isThis?' selected':''}>${lbl}</option>`;
     }
     sel.innerHTML=opts;
-    // 이전 선택값이 있으면 복원 (페이지 재로드 시)
     if(prevVal&&prevVal!==thisYm) sel.value=prevVal;
   })();
   renderTeamActChart();
