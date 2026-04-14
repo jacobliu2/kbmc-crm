@@ -2413,16 +2413,21 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
         <!-- 드랍 사유 입력 (드랍 선택 시 표시) -->
         <div id="act-drop-reason-wrap" style="display:none;margin-top:10px;padding:14px;background:rgba(239,68,68,.04);border:1.5px solid rgba(239,68,68,.2);border-radius:var(--r-sm)">
           <label style="font-size:12px;font-weight:700;color:var(--err);margin-bottom:8px;display:block">드랍 사유 <span style="color:var(--err)">*필수</span></label>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px" id="act-drop-reason-presets">
-            <button type="button" onclick="setActDropReason('보험 기피')" style="padding:5px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;color:var(--gray-700)">보험 기피</button>
-            <button type="button" onclick="setActDropReason('가격 불만족')" style="padding:5px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;color:var(--gray-700)">가격 불만족</button>
-            <button type="button" onclick="setActDropReason('서비스 내용 불만족')" style="padding:5px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;color:var(--gray-700)">서비스 내용 불만족</button>
-            <button type="button" onclick="setActDropReason('연락두절')" style="padding:5px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;color:var(--gray-700)">연락두절</button>
-            <button type="button" onclick="setActDropReason('팀장 판단')" style="padding:5px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;color:var(--gray-700)">팀장 판단</button>
-            <button type="button" onclick="setActDropReason('기타')" style="padding:5px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;color:var(--gray-700)">기타</button>
+          <div style="font-size:11px;color:var(--gray-500);margin-bottom:6px">① 대범주 선택</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px" id="act-drop-reason-presets">
+            <button type="button" onclick="selectDropCategory(this,'act')" data-cat="보험 기피" style="padding:5px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;color:var(--gray-700)">보험 기피</button>
+            <button type="button" onclick="selectDropCategory(this,'act')" data-cat="가격 불만족" style="padding:5px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;color:var(--gray-700)">가격 불만족</button>
+            <button type="button" onclick="selectDropCategory(this,'act')" data-cat="서비스 내용 불만족" style="padding:5px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;color:var(--gray-700)">서비스 내용 불만족</button>
+            <button type="button" onclick="selectDropCategory(this,'act')" data-cat="연락두절" style="padding:5px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;color:var(--gray-700)">연락두절</button>
+            <button type="button" onclick="selectDropCategory(this,'act')" data-cat="팀장 판단" style="padding:5px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;color:var(--gray-700)">팀장 판단</button>
+            <button type="button" onclick="selectDropCategory(this,'act')" data-cat="기타" style="padding:5px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;color:var(--gray-700)">기타</button>
           </div>
-          <textarea id="act-drop-reason" rows="2" placeholder="드랍 사유를 입력하세요 (직접 작성 또는 위 선택)"
-            style="width:100%;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;resize:none;box-sizing:border-box"></textarea>
+          <div id="act-drop-detail-wrap" style="display:none">
+            <div style="font-size:11px;color:var(--gray-500);margin-bottom:4px">② 상세 사유 입력 <span style="color:var(--gray-400);font-weight:400">(선택)</span></div>
+            <textarea id="act-drop-reason" rows="2" placeholder="상세 사유를 입력하세요 (선택사항)"
+              style="width:100%;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;resize:none;box-sizing:border-box"></textarea>
+          </div>
+          <input type="hidden" id="act-drop-category" value="">
         </div>
       </div>
       <div style="margin-bottom:12px">
@@ -4881,19 +4886,24 @@ function renderKpiDashboard(leads){
     }
   }
 
-  // 팀장별 월별 활동 - 드롭다운 초기화
+  // 팀장별 월별 활동 - 드롭다운 초기화 (매번 갱신)
   (function(){
     const sel=document.getElementById('team-act-month');
     if(!sel) return;
     const cur=new Date();
+    const thisYm=cur.toISOString().slice(0,7);
+    const prevVal=sel.value; // 현재 선택값 보존
     let opts='';
-    for(let i=0;i<12;i++){
+    for(let i=0;i<13;i++){
       const d=new Date(cur.getFullYear(),cur.getMonth()-i,1);
       const ym=d.toISOString().slice(0,7);
-      const lbl=ym.replace('-','년 ')+'월';
-      opts+=`<option value="${ym}">${lbl}</option>`;
+      const isThis=ym===thisYm;
+      const lbl=ym.replace('-','년 ')+'월'+(isThis?' (이번달)':'');
+      opts+=`<option value="${ym}"${isThis?' selected':''}>${lbl}</option>`;
     }
-    if(!sel.innerHTML) sel.innerHTML=opts;
+    sel.innerHTML=opts;
+    // 이전 선택값이 있으면 복원 (페이지 재로드 시)
+    if(prevVal&&prevVal!==thisYm) sel.value=prevVal;
   })();
   renderTeamActChart();
 }
@@ -5718,14 +5728,19 @@ function openDropModal(ids){
     <div style="font-size:13px;color:var(--gray-400);margin-bottom:16px">${ids.length}건 선택됨</div>
     <div class="fg" style="margin-bottom:10px">
       <label style="font-size:12px;font-weight:700;color:var(--gray-600);margin-bottom:6px;display:block">드랍 사유 <span style="color:var(--err)">*</span></label>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px" id="drop-reason-presets">
+      <div style="font-size:11px;color:var(--gray-500);margin-bottom:6px">① 대범주 선택 <span style="color:var(--err)">*필수</span></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px" id="drop-reason-presets">
         ${['보험 기피','가격 불만족','서비스 내용 불만족','연락두절','팀장 판단','기타'].map(r=>
-          `<button onclick="setDropReason('${r}')" style="padding:5px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;transition:all .12s;color:var(--gray-700)"
-            onmouseover="this.style.borderColor='var(--navy)';this.style.color='var(--navy)'" onmouseout="if(!this.classList.contains('selected')){this.style.borderColor='var(--gray-200)';this.style.color='var(--gray-700)'}">${r}</button>`
+          `<button onclick="selectDropCategory(this,'admin')" data-cat="${r}"
+            style="padding:5px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;color:var(--gray-700)">${r}</button>`
         ).join('')}
       </div>
-      <textarea id="drop-reason-input" rows="3" placeholder="드랍 사유를 입력하세요 (직접 작성 또는 위 선택)"
-        style="width:100%;padding:10px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--gray-900);resize:vertical"></textarea>
+      <div id="drop-detail-wrap" style="display:none">
+        <div style="font-size:11px;color:var(--gray-500);margin-bottom:4px">② 상세 사유 입력 <span style="color:var(--gray-400);font-weight:400">(선택)</span></div>
+        <textarea id="drop-reason-input" rows="2" placeholder="상세 사유를 입력하세요 (선택사항)"
+          style="width:100%;padding:10px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--gray-900);resize:vertical"></textarea>
+      </div>
+      <input type="hidden" id="drop-category-input" value="">
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="btn btn-outline" onclick="closeOv('ov-drop-reason')">취소</button>
@@ -5750,62 +5765,48 @@ function setActHoldReason(reason){
   });
 }
 
-function setActDropReason(reason){
-  const inp=document.getElementById('act-drop-reason');
-  if(reason==='기타'){
-    if(inp){inp.value='';inp.placeholder='기타 사유를 직접 입력하세요';inp.focus();}
-  } else {
-    if(inp) inp.value=reason;
-  }
-  document.querySelectorAll('#act-drop-reason-presets button').forEach(b=>{
-    const on=b.textContent.trim()===reason;
-    b.style.background=on?'var(--err)':'var(--gray-50)';
+// ── 드랍 범주 선택 공통 함수 ───────────────────────────────
+function selectDropCategory(btn, scope){
+  const cat=btn.getAttribute('data-cat')||btn.textContent.trim();
+  const presetMap={admin:'drop-reason-presets',act:'act-drop-reason-presets',br:'br-drop-reason-presets',tm:'tm-drop-reason-presets',rc:'rc-drop-presets'};
+  const presetId=presetMap[scope]||'drop-reason-presets';
+  document.querySelectorAll('#'+presetId+' button').forEach(b=>{
+    const on=b===btn;
+    b.style.background=on?'#ef4444':'var(--gray-50)';
     b.style.color=on?'#fff':'var(--gray-700)';
-    b.style.borderColor=on?'var(--err)':'var(--gray-200)';
+    b.style.borderColor=on?'#ef4444':'var(--gray-200)';
   });
-}
-
-function setDropReason(reason){
-  const inp=document.getElementById('drop-reason-input');
-  if(inp){
-    if(reason==='기타'){
-      inp.value=''; inp.placeholder='기타 사유를 직접 입력하세요';
-      inp.style.borderColor='var(--navy)'; inp.focus();
-    } else {
-      inp.value=reason;
-    }
+  if(scope==='admin'){
+    const hid=document.getElementById('drop-category-input'); if(hid) hid.value=cat;
+    const wrap=document.getElementById('drop-detail-wrap');
+    if(wrap){wrap.style.display=''; setTimeout(()=>document.getElementById('drop-reason-input')?.focus(),50);}
+  } else if(scope==='act'){
+    const hid=document.getElementById('act-drop-category'); if(hid) hid.value=cat;
+    const wrap=document.getElementById('act-drop-detail-wrap');
+    if(wrap){wrap.style.display=''; setTimeout(()=>document.getElementById('act-drop-reason')?.focus(),50);}
+  } else if(scope==='br'){
+    const hid=document.getElementById('br-drop-category'); if(hid) hid.value=cat;
+    const wrap=document.getElementById('br-drop-detail-wrap');
+    if(wrap){wrap.style.display=''; setTimeout(()=>document.getElementById('br-drop-reason-input')?.focus(),50);}
+  } else if(scope==='tm'){
+    const hid=document.getElementById('tm-drop-category-val'); if(hid) hid.value=cat;
+    const wrap=document.getElementById('tm-drop-detail-wrap');
+    if(wrap){wrap.style.display=''; setTimeout(()=>document.getElementById('tm-drop-reason-text')?.focus(),50);}
+  } else if(scope==='rc'){
+    const hid=document.getElementById('rc-drop-category-val'); if(hid) hid.value=cat;
+    const wrap=document.getElementById('rc-drop-detail-wrap');
+    if(wrap){wrap.style.display=''; setTimeout(()=>document.getElementById('rc-drop-reason')?.focus(),50);}
   }
-  document.querySelectorAll('#drop-reason-presets button').forEach(b=>{
-    const on=b.textContent===reason;
-    b.classList.toggle('selected',on);
-    b.style.background=on?'var(--navy)':'var(--gray-50)';
-    b.style.color=on?'#fff':'var(--gray-700)';
-    b.style.borderColor=on?'var(--navy)':'var(--gray-200)';
-  });
 }
-// 지점장 드랍 모달 전용 사유 선택
-function setBrDropReason(reason){
-  const inp=document.getElementById('br-drop-reason-input');
-  if(inp){
-    if(reason==='기타'){
-      inp.value=''; inp.placeholder='기타 사유를 직접 입력하세요';
-      inp.style.borderColor='var(--navy)'; inp.focus();
-    } else {
-      inp.value=reason;
-    }
-  }
-  document.querySelectorAll('#br-drop-reason-presets button').forEach(b=>{
-    const on=b.textContent===reason;
-    b.style.background=on?'var(--navy)':'var(--gray-50)';
-    b.style.color=on?'#fff':'var(--gray-700)';
-    b.style.borderColor=on?'var(--navy)':'var(--gray-200)';
-  });
-}
+// 하위호환
+function setActDropReason(r){const b=document.querySelector(`#act-drop-reason-presets [data-cat="${r}"]`);if(b)selectDropCategory(b,'act');}
+function setDropReason(r){const b=document.querySelector(`#drop-reason-presets [data-cat="${r}"]`);if(b)selectDropCategory(b,'admin');}
+function setBrDropReason(r){const b=document.querySelector(`#br-drop-reason-presets [data-cat="${r}"]`);if(b)selectDropCategory(b,'br');}
 async function confirmDropWithReason(ids){
-  const reason=document.getElementById('drop-reason-input')?.value.trim();
-  if(!reason){showToast('드랍 사유를 입력하세요.','error');return;}
-  const stdReasons=['보험 기피','가격 불만족','서비스 내용 불만족','연락두절','팀장 판단'];
-  const category=stdReasons.includes(reason)?reason:'기타';
+  const category=document.getElementById('drop-category-input')?.value.trim();
+  if(!category){showToast('대범주를 선택하세요.','error');return;}
+  const detail=document.getElementById('drop-reason-input')?.value.trim();
+  const reason=detail?`${category} - ${detail}`:category;
   const now=new Date().toISOString();
   const dropData={status:'drop',current_stage:'드랍',drop_reason:reason,drop_category:category,dropped_at:now,updated_at:now};
   if(!testMode){
@@ -7226,7 +7227,9 @@ async function saveActivity(){
   if(!content){showToast('상담 내용을 입력하세요.','error');return;}
   // 드랍 선택 시 사유 필수
   if(window._curActStage==='드랍'||curActStatus==='drop'){
-    const dropReason=document.getElementById('act-drop-reason')?.value.trim();
+    const dropCategory=document.getElementById('act-drop-category')?.value.trim()||'';
+  const dropDetail=document.getElementById('act-drop-reason')?.value.trim();
+  const dropReason=dropDetail?(dropCategory?`${dropCategory} - ${dropDetail}`:dropDetail):(dropCategory||'');
     if(!dropReason){showToast('드랍 사유를 입력하세요.','error');document.getElementById('act-drop-reason')?.focus();return;}
   }
   // 보류 선택 시 사유 필수
@@ -7247,8 +7250,16 @@ async function saveActivity(){
     if(result===false){ return; }
     // 드랍/보류 사유 저장
     if(window._curActStage==='드랍'||curActStatus==='drop'){
-      const dr=document.getElementById('act-drop-reason')?.value.trim();
-      if(dr) await dbU('leads',lid,{drop_reason:dr});
+      const _dCat=document.getElementById('act-drop-category')?.value.trim()||'';
+      const _dDet=document.getElementById('act-drop-reason')?.value.trim()||'';
+      const _dReason=_dDet?(_dCat?`${_dCat} - ${_dDet}`:_dDet):_dCat;
+      if(_dReason) await dbU('leads',lid,{
+        drop_reason:_dReason,
+        drop_category:_dCat||'기타',
+        status:'drop',
+        current_stage:'드랍',
+        dropped_at:new Date().toISOString()
+      });
     }
     if(window._curActStage==='보류'){
       const hr=document.getElementById('act-hold-reason')?.value.trim();
@@ -11154,14 +11165,19 @@ async function openTmDrop(lid){
   ov.innerHTML=`<div class="ov-box" style="width:380px;max-width:96vw;padding:28px">
     <div style="font-size:17px;font-weight:800;color:var(--navy);margin-bottom:4px">🚫 드랍 처리</div>
     <div style="font-size:13px;color:var(--gray-500);margin-bottom:16px">${esc(lead.company_name)}</div>
-    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+    <div style="font-size:11px;color:var(--gray-500);margin-bottom:6px">① 대범주 선택 <span style="color:var(--err)">*필수</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px" id="tm-drop-reason-presets">
       ${['보험 기피','가격 불만족','서비스 내용 불만족','연락두절','TM 판단','기타'].map(r=>
-        `<button onclick="this.parentNode.querySelectorAll('button').forEach(b=>{b.style.background='';b.style.color=''});this.style.background='#ef4444';this.style.color='#fff';document.getElementById('tm-drop-reason-text').value='${r}'"
-          style="padding:5px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;cursor:pointer">${r}</button>`
+        `<button onclick="selectDropCategory(this,'tm')" data-cat="${r}"
+          style="padding:5px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;cursor:pointer;color:var(--gray-700)">${r}</button>`
       ).join('')}
     </div>
-    <textarea id="tm-drop-reason-text" rows="2" placeholder="드랍 사유 입력 (필수)"
-      style="width:100%;padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:8px;font-size:13px;font-family:inherit;resize:none;box-sizing:border-box"></textarea>
+    <div id="tm-drop-detail-wrap" style="display:none">
+      <div style="font-size:11px;color:var(--gray-500);margin-bottom:4px">② 상세 사유 입력 <span style="color:var(--gray-400);font-weight:400">(선택)</span></div>
+      <textarea id="tm-drop-reason-text" rows="2" placeholder="상세 사유를 입력하세요 (선택사항)"
+        style="width:100%;padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:8px;font-size:13px;font-family:inherit;resize:none;box-sizing:border-box"></textarea>
+    </div>
+    <input type="hidden" id="tm-drop-category-val" value="">
     <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">
       <button onclick="closeOv('ov-tm-drop-modal')" class="btn btn-outline">취소</button>
       <button onclick="confirmTmDrop('${lid}')" class="btn btn-danger">드랍 처리</button>
@@ -11171,10 +11187,12 @@ async function openTmDrop(lid){
 }
 
 async function confirmTmDrop(lid){
-  const reason=document.getElementById('tm-drop-reason-text')?.value.trim();
-  if(!reason){showToast('드랍 사유를 입력하세요','error');return;}
+  const cat=document.getElementById('tm-drop-category-val')?.value.trim();
+  if(!cat){showToast('드랍 대범주를 선택하세요','error');return;}
+  const detail=document.getElementById('tm-drop-reason-text')?.value.trim();
+  const reason=detail?`${cat} - ${detail}`:cat;
   const now=new Date().toISOString();
-  await dbU('leads',lid,{status:'drop',drop_reason:reason,drop_category:'TM드랍',dropped_at:now,current_stage:'드랍'});
+  await dbU('leads',lid,{status:'drop',drop_reason:reason,drop_category:cat,dropped_at:now,current_stage:'드랍'});
   await logActivity(lid,'status_change','TM 드랍: '+reason,'drop','드랍');
   if(allLeads){const i=allLeads.findIndex(x=>x.id===lid);if(i>=0)allLeads.splice(i,1);}
   if(tmLeads){const i=tmLeads.findIndex(x=>x.id===lid);if(i>=0)tmLeads.splice(i,1);}
@@ -12389,13 +12407,18 @@ function confirmBrDrop(){
     <div style="font-size:13px;color:var(--gray-400);margin-bottom:16px">${ids.length}건 선택됨</div>
     <div class="fg" style="margin-bottom:10px">
       <label style="font-size:12px;font-weight:700;color:var(--gray-600);margin-bottom:6px;display:block">드랍 사유 <span style="color:var(--err)">*</span></label>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px" id="br-drop-reason-presets">
+      <div style="font-size:11px;color:var(--gray-500);margin-bottom:6px">① 대범주 선택 <span style="color:var(--err)">*필수</span></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px" id="br-drop-reason-presets">
         ${['보험 기피','가격 불만족','서비스 내용 불만족','연락두절','팀장 판단','기타'].map(r=>
-          `<button onclick="setBrDropReason('${r}')" style="padding:5px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;color:var(--gray-700)">${r}</button>`
+          `<button onclick="selectDropCategory(this,'br')" data-cat="${r}" style="padding:5px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;color:var(--gray-700)">${r}</button>`
         ).join('')}
       </div>
-      <textarea id="br-drop-reason-input" rows="3" placeholder="드랍 사유를 입력하세요"
-        style="width:100%;padding:10px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--gray-900);resize:vertical"></textarea>
+      <div id="br-drop-detail-wrap" style="display:none">
+        <div style="font-size:11px;color:var(--gray-500);margin-bottom:4px">② 상세 사유 입력 <span style="color:var(--gray-400);font-weight:400">(선택)</span></div>
+        <textarea id="br-drop-reason-input" rows="2" placeholder="상세 사유를 입력하세요 (선택사항)"
+          style="width:100%;padding:10px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--gray-900);resize:vertical"></textarea>
+      </div>
+      <input type="hidden" id="br-drop-category" value="">
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="btn btn-outline" onclick="closeOv('ov-br-drop-reason')">취소</button>
@@ -12406,11 +12429,14 @@ function confirmBrDrop(){
   setTimeout(()=>document.getElementById('br-drop-reason-input')?.focus(),80);
 }
 async function confirmBrDropWithReason(ids){
-  const reason=document.getElementById('br-drop-reason-input')?.value.trim();
-  if(!reason){showToast('드랍 사유를 입력하세요.','error');return;}
+  const cat=document.getElementById('br-drop-category')?.value.trim();
+  if(!cat){showToast('드랍 대범주를 선택하세요.','error');return;}
+  const detail=document.getElementById('br-drop-reason-input')?.value.trim();
+  const reason=detail?`${cat} - ${detail}`:cat;
+  const now=new Date().toISOString();
   for(const id of ids){
-    await dbU('leads',id,{drop_reason:reason});
-    await changeStatus(id,'drop','드랍',reason);
+    await dbU('leads',id,{drop_reason:reason,drop_category:cat,status:'drop',current_stage:'드랍',dropped_at:now});
+    await logActivity(id,'status_change',`드랍: ${reason}`,'drop','드랍');
   }
   closeOv('ov-br-drop-reason'); clearBrSel();
   showToast(ids.length+'건 드랍','success'); loadBranchScreen();
@@ -12999,14 +13025,19 @@ function rcDropOne(id, companyName){
   ov.innerHTML=`<div class="ov-box" style="width:380px;max-width:96vw;padding:28px">
     <div style="font-size:17px;font-weight:800;color:var(--navy);margin-bottom:4px">🚫 드랍 처리</div>
     <div style="font-size:13px;color:var(--gray-500);margin-bottom:16px">${esc(companyName)}</div>
-    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px" id="rc-drop-presets">
+    <div style="font-size:11px;color:var(--gray-500);margin-bottom:6px">① 대범주 선택 <span style="color:var(--err)">*필수</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px" id="rc-drop-presets">
       ${['보험 기피','가격 불만족','서비스 내용 불만족','연락두절','팀장 판단','기타'].map(r=>
-        `<button onclick="this.closest('#rc-drop-presets').querySelectorAll('button').forEach(b=>{b.style.background='';b.style.color=''});this.style.background='#ef4444';this.style.color='#fff';document.getElementById('rc-drop-reason').value='${r}'"
-          style="padding:5px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;cursor:pointer">${r}</button>`
+        `<button onclick="selectDropCategory(this,'rc')" data-cat="${r}"
+          style="padding:5px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;cursor:pointer;color:var(--gray-700)">${r}</button>`
       ).join('')}
     </div>
-    <textarea id="rc-drop-reason" rows="2" placeholder="드랍 사유 입력 (필수)"
-      style="width:100%;padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:8px;font-size:13px;font-family:inherit;resize:none;box-sizing:border-box"></textarea>
+    <div id="rc-drop-detail-wrap" style="display:none">
+      <div style="font-size:11px;color:var(--gray-500);margin-bottom:4px">② 상세 사유 입력 <span style="color:var(--gray-400);font-weight:400">(선택)</span></div>
+      <textarea id="rc-drop-reason" rows="2" placeholder="상세 사유를 입력하세요 (선택사항)"
+        style="width:100%;padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:8px;font-size:13px;font-family:inherit;resize:none;box-sizing:border-box"></textarea>
+    </div>
+    <input type="hidden" id="rc-drop-category-val" value="">
     <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">
       <button onclick="closeOv('ov-rc-drop')" class="btn btn-outline">취소</button>
       <button onclick="rcDropOneConfirm('${id}')" class="btn btn-danger">드랍 처리</button>
@@ -13017,10 +13048,10 @@ function rcDropOne(id, companyName){
 }
 
 async function rcDropOneConfirm(id){
-  const reason=document.getElementById('rc-drop-reason')?.value.trim();
-  if(!reason){showToast('드랍 사유를 입력하세요','error');return;}
-  const stdReasons=['보험 기피','가격 불만족','서비스 내용 불만족','연락두절','팀장 판단'];
-  const category=stdReasons.includes(reason)?reason:'기타';
+  const category=document.getElementById('rc-drop-category-val')?.value.trim();
+  if(!category){showToast('드랍 대범주를 선택하세요','error');return;}
+  const detail=document.getElementById('rc-drop-reason')?.value.trim();
+  const reason=detail?`${category} - ${detail}`:category;
   const now=new Date().toISOString();
   const dropData={status:'drop',current_stage:'드랍',drop_reason:reason,drop_category:category,dropped_at:now,updated_at:now};
   await dbU('leads',id,dropData);
