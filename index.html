@@ -4414,10 +4414,10 @@ function showScreen(id, btn){
   // 역할별 접근 가능 화면 화이트리스트
   const ALLOWED = {
     admin:     ['admin','leads','activity','settings'],
-    dbmanager: ['leads','activity'],
-    branch:    ['branch','leads','my-clients','activity'],
-    team:      ['leads','my-leads','my-clients','activity'],
-    tm:        ['tm-panel'],
+    dbmanager: ['leads','activity','notices'],
+    branch:    ['branch','leads','my-clients','activity','notices'],
+    team:      ['leads','my-leads','my-clients','activity','notices'],
+    tm:        ['tm-panel','notices'],
   };
   const role = curUser?.role;
   const allowed = ALLOWED[role] || [];
@@ -12982,9 +12982,14 @@ function rcSendNotice(){
   if(!_rcTargets||!_rcTargets.length){
     showToast('회수대상이 없습니다','error'); return;
   }
+  // 체크박스 선택된 건만 대상 (없으면 전체)
+  const targetLeads = _rcSelected&&_rcSelected.size>0
+    ? _rcTargets.filter(t=>_rcSelected.has(t.id))
+    : _rcTargets;
+  if(!targetLeads.length){showToast('선택된 DB가 없습니다','error');return;}
   // 팀장별로 담당 건수 집계
   const teamMap = new Map(); // teamName => {count, leads:[]}
-  for(const t of _rcTargets){
+  for(const t of targetLeads){
     const tn = t.team_name||'미배정';
     if(!teamMap.has(tn)) teamMap.set(tn,{count:0,leads:[]});
     const e = teamMap.get(tn);
