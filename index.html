@@ -4917,11 +4917,22 @@ function renderTeamActChart(){
     teamEl.innerHTML='<div style="color:var(--gray-300);font-size:12px;text-align:center;padding:16px">팀장 없음</div>';
     return;
   }
-  const allInfo=typeof getLInfoAll==='function'?getLInfoAll():{};
-  const branchColors={'신상국':'#3182f6','정명구':'#00c073','정혜윤':'#f59e0b','최종길':'#ef4444'};
-  teamEl.innerHTML=teamActCts.map(x=>{
+  // 순위별 파랑 그라데이션: 1위=짙은파랑(#0f2d6e), 꼴찌=옅은파랑(#bfdbfe)
+  // 활동 있는 팀장 수 기준으로 색상 보간
+  const activeCount=teamActCts.filter(x=>x.cnt>0).length||1;
+  let rankIdx=0; // 활동 있는 팀장만 색상 부여
+  teamEl.innerHTML=teamActCts.map((x,i)=>{
     const pct=x.cnt>0?Math.round(x.cnt/maxTeamAct*100):0;
-    const clr=allInfo[x.name]?.color||branchColors[x.branch]||'var(--blue)';
+    let clr='var(--gray-200)';
+    if(x.cnt>0){
+      // 0(1위)→ 짙은파랑, activeCount-1(꼴찌)→ 옅은파랑
+      const t=activeCount===1?0:rankIdx/(activeCount-1); // 0=짙음, 1=옅음
+      const r=Math.round(15+(191-15)*t);   // 15→191
+      const g=Math.round(45+(219-45)*t);   // 45→219
+      const b=Math.round(110+(254-110)*t); // 110→254
+      clr=`rgb(${r},${g},${b})`;
+      rankIdx++;
+    }
     const barStyle=pct>0
       ?`height:100%;width:${pct}%;background:${clr};border-radius:3px;transition:width .4s;display:flex;align-items:center;padding-left:6px`
       :'height:100%;width:2px;background:var(--gray-200);border-radius:3px';
