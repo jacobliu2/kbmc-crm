@@ -4914,17 +4914,34 @@ function renderKpiDashboard(leads){
   renderTeamActChart();
 }
 
+// 팀장별 월별 활동 캐시 (월별 미리 계산)
+let _teamActCache=null, _teamActCacheTime=0;
+function _buildTeamActCache(){
+  const acts=allActivities||[];
+  const cache={};
+  const SKIP=new Set(['assign','status_change']);
+  for(const a of acts){
+    if(SKIP.has(a.type)) continue;
+    const ym=(a.created_at||'').slice(0,7);
+    if(!ym) continue;
+    if(!cache[ym]) cache[ym]={};
+    cache[ym][a.author]=(cache[ym][a.author]||0)+1;
+  }
+  _teamActCache=cache;
+  _teamActCacheTime=allActivities?.length||0;
+}
+
 function renderTeamActChart(){
   const sel=document.getElementById('team-act-month');
   const ym=sel?.value||new Date().toISOString().slice(0,7);
-  const acts=allActivities||[];
-  const monthActs=acts.filter(a=>!['assign','status_change'].includes(a.type)&&(a.created_at||'').startsWith(ym));
+  // allActivities 크기 변화 시 캐시 재빌드
+  if(!_teamActCache||_teamActCacheTime!==(allActivities?.length||0)) _buildTeamActCache();
+  const ymData=_teamActCache[ym]||{};
   const allTeams=Object.values(TEAM_MAP).flat();
-  // 모든 팀장 표시 (활동 없어도 0건으로)
   const teamActCts=allTeams.map(t=>({
     name:t,
     branch:Object.entries(TEAM_MAP).find(([,v])=>v.includes(t))?.[0]||'',
-    cnt:monthActs.filter(a=>a.author===t).length,
+    cnt:ymData[t]||0,
   })).sort((a,b)=>b.cnt-a.cnt||a.name.localeCompare(b.name));
   const maxTeamAct=Math.max(...teamActCts.map(x=>x.cnt),1);
   const teamEl=document.getElementById('team-act-chart');
@@ -10324,6 +10341,7 @@ async function loadTmPanel(){
   // allActivities 로드 (TM 히스토리 표시용) — 미로드 시 전체 조회
   if(!testMode && (!allActivities || allActivities.length===0)){
     allActivities = await _loadAllActivities().catch(()=>[]);
+    _teamActCache=null; // 캐시 무효화
   }
   const all=await dbQ('leads');
   const today=new Date().toISOString().slice(0,10);
