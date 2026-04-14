@@ -5083,7 +5083,7 @@ async function loadLeads(){
 
   if(curUser.role === 'admin' || curUser.role === 'dbmanager'){
     // 관리자/DB관리자: 전체 지점 선택 가능
-    if(branchEl) branchEl.innerHTML='<option value="">전체 지점</option>'+BRANCHES.map(b=>`<option>${b}</option>`).join('');
+    if(branchEl) branchEl.innerHTML='<option value="">전체 지점</option>'+BRANCHES.map(b=>`<option>${b}</option>`).join('')+'<option value="대전">대전TM</option>';
     if(branchEl) branchEl.style.display='';
     // 팀장 필터: TEAM_MAP 기준 (삭제 계정 제외), 지점 선택에 따라 연동
     const _branchSel=document.getElementById('leads-branch')?.value||'';
@@ -5168,7 +5168,15 @@ function filterLeads(){
     // YJ초도상담완료(yj_done=true) 건 — 재배정 탭에서 별도 표시 (전체DB 숨김)
     if((l.yj_done===true||l.yj_done==='true')&&!(l.tm_transferred===true||l.tm_transferred==='true')&&!isTmCompleted(l)) return false;
     if(s&&!(l.company_name||'').toLowerCase().includes(s)&&!(l.contact_name||'').toLowerCase().includes(s)&&!(l.phone||'').includes(s))return false;
-    if(br&&l.branch_name!==br)return false;
+    if(br){
+      if(br==='대전'){
+        // 대전 필터: tm_transferred=true 또는 branch_name='대전' 인 건
+        const isDJ=(l.tm_transferred===true||l.tm_transferred==='true')||l.branch_name==='대전'||l.branch_name==='대전TM';
+        if(!isDJ) return false;
+      } else {
+        if(l.branch_name!==br) return false;
+      }
+    }
     if(tm){
       const _tn=l.team_name||'';
       const _tns=(()=>{try{return JSON.parse(l.team_names||'[]');}catch(e){return[];}})();
@@ -5827,7 +5835,7 @@ async function openPanel(lead){
       }
       // sbGet 결과 + allActivities 캐시 합산 (sbGet이 빈배열이어도 캐시에 있으면 표시)
       const cached = (allActivities||[]).filter(a=>a.lead_id===lead.id && a.type!=='assign');
-      const sbRows = rows.filter(a=>a.type!=='assign');
+      const sbRows = (rows||[]).filter(a=>a.type!=='assign'); // 대전TM 활동 포함 전체 조회
       // 중복 제거 후 합산
       const merged = [...sbRows];
       cached.forEach(a=>{ if(!merged.find(r=>r.id===a.id)) merged.push(a); });
@@ -6384,6 +6392,24 @@ function switchActModalTab(tab, btn){
   if(footer){
     const saveBtn=footer.querySelector('[onclick="saveActivity()"]');
     if(saveBtn) saveBtn.style.display = tab==='form'?'':'none';
+  }
+  // 히스토리 탭 전환 시 항상 최신 데이터로 재렌더
+  if(tab==='history'){
+    const lid=document.getElementById('act-lead-id')?.value;
+    if(lid){
+      _renderActModalHistory(lid);
+      // Supabase 최신 조회 후 재렌더
+      if(!testMode){
+        sbGet(`activities?select=*&lead_id=eq.${lid}&order=created_at.desc&limit=200`).then(rows=>{
+          if(rows&&rows.length>0){
+            if(Array.isArray(allActivities)){
+              rows.forEach(r=>{ if(!allActivities.find(a=>a.id===r.id)) allActivities.unshift(r); });
+            }
+            _renderActModalHistory(lid);
+          }
+        }).catch(()=>{});
+      }
+    }
   }
 }
 
@@ -15195,7 +15221,13 @@ function _toTs(raw){
   const t=Date.parse(s); return isNaN(t)?0:t;
 }
 function applySort(data){
-  if(!_sortKey) return data;
+  if(!_sortKey){
+    // 기본 정렬: tm_hq_transferred(대전재콜) 건을 assigned_at 내림차순으로 상단 표시
+    const hqItems=data.filter(l=>l.tm_hq_transferred===true||l.tm_hq_transferred==='true')
+      .sort((a,b)=>new Date(b.assigned_at||0)-new Date(a.assigned_at||0));
+    const rest=data.filter(l=>!(l.tm_hq_transferred===true||l.tm_hq_transferred==='true'));
+    return [...hqItems,...rest];
+  }
   // dir: asc=오래된순(작은값 앞), desc=최신순(큰값 앞)
   const dir=_sortDir==='asc'?1:-1;
 
