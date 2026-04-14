@@ -4891,7 +4891,9 @@ function renderKpiDashboard(leads){
     const sel=document.getElementById('team-act-month');
     if(!sel) return;
     const cur=new Date();
-    const thisYm=cur.toISOString().slice(0,7);
+    // KST 기준 연월 (UTC+9 보정)
+    const _kst=new Date(cur.getTime()+9*3600*1000);
+    const thisYm=_kst.toISOString().slice(0,7);
     const prevVal=sel.value; // 현재 선택값 보존
     let opts='';
     for(let i=0;i<13;i++){
