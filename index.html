@@ -2577,15 +2577,23 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
 
     <!-- 통계 내보내기 패널 -->
     <div id="exp-panel-stat" style="display:none;flex-direction:column;gap:12px">
-      <div style="font-size:12px;color:var(--gray-500);margin-bottom:4px">기준 연월을 선택하면 해당 월의 통계를 엑셀로 내보냅니다.</div>
+      <div style="font-size:12px;color:var(--gray-500);margin-bottom:4px">기간을 선택하면 해당 통계를 엑셀로 내보냅니다. Supabase에서 최신 데이터를 직접 조회합니다.</div>
       <div style="display:flex;gap:8px;align-items:center">
+        <label style="font-size:12px;font-weight:700;color:var(--gray-600);white-space:nowrap">기간 기준</label>
+        <select id="exp-stat-period" onchange="updateStatMonthVis()" style="flex:1;padding:9px 11px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--gray-900)">
+          <option value="month">특정 월</option>
+          <option value="thismonth">이번달</option>
+          <option value="all">전체 기간</option>
+        </select>
+      </div>
+      <div id="exp-stat-month-row" style="display:flex;gap:8px;align-items:center">
         <label style="font-size:12px;font-weight:700;color:var(--gray-600);white-space:nowrap">기준 연월</label>
         <select id="exp-stat-month" style="flex:1;padding:9px 11px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--gray-900)"></select>
       </div>
       <div style="background:var(--gray-50);border-radius:8px;padding:12px 14px">
         <div style="font-size:12px;font-weight:700;color:var(--gray-600);margin-bottom:8px">포함 항목</div>
         <div style="display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--gray-500)">
-          <div>✅ 팀장별 월별 활동건수</div>
+          <div>✅ 팀장별 활동건수 (기간 기준)</div>
           <div>✅ 지점별 실적 (전체·계약·상담·전환율)</div>
           <div>✅ 드랍 사유 분포</div>
           <div>✅ 진행단계별 현황</div>
@@ -8030,12 +8038,31 @@ async function getExpData(){
   return data;
 }
 // ── 통계 엑셀 내보내기 ──────────────────────────────────
+function updateStatMonthVis(){
+  const p=document.getElementById('exp-stat-period')?.value||'month';
+  const row=document.getElementById('exp-stat-month-row');
+  if(row) row.style.display=(p==='month')?'flex':'none';
+}
+
 async function exportStatExcel(){
-  const ym=document.getElementById('exp-stat-month')?.value||new Date().toISOString().slice(0,7);
-  const [yr,mo]=ym.split('-').map(Number);
-  const monthLabel=yr+'년 '+mo+'월';
-  const all=allLeads||[];
-  const acts=allActivities||[];
+  const period=document.getElementById('exp-stat-period')?.value||'month';
+  const now=new Date();
+  const kst=new Date(now.getTime()+9*3600*1000);
+  const thisYm=kst.toISOString().slice(0,7);
+  let ym='', periodLabel='';
+  if(period==='all'){ym='';periodLabel='전체 기간';}
+  else if(period==='thismonth'){ym=thisYm;periodLabel=thisYm.replace('-','년 ')+'월 (이번달)';}
+  else{ym=document.getElementById('exp-stat-month')?.value||thisYm;periodLabel=ym.replace('-','년 ')+'월';}
+
+  showToast('통계 데이터 조회 중...','');
+
+  // Supabase에서 직접 최신 데이터 조회
+  const [allRaw, actsRaw] = await Promise.all([
+    dbQ('leads').catch(()=>allLeads||[]),
+    dbQ('activities').catch(()=>allActivities||[]),
+  ]);
+  const all=allRaw;
+  const acts=actsRaw;
 
   // SheetJS 로드
   if(!window.XLSX){
@@ -8047,42 +8074,61 @@ async function exportStatExcel(){
   }
   const WB=window.XLSX.utils.book_new();
 
-  // ── 시트1: 팀장별 월별 활동 ──
-  const monthActs=acts.filter(a=>!['assign','status_change'].includes(a.type)&&(a.created_at||'').startsWith(ym));
-  const allTeams=Object.values(TEAM_MAP).flat();
-  const sheet1Data=[['지점','팀장','활동건수']];
+  // ── 시트1: 팀장별 활동 (기간 필터) ──
+  const SKIP=new Set(['assign','status_change']);
+  const filteredActs=acts.filter(a=>{
+    if(SKIP.has(a.type)) return false;
+    if(ym) return (a.created_at||'').startsWith(ym);
+    return true;
+  });
+  const sheet1Data=[['지점','팀장',periodLabel+' 활동건수']];
   BRANCHES.forEach(br=>{
     (TEAM_MAP[br]||[]).forEach(t=>{
-      sheet1Data.push([br,t,monthActs.filter(a=>a.author===t).length]);
+      sheet1Data.push([br,t,filteredActs.filter(a=>a.author===t).length]);
     });
   });
   sheet1Data.push([]);
-  sheet1Data.push(['합계','',monthActs.length]);
+  sheet1Data.push(['합계','',filteredActs.length]);
   const ws1=window.XLSX.utils.aoa_to_sheet(sheet1Data);
   window.XLSX.utils.book_append_sheet(WB,ws1,'팀장별 활동');
 
-  // ── 시트2: 지점별 실적 ──
-  const activeLeads=all.filter(l=>!['drop','deleted'].includes(l.status));
-  const sheet2Data=[['지점','전체DB','계약','상담중','관리','전환율(%)']];
+  // ── 시트2: 지점별 실적 (현재 스냅샷) ──
+  const activeLeads=all.filter(l=>!['drop','deleted'].includes(l.status||''));
+  const sheet2Data=[['지점','전체DB','계약','상담','제안','관리','배정','접촉','전환율(%)']];
   BRANCHES.forEach(br=>{
     const bl=activeLeads.filter(l=>l.branch_name===br);
     const ct=bl.filter(l=>l.current_stage==='계약').length;
-    const cons=bl.filter(l=>['상담','제안'].includes(l.current_stage||'')).length;
+    const cons=bl.filter(l=>l.current_stage==='상담').length;
+    const prop=bl.filter(l=>l.current_stage==='제안').length;
     const mgmt=bl.filter(l=>l.current_stage==='관리').length;
+    const asgn=bl.filter(l=>l.current_stage==='배정').length;
+    const cont=bl.filter(l=>l.current_stage==='접촉').length;
     const conv=bl.length?Math.round(ct/bl.length*100):0;
-    sheet2Data.push([br,bl.length,ct,cons,mgmt,conv]);
+    sheet2Data.push([br,bl.length,ct,cons,prop,mgmt,asgn,cont,conv]);
   });
+  // 합계 행
+  const tot=activeLeads.length;
+  const totCt=activeLeads.filter(l=>l.current_stage==='계약').length;
+  sheet2Data.push(['합계',tot,totCt,
+    activeLeads.filter(l=>l.current_stage==='상담').length,
+    activeLeads.filter(l=>l.current_stage==='제안').length,
+    activeLeads.filter(l=>l.current_stage==='관리').length,
+    activeLeads.filter(l=>l.current_stage==='배정').length,
+    activeLeads.filter(l=>l.current_stage==='접촉').length,
+    tot?Math.round(totCt/tot*100):0
+  ]);
   const ws2=window.XLSX.utils.aoa_to_sheet(sheet2Data);
   window.XLSX.utils.book_append_sheet(WB,ws2,'지점별 실적');
 
   // ── 시트3: 드랍 사유 분포 ──
+  const dropLeads=all.filter(l=>l.status==='drop');
   const dropReasons={};
-  all.filter(l=>l.status==='drop').forEach(l=>{
+  dropLeads.forEach(l=>{
     const r=l.drop_category||l.drop_reason||'미입력';
     dropReasons[r]=(dropReasons[r]||0)+1;
   });
   const totalDrop=Object.values(dropReasons).reduce((a,b)=>a+b,0)||1;
-  const sheet3Data=[['드랍 사유','건수','비율(%)']];
+  const sheet3Data=[['드랍 사유(대범주)','건수','비율(%)']];
   Object.entries(dropReasons).sort((a,b)=>b[1]-a[1]).forEach(([r,cnt])=>{
     sheet3Data.push([r,cnt,Math.round(cnt/totalDrop*100)]);
   });
@@ -8090,12 +8136,14 @@ async function exportStatExcel(){
   const ws3=window.XLSX.utils.aoa_to_sheet(sheet3Data);
   window.XLSX.utils.book_append_sheet(WB,ws3,'드랍 사유 분포');
 
-  // ── 시트4: 진행단계별 현황 ──
+  // ── 시트4: 진행단계별 현황 (드랍 포함 전체) ──
   const stages=['배정','접촉','상담','제안','계약','관리','보류','드랍'];
-  const sheet4Data=[['진행단계','건수','비율(%)']];
+  const sheet4Data=[['진행단계','건수','비율(%)','비고']];
+  const totalAll=all.filter(l=>l.status!=='deleted').length||1;
   stages.forEach(s=>{
-    const cnt=all.filter(l=>l.current_stage===s).length;
-    sheet4Data.push([s,cnt,all.length?Math.round(cnt/all.length*100):0]);
+    const cnt=all.filter(l=>l.current_stage===s&&l.status!=='deleted').length;
+    const note=s==='드랍'?'드랍 처리 완료':s==='보류'?'진행 보류 중':'';
+    sheet4Data.push([s,cnt,Math.round(cnt/totalAll*100),note]);
   });
   const ws4=window.XLSX.utils.aoa_to_sheet(sheet4Data);
   window.XLSX.utils.book_append_sheet(WB,ws4,'진행단계 현황');
@@ -8104,19 +8152,21 @@ async function exportStatExcel(){
   const contracts=activeLeads.filter(l=>l.current_stage==='계약');
   const proposals=activeLeads.filter(l=>['제안','계약','관리'].includes(l.current_stage||''));
   const sheet5Data=[
-    ['항목','수치'],
-    ['전체 DB',activeLeads.length],
-    ['계약 건수',contracts.length],
-    ['제안 이상 진행',proposals.length],
-    ['전체 전환율(%)',activeLeads.length?Math.round(contracts.length/activeLeads.length*100):0],
-    ['제안→계약 전환율(%)',proposals.length?Math.round(contracts.length/proposals.length*100):0],
-    ['드랍 건수',all.filter(l=>l.status==='drop').length],
-    ['드랍률(%)',all.length?Math.round(all.filter(l=>l.status==='drop').length/all.length*100):0],
+    ['항목','수치','설명'],
+    ['전체 활성 DB',activeLeads.length,'드랍·삭제 제외'],
+    ['계약 건수',contracts.length,'현재 계약 단계'],
+    ['관리 건수',activeLeads.filter(l=>l.current_stage==='관리').length,'서비스 제공 중'],
+    ['제안 이상 진행',proposals.length,'제안+계약+관리'],
+    ['전체 전환율(%)',activeLeads.length?Math.round(contracts.length/activeLeads.length*100):0,'계약/전체'],
+    ['제안→계약 전환율(%)',proposals.length?Math.round(contracts.length/proposals.length*100):0,'계약/제안이상'],
+    ['드랍 건수',dropLeads.length,''],
+    ['드랍률(%)',all.filter(l=>l.status!=='deleted').length?Math.round(dropLeads.length/all.filter(l=>l.status!=='deleted').length*100):0,'드랍/전체'],
+    ['미배정 건수',all.filter(l=>!l.branch_name&&!['drop','deleted'].includes(l.status||'')).length,'지점 미배정'],
   ];
   const ws5=window.XLSX.utils.aoa_to_sheet(sheet5Data);
   window.XLSX.utils.book_append_sheet(WB,ws5,'전환율');
 
-  const fname=`KBMC_통계_${ym}.xlsx`;
+  const fname=`KBMC_통계_${period==='all'?'전체':ym}.xlsx`;
   window.XLSX.writeFile(WB,fname);
   closeM('modal-export');
   showToast(`통계 내보내기 완료 (${monthLabel})`, 'success');
