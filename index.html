@@ -1044,6 +1044,25 @@ tbody tr.selected td{background:var(--blue-50)!important}
           <div style="font-size:11px;color:var(--gray-400);margin-top:2px">상담 → 계약</div>
         </div>
       </div>
+      <!-- 대전 재배정 현황 + 팀별 미팅 현황 2컬럼 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+        <!-- 대전 재배정 현황 카드 -->
+        <div class="card" style="padding:16px 18px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px">
+            <div class="section-title" style="margin:0">🔁 대전 재배정 현황</div>
+            <select id="daejeon-period" onchange="renderDaejeonRecall()" style="font-size:11px;padding:3px 8px;border:1px solid var(--gray-200);border-radius:6px;background:#fff;color:var(--navy);font-weight:600"></select>
+          </div>
+          <div id="daejeon-recall-body"></div>
+        </div>
+        <!-- 팀별 미팅 현황 카드 -->
+        <div class="card" style="padding:16px 18px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px">
+            <div class="section-title" style="margin:0">🤝 팀별 미팅 현황</div>
+            <select id="team-meeting-period" onchange="renderTeamMeeting()" style="font-size:11px;padding:3px 8px;border:1px solid var(--gray-200);border-radius:6px;background:#fff;color:var(--navy);font-weight:600"></select>
+          </div>
+          <div id="team-meeting-body"></div>
+        </div>
+      </div>
       <!-- 드랍 분포 + 팀장별 활동 (세로 2단 → 스크롤 없이 전체 표시) -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;align-items:start">
         <div class="card" style="height:auto">
@@ -4775,6 +4794,12 @@ async function loadAdmin(){
   if(!testMode && !allActivities?.length){
     allActivities = await dbQ('activities').catch(()=>[]);
   }
+  // next_actions 로드 (팀별 미팅 예정 집계용)
+  if(!testMode && !allNextActions?.length){
+    allNextActions = await dbQ('next_actions').catch(()=>[]);
+  }
+  // 대시보드 전역 리드 캐시 (대전 재배정·팀별 미팅 카드에서 사용)
+  window._adminLeadsCache = all;
 
   (document.getElementById('s-total')||{}).textContent=all.length;
   (document.getElementById('s-contract')||{}).textContent=all.filter(l=>l.current_stage==='계약').length;
@@ -4823,6 +4848,10 @@ async function loadAdmin(){
   renderAssignSummary(all);
   // KPI 렌더
   renderKpiDashboard(all);
+  // 대전 재배정 현황 + 팀별 미팅 현황 렌더
+  _initDashboardExtraSelectors();
+  renderDaejeonRecall();
+  renderTeamMeeting();
   
 }
 
@@ -4927,6 +4956,297 @@ function renderKpiDashboard(leads){
     if(prevVal&&prevVal!==thisYm) sel.value=prevVal;
   })();
   renderTeamActChart();
+}
+
+// ══════════════════════════════════════════════════════════════
+// 대전 재배정 현황 + 팀별 미팅 현황 (KPI 그리드 아래 2컬럼 카드)
+// ══════════════════════════════════════════════════════════════
+
+// 기간 드롭다운 옵션 (공통 유틸)
+function _dashPeriodOptions(selectedVal){
+  const now=new Date();
+  const kstNow=new Date(now.getTime()+9*3600*1000);
+  const kstYear=kstNow.getUTCFullYear();
+  const kstMonth=kstNow.getUTCMonth();
+  const pad=n=>String(n).padStart(2,'0');
+  const toYm=(y,m)=>y+'-'+pad(m+1);
+  const thisYm=toYm(kstYear,kstMonth);
+  let opts='';
+  // 고정 옵션
+  opts+=`<option value="last30">최근 30일</option>`;
+  opts+=`<option value="last90">최근 90일</option>`;
+  opts+=`<option value="all">전체</option>`;
+  // 월별 옵션 (최근 13개월)
+  for(let i=0;i<13;i++){
+    let m=kstMonth-i, y=kstYear;
+    while(m<0){m+=12;y--;}
+    const ym=toYm(y,m);
+    const isThis=i===0;
+    const lbl=ym.replace('-','년 ')+'월'+(isThis?' (이번달)':'');
+    opts+=`<option value="ym:${ym}">${lbl}</option>`;
+  }
+  // 기본 선택: 이번달
+  const defaultVal=selectedVal||'ym:'+thisYm;
+  // selected 표기
+  opts=opts.replace(`value="${defaultVal}"`,`value="${defaultVal}" selected`);
+  return opts;
+}
+
+// 드롭다운 초기화 (두 카드 공통)
+function _initDashboardExtraSelectors(){
+  const sel1=document.getElementById('daejeon-period');
+  if(sel1){
+    const prev=sel1.value;
+    sel1.innerHTML=_dashPeriodOptions(prev||null);
+  }
+  const sel2=document.getElementById('team-meeting-period');
+  if(sel2){
+    const prev=sel2.value;
+    sel2.innerHTML=_dashPeriodOptions(prev||null);
+  }
+}
+
+// 기간 값 → [startMs, endMs] 범위 계산 (endMs=null이면 현재까지)
+function _parseDashPeriod(val){
+  if(!val||val==='all') return [null,null];
+  const now=Date.now();
+  if(val==='last30') return [now-30*86400000, null];
+  if(val==='last90') return [now-90*86400000, null];
+  if(val.startsWith('ym:')){
+    const ym=val.slice(3);
+    const [y,m]=ym.split('-').map(Number);
+    if(!y||!m) return [null,null];
+    const start=new Date(y,m-1,1).getTime();
+    const end=new Date(y,m,1).getTime()-1;
+    return [start,end];
+  }
+  return [null,null];
+}
+
+// ── 대전 재배정 현황 렌더 ────────────────────────────────────
+function renderDaejeonRecall(){
+  const body=document.getElementById('daejeon-recall-body');
+  if(!body) return;
+  const leads=(window._adminLeadsCache||allLeads||[]).filter(l=>l.status!=='deleted');
+  const sel=document.getElementById('daejeon-period');
+  const [startMs,endMs]=_parseDashPeriod(sel?.value);
+
+  // 기간 필터 기준: 유형 A는 auto_recall_at, 유형 B는 created_at 사용
+  // 두 필드 모두 없으면 updated_at 폴백
+  const inRange=(ts)=>{
+    if(!ts) return startMs===null;
+    const t=new Date(ts).getTime();
+    if(isNaN(t)) return false;
+    if(startMs!==null && t<startMs) return false;
+    if(endMs!==null && t>endMs) return false;
+    return true;
+  };
+
+  // 유형 A: 팀장 배정 후 회수되어 대전 이관된 건 (auto_recalled=true)
+  const typeA=leads.filter(l=>{
+    const recalled=(l.auto_recalled===true||l.auto_recalled==='true');
+    if(!recalled) return false;
+    const ts=l.auto_recall_at||l.updated_at||l.assigned_at;
+    return inRange(ts);
+  });
+
+  // 유형 B: 대전TM 직접 업로드 재콜건 (registered_by='대전TM' AND NOT auto_recalled)
+  // 유형 A와 중복 방지: auto_recalled=true인 경우는 A로만 카운트
+  const typeB=leads.filter(l=>{
+    if(l.registered_by!=='대전TM') return false;
+    if(l.auto_recalled===true||l.auto_recall===true||l.auto_recalled==='true') return false;
+    const ts=l.created_at||l.updated_at;
+    return inRange(ts);
+  });
+
+  const total=typeA.length+typeB.length;
+
+  // 합계 대비 비율
+  const pctA=total?Math.round(typeA.length/total*100):0;
+  const pctB=total?Math.round(typeB.length/total*100):0;
+
+  body.innerHTML=`
+    <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--gray-100)">
+      <span style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px">합계</span>
+      <span style="font-size:30px;font-weight:800;color:var(--navy);letter-spacing:-1.5px">${total}</span>
+      <span style="font-size:13px;color:var(--gray-400);font-weight:600">건</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+          <div>
+            <span style="font-size:11px;font-weight:700;color:var(--err);background:rgba(239,68,68,.08);padding:2px 7px;border-radius:10px;margin-right:6px">A</span>
+            <span style="font-size:12px;font-weight:600;color:var(--gray-700)">회수 → 대전 이관</span>
+          </div>
+          <div><span style="font-size:18px;font-weight:800;color:var(--err)">${typeA.length}</span><span style="font-size:11px;color:var(--gray-400);margin-left:2px">건 (${pctA}%)</span></div>
+        </div>
+        <div style="height:5px;background:var(--gray-100);border-radius:3px"><div style="height:100%;width:${pctA}%;background:var(--err);border-radius:3px;transition:width .4s"></div></div>
+        <div style="font-size:10px;color:var(--gray-400);margin-top:3px">팀장 미접촉으로 회수된 DB</div>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+          <div>
+            <span style="font-size:11px;font-weight:700;color:var(--blue);background:rgba(37,99,235,.08);padding:2px 7px;border-radius:10px;margin-right:6px">B</span>
+            <span style="font-size:12px;font-weight:600;color:var(--gray-700)">대전 직접 업로드 (재콜)</span>
+          </div>
+          <div><span style="font-size:18px;font-weight:800;color:var(--blue)">${typeB.length}</span><span style="font-size:11px;color:var(--gray-400);margin-left:2px">건 (${pctB}%)</span></div>
+        </div>
+        <div style="height:5px;background:var(--gray-100);border-radius:3px"><div style="height:100%;width:${pctB}%;background:var(--blue);border-radius:3px;transition:width .4s"></div></div>
+        <div style="font-size:10px;color:var(--gray-400);margin-top:3px">대전TM이 엑셀로 직접 업로드한 DB</div>
+      </div>
+    </div>
+  `;
+}
+
+// ── 팀별 미팅 현황 렌더 ──────────────────────────────────────
+function renderTeamMeeting(){
+  const body=document.getElementById('team-meeting-body');
+  if(!body) return;
+  const sel=document.getElementById('team-meeting-period');
+  const [startMs,endMs]=_parseDashPeriod(sel?.value);
+
+  const acts=allActivities||[];
+  const nas=allNextActions||[];
+
+  // 완료 미팅: activities에서 type='meeting' + 기간 필터
+  const inRangeMs=(ts)=>{
+    if(!ts) return startMs===null;
+    const t=new Date(ts).getTime();
+    if(isNaN(t)) return false;
+    if(startMs!==null && t<startMs) return false;
+    if(endMs!==null && t>endMs) return false;
+    return true;
+  };
+  // 예정 미팅: next_actions.due_date (YYYY-MM-DD 문자열) + status='예정'
+  const inRangeDate=(dateStr)=>{
+    if(!dateStr) return startMs===null;
+    const t=new Date(dateStr+'T00:00:00').getTime();
+    if(isNaN(t)) return false;
+    if(startMs!==null && t<startMs) return false;
+    if(endMs!==null && t>endMs) return false;
+    return true;
+  };
+
+  // 지점별 → 팀별 집계
+  // TEAM_MAP: {'신상국':[...], '정명구':[...], ...}
+  const branchData={};
+  for(const branch of Object.keys(TEAM_MAP)){
+    branchData[branch]={done:0, scheduled:0, teams:{}};
+    for(const teamName of TEAM_MAP[branch]){
+      branchData[branch].teams[teamName]={done:0, scheduled:0};
+    }
+  }
+
+  // 완료 미팅 집계 (activities.author 기준)
+  for(const a of acts){
+    if(a.type!=='meeting') continue;
+    if(!inRangeMs(a.created_at)) continue;
+    const author=a.author;
+    if(!author) continue;
+    // 어느 지점인지 찾기
+    for(const branch of Object.keys(TEAM_MAP)){
+      if(TEAM_MAP[branch].includes(author)){
+        branchData[branch].done++;
+        branchData[branch].teams[author].done++;
+        break;
+      }
+    }
+  }
+
+  // 예정 미팅 집계 (next_actions.team_leader 기준 — 스키마 실제 필드명)
+  for(const n of nas){
+    if(n.action_type!=='미팅') continue;
+    if(n.status!=='예정') continue;
+    if(!inRangeDate(n.due_date)) continue;
+    const team=n.team_leader||n.author;
+    if(!team) continue;
+    for(const branch of Object.keys(TEAM_MAP)){
+      if(TEAM_MAP[branch].includes(team)){
+        branchData[branch].scheduled++;
+        if(branchData[branch].teams[team]){
+          branchData[branch].teams[team].scheduled++;
+        }
+        break;
+      }
+    }
+  }
+
+  const totalDone=Object.values(branchData).reduce((s,b)=>s+b.done,0);
+  const totalScheduled=Object.values(branchData).reduce((s,b)=>s+b.scheduled,0);
+  const total=totalDone+totalScheduled;
+
+  // 지점 정렬: 합계 내림차순
+  const branchSorted=Object.entries(branchData).sort((a,b)=>(b[1].done+b[1].scheduled)-(a[1].done+a[1].scheduled));
+
+  let html=`
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--gray-100);flex-wrap:wrap">
+      <div>
+        <span style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px;margin-right:6px">완료</span>
+        <span style="font-size:22px;font-weight:800;color:var(--ok);letter-spacing:-1px">${totalDone}</span>
+        <span style="font-size:12px;color:var(--gray-400)">건</span>
+      </div>
+      <div>
+        <span style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px;margin-right:6px">예정</span>
+        <span style="font-size:22px;font-weight:800;color:var(--blue);letter-spacing:-1px">${totalScheduled}</span>
+        <span style="font-size:12px;color:var(--gray-400)">건</span>
+      </div>
+      <div style="margin-left:auto">
+        <span style="font-size:11px;color:var(--gray-400)">총</span>
+        <span style="font-size:15px;font-weight:700;color:var(--navy);margin-left:3px">${total}건</span>
+      </div>
+    </div>
+  `;
+
+  if(total===0){
+    html+='<div style="color:var(--gray-300);font-size:12px;text-align:center;padding:24px 0">선택 기간에 미팅 데이터가 없습니다</div>';
+  } else {
+    html+='<div style="display:flex;flex-direction:column;gap:10px">';
+    for(const [branch,data] of branchSorted){
+      const sum=data.done+data.scheduled;
+      if(sum===0) continue;
+      const donePct=sum?Math.round(data.done/sum*100):0;
+      html+=`
+        <details style="border:1px solid var(--gray-100);border-radius:8px;padding:0">
+          <summary style="cursor:pointer;padding:9px 12px;list-style:none;display:flex;justify-content:space-between;align-items:center;font-size:12px">
+            <span style="font-weight:700;color:var(--navy)">${esc(branch)} 지점</span>
+            <span style="display:flex;align-items:center;gap:8px">
+              <span style="color:var(--ok);font-weight:700">완료 ${data.done}</span>
+              <span style="color:var(--gray-300)">|</span>
+              <span style="color:var(--blue);font-weight:700">예정 ${data.scheduled}</span>
+              <span style="color:var(--gray-400);font-size:11px">(${sum}건)</span>
+            </span>
+          </summary>
+          <div style="padding:2px 12px 10px 12px">
+            <div style="display:flex;height:4px;border-radius:2px;overflow:hidden;background:var(--gray-100);margin-bottom:8px">
+              <div style="width:${donePct}%;background:var(--ok)"></div>
+              <div style="width:${100-donePct}%;background:var(--blue)"></div>
+            </div>
+            <table style="width:100%;border-collapse:collapse;font-size:11px">
+              <thead><tr style="color:var(--gray-400);border-bottom:1px solid var(--gray-100)">
+                <th style="text-align:left;padding:4px 2px;font-weight:600">팀장</th>
+                <th style="text-align:right;padding:4px 2px;font-weight:600;color:var(--ok)">완료</th>
+                <th style="text-align:right;padding:4px 2px;font-weight:600;color:var(--blue)">예정</th>
+                <th style="text-align:right;padding:4px 2px;font-weight:600">합계</th>
+              </tr></thead>
+              <tbody>
+      `;
+      const teamSorted=Object.entries(data.teams)
+        .filter(([,v])=>v.done+v.scheduled>0)
+        .sort((a,b)=>(b[1].done+b[1].scheduled)-(a[1].done+a[1].scheduled));
+      for(const [tn,tv] of teamSorted){
+        html+=`<tr style="border-bottom:1px solid var(--gray-50)">
+          <td style="padding:5px 2px;color:var(--gray-700)">${esc(tn)}</td>
+          <td style="padding:5px 2px;text-align:right;color:var(--ok);font-weight:700">${tv.done}</td>
+          <td style="padding:5px 2px;text-align:right;color:var(--blue);font-weight:700">${tv.scheduled}</td>
+          <td style="padding:5px 2px;text-align:right;font-weight:700;color:var(--navy)">${tv.done+tv.scheduled}</td>
+        </tr>`;
+      }
+      html+='</tbody></table></div></details>';
+    }
+    html+='</div>';
+  }
+
+  body.innerHTML=html;
 }
 
 // 팀장별 월별 활동 캐시 (월별 미리 계산)
@@ -8166,10 +8486,116 @@ async function exportStatExcel(){
   const ws5=window.XLSX.utils.aoa_to_sheet(sheet5Data);
   window.XLSX.utils.book_append_sheet(WB,ws5,'전환율');
 
+  // ── 시트6: 대전 재배정 현황 ──
+  // 유형 A: 팀장 배정 후 회수되어 대전 이관된 건 (auto_recalled=true)
+  // 유형 B: 대전TM 직접 업로드 재콜건 (registered_by='대전TM' AND NOT auto_recalled)
+  // 기간 필터: ym(YYYY-MM)이 있으면 해당 월로, 없으면 전체
+  const _inStatYm=(ts)=>{
+    if(!ym) return true; // 전체 기간
+    if(!ts) return false;
+    return String(ts).startsWith(ym);
+  };
+  const typeAleads=all.filter(l=>{
+    if(l.status==='deleted') return false;
+    const recalled=(l.auto_recalled===true||l.auto_recalled==='true');
+    if(!recalled) return false;
+    const ts=l.auto_recall_at||l.updated_at||l.assigned_at;
+    return _inStatYm(ts);
+  });
+  const typeBleads=all.filter(l=>{
+    if(l.status==='deleted') return false;
+    if(l.registered_by!=='대전TM') return false;
+    if(l.auto_recalled===true||l.auto_recalled==='true') return false;
+    const ts=l.created_at||l.updated_at;
+    return _inStatYm(ts);
+  });
+  const _fmtDate=(ts)=>{
+    if(!ts) return '';
+    const s=String(ts);
+    if(/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10);
+    try{const d=new Date(ts);return isNaN(d)?'':d.toISOString().slice(0,10);}catch(e){return '';}
+  };
+  const sheet6Data=[
+    ['대전 재배정 현황 ('+periodLabel+')'],
+    [],
+    ['구분','건수','비율(%)','설명'],
+    ['유형 A: 회수 → 대전 이관', typeAleads.length, (typeAleads.length+typeBleads.length)?Math.round(typeAleads.length/(typeAleads.length+typeBleads.length)*100):0, '팀장 미접촉으로 회수된 DB'],
+    ['유형 B: 대전 직접 업로드 (재콜)', typeBleads.length, (typeAleads.length+typeBleads.length)?Math.round(typeBleads.length/(typeAleads.length+typeBleads.length)*100):0, '대전TM이 엑셀로 직접 업로드한 DB'],
+    ['합계', typeAleads.length+typeBleads.length, 100, ''],
+    [],
+    ['── 유형 A 상세 목록 ──'],
+    ['회사명','연락처','원래 지점','원래 팀장','회수 사유','회수 일시','현재 진행단계']
+  ];
+  typeAleads.forEach(l=>{
+    sheet6Data.push([
+      l.company_name||'', l.phone||'',
+      l.branch_name_before||l.branch_name||'', // 회수 후에도 기록은 남아있을 수 있음
+      l.team_name_before||l.team_name||'',
+      l.auto_recall_reason||'',
+      _fmtDate(l.auto_recall_at||l.updated_at),
+      l.current_stage||''
+    ]);
+  });
+  sheet6Data.push([]);
+  sheet6Data.push(['── 유형 B 상세 목록 ──']);
+  sheet6Data.push(['회사명','연락처','담당팀장','등록일','TM결과','현재 진행단계']);
+  typeBleads.forEach(l=>{
+    sheet6Data.push([
+      l.company_name||'', l.phone||'',
+      l.team_name||'대전센터',
+      _fmtDate(l.created_at),
+      l.tm_result||'',
+      l.current_stage||''
+    ]);
+  });
+  const ws6=window.XLSX.utils.aoa_to_sheet(sheet6Data);
+  ws6['!cols']=[{wch:24},{wch:14},{wch:12},{wch:12},{wch:18},{wch:12},{wch:10}];
+  window.XLSX.utils.book_append_sheet(WB,ws6,'대전 재배정 현황');
+
+  // ── 시트7: 팀별 미팅 현황 (완료·예정 구분) ──
+  // 완료 미팅: activities.type='meeting' + 기간 필터 (created_at)
+  // 예정 미팅: next_actions.action_type='미팅' AND status='예정' + 기간 필터 (due_date)
+  // next_actions 재조회 (통계 내보내기 진입 시 최신 데이터 보장)
+  const nas=await dbQ('next_actions').catch(()=>allNextActions||[]);
+  const meetingDone=acts.filter(a=>{
+    if(a.type!=='meeting') return false;
+    if(!ym) return true;
+    return (a.created_at||'').startsWith(ym);
+  });
+  const meetingScheduled=nas.filter(n=>{
+    if(n.action_type!=='미팅') return false;
+    if(n.status!=='예정') return false;
+    if(!ym) return true;
+    return (n.due_date||'').startsWith(ym);
+  });
+  const sheet7Data=[
+    ['팀별 미팅 현황 ('+periodLabel+')'],
+    [],
+    ['지점','팀장','완료 미팅','예정 미팅','합계']
+  ];
+  let gDone=0, gSch=0;
+  BRANCHES.forEach(br=>{
+    const teams=TEAM_MAP[br]||[];
+    let bDone=0, bSch=0;
+    teams.forEach(t=>{
+      const d=meetingDone.filter(a=>a.author===t).length;
+      const s=meetingScheduled.filter(n=>(n.team_leader||n.author)===t).length;
+      bDone+=d; bSch+=s;
+      sheet7Data.push([br, t, d, s, d+s]);
+    });
+    sheet7Data.push([br+' 소계', '', bDone, bSch, bDone+bSch]);
+    sheet7Data.push([]);
+    gDone+=bDone; gSch+=bSch;
+  });
+  sheet7Data.push(['전체 합계', '', gDone, gSch, gDone+gSch]);
+  const ws7=window.XLSX.utils.aoa_to_sheet(sheet7Data);
+  ws7['!cols']=[{wch:12},{wch:12},{wch:12},{wch:12},{wch:10}];
+  window.XLSX.utils.book_append_sheet(WB,ws7,'팀별 미팅 현황');
+
   const fname=`KBMC_통계_${period==='all'?'전체':ym}.xlsx`;
   window.XLSX.writeFile(WB,fname);
   closeM('modal-export');
-  showToast(`통계 내보내기 완료 (${monthLabel})`, 'success');
+  showToast(`통계 내보내기 완료 (${periodLabel})`, 'success');
 }
 
 async function doExport(){
