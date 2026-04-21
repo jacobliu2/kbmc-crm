@@ -5772,8 +5772,9 @@ let _tmVisCols = getTmVisCols();
 function colVal(l, key, acts){
   switch(key){
     case 'company_name': {
-      // 재콜: 현재 대전이 실제 관여 중인 건만
+      // 재콜: is_recall=true(영구 플래그) 또는 현재 대전이 실제 관여 중인 건
       const isRecall=
+        (l.is_recall===true||l.is_recall==='true') ||
         (l.tm_hq_transferred===true||l.tm_hq_transferred==='true') ||
         (l.tm_transferred===true||l.tm_transferred==='true') ||
         (()=>{try{return JSON.parse(l.collab_branches||'[]').includes('대전TM');}catch(e){return false;}})();
@@ -8024,7 +8025,7 @@ async function importTmExcel(event){
       note:String(map.note||'').trim(),
       // 대전TM 강제 세팅
       branch_name:'대전',team_name:'대전센터',tm_transferred:true,
-      status:'assigned',registered_by:'대전TM',
+      status:'assigned',registered_by:'대전TM',is_recall:true,
       applied_at:(function(){
         const v=map.applied_at;if(!v)return null;
         if(v instanceof Date){const y=v.getFullYear(),mo=String(v.getMonth()+1).padStart(2,'0'),d=String(v.getDate()).padStart(2,'0'),h=String(v.getHours()).padStart(2,'0'),min=String(v.getMinutes()).padStart(2,'0');return y+'-'+mo+'-'+d+'T'+h+':'+min+':00';}
@@ -8263,7 +8264,7 @@ async function confirmImport(){
     const tmPatch={
       branch_name:'대전', team_name:'대전센터',
       tm_transferred:true, status:'assigned',
-      registered_by:'대전TM', assigned_at:now, updated_at:now
+      registered_by:'대전TM', is_recall:true, assigned_at:now, updated_at:now
     };
     for(const p of _pendingPatch){
       await dbU('leads', p.id, tmPatch);
@@ -11150,8 +11151,9 @@ function renderTmListView(){
       <tbody>
         ${data.map(l=>{
           const lastAct=acts.filter(a=>a.lead_id===l.id&&a.type!=='assign').sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];
-          // 재콜: 현재 대전이 실제 관여 중인 건만
+          // 재콜: is_recall=true(영구 플래그) 또는 현재 대전이 실제 관여 중인 건
       const isRecall=
+        (l.is_recall===true||l.is_recall==='true') ||
         (l.tm_hq_transferred===true||l.tm_hq_transferred==='true') ||
         (l.tm_transferred===true||l.tm_transferred==='true') ||
         (()=>{try{return JSON.parse(l.collab_branches||'[]').includes('대전TM');}catch(e){return false;}})();
