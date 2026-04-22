@@ -1679,6 +1679,10 @@ tbody tr.selected td{background:var(--blue-50)!important}
           style="padding:10px 20px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit;white-space:nowrap">
           🏢 본사이관완료 <span id="tmv2-cnt-hqtransfer" style="font-size:11px;padding:1px 6px;background:var(--gray-100);color:var(--gray-500);border-radius:8px;margin-left:3px">0</span>
         </button>
+        <button class="tm-v2-tab" id="tmv2-tab-reminder" onclick="tmV2SwitchTab('reminder',this)"
+          style="padding:10px 20px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit;white-space:nowrap">
+          ⏰ 리마인드 <span id="tmv2-cnt-reminder" style="font-size:11px;padding:1px 6px;background:var(--gray-100);color:var(--gray-500);border-radius:8px;margin-left:3px">0</span>
+        </button>
       </div>
 
       <!-- ── 컬럼 토글 ── -->
@@ -2226,6 +2230,7 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
       <button class="dist-tab" onclick="pickDistMode('recall',this)" style="flex:1;padding:8px;border:none;background:transparent;font-size:12px;font-weight:600;color:var(--gray-500);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">↩ 회수</button>
       <button class="dist-tab" onclick="pickDistMode('team_transfer',this)" style="flex:1;padding:8px;border:none;background:transparent;cursor:pointer;font-size:13px;font-family:inherit;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;transition:all .12s">🔄 팀간이관</button>
       <button class="dist-tab" onclick="pickDistMode('happycall',this)" style="flex:1;padding:8px;border:none;background:transparent;cursor:pointer;font-size:13px;font-family:inherit;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;transition:all .12s">😊 해피콜</button>
+      <button class="dist-tab" onclick="pickDistMode('reminder',this)" style="flex:1;padding:8px;border:none;background:transparent;cursor:pointer;font-size:13px;font-family:inherit;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;transition:all .12s">⏰ 리마인드</button>
     </div>
     <!-- 지점 배정 섹션 -->
     <div id="dist-section-branch">
@@ -2275,6 +2280,23 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
         😊 <strong>해피콜 이관</strong> — 팀장 진행내용과 함께 대전TM으로 이관됩니다.<br>
         <span style="font-size:11px;color:var(--gray-400)">TM센터에서 해피콜만 수행 후 결과 기록</span>
       </div>
+    </div>
+    <!-- 리마인드 섹션 -->
+    <div id="dist-section-reminder" style="display:none">
+      <div style="padding:14px;background:rgba(124,58,237,.07);border:1px solid rgba(124,58,237,.2);border-radius:var(--r-sm);font-size:13px;color:var(--gray-700);margin-bottom:12px">
+        ⏰ <strong>리마인드 이관</strong> — 지정일에 도래하면 대전TM 리마인드 탭에 표시됩니다.<br>
+        <span style="font-size:11px;color:var(--gray-400)">지정일 이전에는 모든 탭에서 숨김 처리됩니다</span>
+      </div>
+      <div style="font-size:12px;font-weight:700;color:var(--gray-600);margin-bottom:8px">재콜 예정일</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+        <button type="button" class="btn btn-outline btn-sm" onclick="setReminderPreset(1)">1개월 후</button>
+        <button type="button" class="btn btn-outline btn-sm" onclick="setReminderPreset(3)">3개월 후</button>
+        <button type="button" class="btn btn-outline btn-sm" onclick="setReminderPreset(6)">6개월 후</button>
+        <button type="button" class="btn btn-outline btn-sm" onclick="setReminderPreset(12)">1년 후</button>
+      </div>
+      <input type="date" id="reminder-date" style="width:100%;padding:10px;border:1px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;margin-bottom:10px">
+      <div style="font-size:12px;font-weight:700;color:var(--gray-600);margin-bottom:8px">메모 (대전TM에 공유될 내용)</div>
+      <textarea id="reminder-memo" rows="3" placeholder="예: 하반기 매출 확정 후 재접근 요청, 가격 재제안 검토 등" style="width:100%;padding:10px;border:1px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;resize:vertical"></textarea>
     </div>
     <!-- 팀장간 이관 섹션 -->
     <div id="dist-section-team_transfer" style="display:none">
@@ -6203,8 +6225,8 @@ async function confirmDropWithReason(ids){
     // 병렬 PATCH
     await Promise.all(ids.map(id=>{ _trackLocalId(id); return sbPatch('leads',id,dropData); }));
     await Promise.all(ids.map(id=>sbPost('activities',{
-      id:uuid(),lead_id:id,type:'status_change',content:`드랍: ${reason}`,
-      stage:'',author:curUser?.name||'',created_at:now,date:now.slice(0,10)
+      id:uuid(),lead_id:id,type:'note',content:`[드랍] ${reason}`,
+      stage:'드랍',author:curUser?.name||'',created_at:now,date:now.slice(0,10)
     })));
   } else {
     const leads=allLeads||[];
@@ -8093,25 +8115,68 @@ async function importTmExcel(event){
   openM('modal-import');
 }
 
+// ── 대전TM 엑셀 다운로드 (한글 변환 + 탭별 다운로드 지원) ───────────
+// 상태값 한글 매핑
+const _TM_STATUS_KR = {pending:'미배정', assigned:'배정', contacted:'통화완료', no_answer:'부재중', drop:'드랍', consulting:'상담중'};
+// TM 탭 → 한글 이름
+const _TM_TAB_KR = {all:'관리DB', new:'신규배정', contacted:'통화완료', happycall:'해피콜', drop:'드랍', recalldone:'재콜', tmdone:'본사이관완료', scheduled:'미팅예정'};
+
 async function openTmExport(){
   if(!window.XLSX){await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
-  // tm_done=true(이관완료)된 건은 tmLeads에서 제외 → allLeads 관리자뷰로만 이동
-  const data=tmLeads.filter(l=>!isTmCompleted(l));
+  // 현재 탭 정보
+  const curTab = _tmMainTab || 'all';
+  const curTabKr = _TM_TAB_KR[curTab] || '현재탭';
+  // 현재 탭 필터 결과 (검색어·지점필터 반영)
+  const _s = (document.getElementById('tm-search')?.value||'').toLowerCase();
+  const _br = document.getElementById('tm-branch-filter')?.value || '';
+  const curData = _filterForTab(curTab, _s, _br);
+  const allData = tmLeads.filter(l=>!isTmCompleted(l));
+  // 확인 모달: 전체 / 현재탭만 선택
+  const choice = await new Promise(resolve=>{
+    const ov=document.createElement('div');
+    ov.className='ov-bg';
+    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:99999';
+    ov.innerHTML = `
+      <div style="background:#fff;border-radius:12px;padding:22px 24px;width:420px;max-width:92vw;box-shadow:0 20px 60px rgba(0,0,0,.25)">
+        <div style="font-size:16px;font-weight:800;color:var(--navy);margin-bottom:8px">📥 엑셀 다운로드</div>
+        <div style="font-size:13px;color:var(--gray-500);margin-bottom:18px">어떤 범위로 다운로드할까요?</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <button id="_tmx-cur" class="btn btn-primary" style="justify-content:flex-start;text-align:left;padding:12px 14px">
+            <span style="font-weight:700">📋 현재 탭 &laquo;${curTabKr}&raquo; 만 (${curData.length}건)</span>
+          </button>
+          <button id="_tmx-all" class="btn btn-outline" style="justify-content:flex-start;text-align:left;padding:12px 14px">
+            <span style="font-weight:700">🗂 전체 DB (${allData.length}건)</span>
+          </button>
+          <button id="_tmx-cancel" class="btn btn-outline" style="margin-top:6px">취소</button>
+        </div>
+      </div>`;
+    document.body.appendChild(ov);
+    const cleanup = v=>{ov.remove();resolve(v);};
+    ov.querySelector('#_tmx-cur').onclick=()=>cleanup('cur');
+    ov.querySelector('#_tmx-all').onclick=()=>cleanup('all');
+    ov.querySelector('#_tmx-cancel').onclick=()=>cleanup(null);
+    ov.onclick=e=>{if(e.target===ov)cleanup(null);};
+  });
+  if(!choice) return;
+  const data = choice==='cur' ? curData : allData;
+  const scopeKr = choice==='cur' ? curTabKr : '전체';
   if(!data.length){showToast('내보낼 데이터가 없습니다.','error');return;}
   const rows=[['회사명','신청자','연락처','지점','팀장','상태','TM결과','TM날짜','1차미팅일','TM내용','해피콜내용','분배날짜']];
   data.forEach(l=>rows.push([
-    l.company_name||'',l.contact_name||'',l.phone||'',
-    l.branch_name||'',l.team_name||'',l.status||'',
-    l.tm_result||'',l.tm_date||'',l.tm_meeting||'',
-    l.tm_content||'',l.tm_happycall||'',
+    l.company_name||'', l.contact_name||'', l.phone||'',
+    l.branch_name||'', l.team_name||'',
+    _TM_STATUS_KR[l.status]||l.status||'',
+    _TM_STATUS_KR[l.tm_result]||l.tm_result||'',
+    l.tm_date||'', l.tm_meeting||'',
+    l.tm_content||'', l.tm_happycall||'',
     (l.distributed_at||l.created_at||'').slice(0,10)
   ]));
   const wb=XLSX.utils.book_new();
   const ws=XLSX.utils.aoa_to_sheet(rows);
   ws['!cols']=[20,12,14,10,12,8,10,10,10,30,20,10].map(w=>({wch:w}));
-  XLSX.utils.book_append_sheet(wb,ws,'대전TM');
-  XLSX.writeFile(wb,'대전TM_'+new Date().toISOString().slice(0,10)+'.xlsx');
-  showToast('엑셀 다운로드 완료','success');
+  XLSX.utils.book_append_sheet(wb, ws, ('대전TM_'+scopeKr).slice(0,31));
+  XLSX.writeFile(wb, `대전TM_${scopeKr}_${new Date().toISOString().slice(0,10)}.xlsx`);
+  showToast(`엑셀 다운로드 완료 — ${scopeKr} ${data.length}건`,'success');
 }
 
 async function downloadTmTemplate(){
@@ -10755,22 +10820,29 @@ function _tmV2Filter(tab){
     // 본사이관완료 여부
     const isHqTransferred = l.tm_hq_transferred===true||l.tm_hq_transferred==='true';
 
+    // 리마인드 상태 판정
+    const _today = new Date().toISOString().slice(0,10);
+    const _rDate = (l.reminder_date||'').slice(0,10);
+    const isReminderPending = _rDate && _rDate > _today; // 미도래 (예약됨)
+    const isReminderDue     = _rDate && _rDate <= _today; // 도래 (리마인드 탭 노출)
+
     switch(tab){
-      case 'manage':       return isAnyTm&&!isDrop&&!isHqTransferred;
-      case 'pending':      return isTmSolo&&isPending&&!isHqTransferred;
-      case 'collab':       return isCollab&&!isDrop&&!isHqTransferred;
-      case 'contacted':    return isTmSolo&&isContacted&&!isHqTransferred;
-      case 'happycall':    return isAnyTm&&hasHappycall&&!isDrop&&!isHqTransferred;
+      case 'manage':       return isAnyTm&&!isDrop&&!isHqTransferred&&!isReminderPending;
+      case 'pending':      return isTmSolo&&isPending&&!isHqTransferred&&!isReminderPending&&!isReminderDue;
+      case 'collab':       return isCollab&&!isDrop&&!isHqTransferred&&!isReminderPending&&!isReminderDue;
+      case 'contacted':    return isTmSolo&&isContacted&&!isHqTransferred&&!isReminderPending&&!isReminderDue;
+      case 'happycall':    return isAnyTm&&hasHappycall&&!isDrop&&!isHqTransferred&&!isReminderPending&&!isReminderDue;
       case 'drop':         return isAnyTm&&isDrop&&!isHqTransferred;
       case 'hqtransfer':   return isHqTransferred; // 본사이관완료 — 모두 표시
-      default:             return isAnyTm;
+      case 'reminder':     return isAnyTm&&isReminderDue&&!isDrop&&!isHqTransferred; // 도래한 리마인드만
+      default:             return isAnyTm&&!isReminderPending;
     }
   });
 }
 
 // ── 카운트 갱신 ───────────────────────────────────────────────────────────
 function _tmV2UpdateCounts(){
-  const tabs=['manage','pending','collab','contacted','happycall','drop','hqtransfer'];
+  const tabs=['manage','pending','collab','contacted','happycall','drop','hqtransfer','reminder'];
   tabs.forEach(tab=>{
     const cnt=_tmV2Filter(tab).length;
     const el=document.getElementById('tmv2-cnt-'+tab);
@@ -10852,7 +10924,9 @@ function tmV2Render(){
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-async function loadTmPanel(){
+async function loadTmPanel(opts){
+  // opts.preserveTab === true 이면 현재 탭 상태 유지 (활동기록 저장 후 호출 시 사용)
+  const _preserveTab = !!(opts && opts.preserveTab);
   // allActivities 로드 (TM 히스토리 표시용) — 미로드 시 전체 조회
   if(!testMode && (!allActivities || allActivities.length===0)){
     allActivities = await _loadAllActivities().catch(()=>[]);
@@ -10983,9 +11057,13 @@ async function loadTmPanel(){
   });
 
   tmFiltered=[...tmLeads];
-  // 초기 탭: 저장된 값 또는 'new'
-  const defaultTab=getTmDefaultTab();
-  _tmMainTab=defaultTab; _tmQuickTab=defaultTab;
+  // 초기 탭: preserveTab=true 이면 현재 _tmMainTab/_tmQuickTab 유지, 아니면 저장된 기본 탭으로 설정
+  const defaultTab = _preserveTab && _tmMainTab
+    ? _tmMainTab
+    : getTmDefaultTab();
+  if(!_preserveTab){
+    _tmMainTab=defaultTab; _tmQuickTab=defaultTab;
+  }
   // 탭 UI만 변경 (렌더 없이)
   document.querySelectorAll('.tm-main-tab').forEach(b=>{
     b.style.color='var(--gray-500)';b.style.borderBottom='2px solid transparent';b.style.fontWeight='600';
@@ -11862,7 +11940,7 @@ async function confirmTmDrop(lid){
   const reason=detail?`${cat} - ${detail}`:cat;
   const now=new Date().toISOString();
   await dbU('leads',lid,{status:'drop',drop_reason:reason,drop_category:cat,dropped_at:now,current_stage:'드랍'});
-  await logActivity(lid,'status_change','TM 드랍: '+reason,'drop','드랍');
+  await logActivity(lid,'note','[드랍] '+reason,'drop','드랍');
   if(allLeads){const i=allLeads.findIndex(x=>x.id===lid);if(i>=0)allLeads.splice(i,1);}
   if(tmLeads){const i=tmLeads.findIndex(x=>x.id===lid);if(i>=0)tmLeads.splice(i,1);}
   closeOv('ov-tm-drop-modal');
@@ -12030,7 +12108,7 @@ async function saveTmRecord(){
   if(curTmStatus==='drop'){
     const dropReason=document.getElementById('tm-drop-reason')?.value.trim()||'TM 드랍';
     await dbU('leads',lid,{current_stage:'드랍',drop_reason:dropReason,drop_date:new Date().toISOString().slice(0,10)});
-    await logActivity(lid,'status_change','TM 드랍 처리: '+dropReason,'drop','드랍');
+    await logActivity(lid,'note','[드랍] '+dropReason,'drop','드랍');
   }
 
   // 2. TM 필드 DB 저장 (tm_result, tm_content, tm_date, tm_meeting)
@@ -12086,7 +12164,7 @@ async function saveTmRecord(){
   }
   // 관리자/지점장 전체DB 진행내용 즉시 갱신
   if(typeof filterLeads==='function') filterLeads();
-  await loadTmPanel();
+  await loadTmPanel({preserveTab:true});
 }
 
 
@@ -12489,12 +12567,21 @@ function pickDistMode(mode, btn){
   });
   if(btn){ btn.style.fontWeight='700'; btn.style.color='var(--navy)'; btn.style.borderBottom='2px solid var(--navy)'; }
   // 섹션 전환
-  ['branch','daejeon','recall','happycall','team_transfer'].forEach(sec=>{
+  ['branch','daejeon','recall','happycall','team_transfer','reminder'].forEach(sec=>{
     const el=document.getElementById('dist-section-'+sec);
     if(el) el.style.display=(sec===mode?'':'none');
   });
   const cb=document.getElementById('dist-confirm-btn');
-  if(cb) cb.textContent=mode==='recall'?'회수 확정':mode==='daejeon'?'이관 확정':mode==='happycall'?'해피콜 이관':mode==='team_transfer'?'팀장 이관':'배정 확정';
+  if(cb) cb.textContent=mode==='recall'?'회수 확정':mode==='daejeon'?'이관 확정':mode==='happycall'?'해피콜 이관':mode==='team_transfer'?'팀장 이관':mode==='reminder'?'리마인드 이관':'배정 확정';
+}
+
+// 리마인드 날짜 프리셋 (월 단위)
+function setReminderPreset(months){
+  const d=new Date();
+  d.setMonth(d.getMonth()+months);
+  const iso=d.toISOString().slice(0,10);
+  const el=document.getElementById('reminder-date');
+  if(el) el.value=iso;
 }
 
 function openDistribute(){
@@ -12510,6 +12597,9 @@ function openDistribute(){
   const tw=document.getElementById('dist-team-wrap'); if(tw)tw.style.display='none';
   const tn=document.getElementById('dist-team-note'); if(tn)tn.textContent='';
   if(document.getElementById('dist-note'))(document.getElementById('dist-note')||{}).value='';
+  // 리마인드 필드 초기화
+  const _rd=document.getElementById('reminder-date'); if(_rd) _rd.value='';
+  const _rm=document.getElementById('reminder-memo'); if(_rm) _rm.value='';
 
   // ── 권한별 지점장 카드 동적 렌더링 ──
   const grid=document.getElementById('dist-branch-cards');
@@ -13115,7 +13205,7 @@ async function confirmBrDropWithReason(ids){
   const now=new Date().toISOString();
   for(const id of ids){
     await dbU('leads',id,{drop_reason:reason,drop_category:cat,status:'drop',current_stage:'드랍',dropped_at:now});
-    await logActivity(id,'status_change',`드랍: ${reason}`,'drop','드랍');
+    await logActivity(id,'note',`[드랍] ${reason}`,'drop','드랍');
   }
   closeOv('ov-br-drop-reason'); clearBrSel();
   showToast(ids.length+'건 드랍','success'); loadBranchScreen();
@@ -13739,7 +13829,7 @@ async function rcDropOneConfirm(id){
   const now=new Date().toISOString();
   const dropData={status:'drop',current_stage:'드랍',drop_reason:reason,drop_category:category,dropped_at:now,updated_at:now};
   await dbU('leads',id,dropData);
-  await sbPost('activities',{id:uuid(),lead_id:id,type:'status_change',content:`드랍: ${reason}`,stage:'',author:curUser?.name||'',created_at:now,date:now.slice(0,10)});
+  await sbPost('activities',{id:uuid(),lead_id:id,type:'note',content:`[드랍] ${reason}`,stage:'드랍',author:curUser?.name||'',created_at:now,date:now.slice(0,10)});
   if(allLeads){const i=allLeads.findIndex(l=>l.id===id);if(i>=0)allLeads.splice(i,1);}
   closeOv('ov-rc-drop');
   showToast('드랍 처리 완료','success');
@@ -14453,6 +14543,37 @@ async function confirmDistribute(){
     }
     closeOv('ov-distribute'); clearSel();
     showToast(`${ids.length}건 해피콜 이관 (예정일 ${hcDateStr})`,'success'); loadLeads(); return;
+  }
+
+  // ── 리마인드 이관 ─────────────────────────────────
+  // 지정된 재콜일에 대전TM 리마인드 탭에 노출. 도래 전에는 모든 탭에서 숨김.
+  if(_distMode==='reminder'){
+    const rDate=document.getElementById('reminder-date')?.value||'';
+    const rMemo=document.getElementById('reminder-memo')?.value.trim()||'';
+    if(!rDate){showToast('재콜 예정일을 선택하세요.','error');return;}
+    const _today=new Date().toISOString().slice(0,10);
+    if(rDate<_today){showToast('재콜 예정일은 오늘 이후여야 합니다.','error');return;}
+    const rSource=curUser?.name||'';
+    // 원래 지점/팀장 정보를 유지하되, 대전TM 협업 관계로 세팅
+    for(const id of ids){
+      const lead=(allLeads||[]).find(l=>l.id===id)||{};
+      let cb=[];
+      try{cb=JSON.parse(lead.collab_branches||'[]');}catch(e){cb=[];}
+      if(!cb.includes('대전TM')) cb.push('대전TM');
+      const rData={
+        reminder_date:rDate,
+        reminder_memo:rMemo,
+        reminder_source:rSource,
+        tm_transferred:true,
+        collab_branches:JSON.stringify(cb)
+      };
+      await dbU('leads',id,rData);
+      await logActivity(id,'note',`⏰ [리마인드 이관] ${rDate} 재콜 예정${rMemo?' — '+rMemo:''}`,'','');
+      if(allLeads){const i=allLeads.findIndex(r=>r.id===id);if(i>=0)allLeads[i]={...allLeads[i],...rData};}
+    }
+    closeOv('ov-distribute'); clearSel();
+    showToast(`${ids.length}건 리마인드 이관 완료 — 예정일 ${rDate}`,'success');
+    filterLeads(); updateLeadsSubTabCounts(); return;
   }
 
   // ── 대전TM 단독 배정 (관리자가 지점카드에서 대전TM 선택) ──
