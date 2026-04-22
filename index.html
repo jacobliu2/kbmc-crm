@@ -1804,6 +1804,31 @@ tbody tr.selected td{background:var(--blue-50)!important}
           <button class="btn btn-sm" style="background:#f59e0b;color:#fff;border-color:#f59e0b;white-space:nowrap" onclick="tmNotifyLeaders()">📢 담당팀장에게 알림 발송</button>
         </div>
 
+        <!-- 리마인드 이관 (모든 역할에서 접근 가능) -->
+        <div id="tm-reminder-wrap" style="margin-bottom:14px;padding:14px;background:rgba(124,58,237,.06);border:1px solid rgba(124,58,237,.25);border-radius:var(--r-sm)">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <div style="font-size:12px;font-weight:700;color:#6d28d9">⏰ 리마인드 이관</div>
+            <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--gray-600);cursor:pointer">
+              <input type="checkbox" id="tm-reminder-enable" onclick="tmToggleReminderFields(this.checked)" style="accent-color:#7c3aed">
+              <span>이 DB를 리마인드로 지정</span>
+            </label>
+          </div>
+          <div id="tm-reminder-fields" style="display:none">
+            <div style="font-size:11px;color:var(--gray-500);margin-bottom:8px">지정일 도래 전까지는 모든 탭에서 숨김. 도래 후 대전TM <strong>⏰ 리마인드</strong> 탭에 자동 노출됩니다.</div>
+            <div style="font-size:11px;font-weight:700;color:var(--gray-500);margin-bottom:5px">재콜 예정일</div>
+            <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px">
+              <button type="button" class="btn btn-outline btn-xs" onclick="tmSetReminderPreset(1)" style="font-size:11px;padding:4px 10px">1개월</button>
+              <button type="button" class="btn btn-outline btn-xs" onclick="tmSetReminderPreset(3)" style="font-size:11px;padding:4px 10px">3개월</button>
+              <button type="button" class="btn btn-outline btn-xs" onclick="tmSetReminderPreset(6)" style="font-size:11px;padding:4px 10px">6개월</button>
+              <button type="button" class="btn btn-outline btn-xs" onclick="tmSetReminderPreset(12)" style="font-size:11px;padding:4px 10px">1년</button>
+            </div>
+            <input type="date" id="tm-reminder-date" style="width:100%;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;margin-bottom:8px">
+            <div style="font-size:11px;font-weight:700;color:var(--gray-500);margin-bottom:5px">메모 <span style="font-weight:400">(대전TM이 재콜 시 참고할 내용)</span></div>
+            <textarea id="tm-reminder-memo" rows="2" placeholder="예) 하반기 매출 확정 후 재접근 희망, 가격 재제안 검토 요청 등"
+              style="width:100%;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;resize:vertical"></textarea>
+          </div>
+        </div>
+
         <div class="mf">
           <button class="btn btn-outline" onclick="closeM('modal-tm-input')">취소</button>
           <button class="btn btn-primary" onclick="saveTmRecord()">저장</button>
@@ -3672,7 +3697,7 @@ function renderLeadCards(){
     const hoursAgo = isUnrec ? Math.floor((now-assignedAt)/3600000) : 0;
 
     return `<div class="lead-card ${isOverdue?'overdue':isUnrec?'unrecorded':''}"
-      onclick="cardClick('${l.id}','${esc(l.company_name||'')}',${isUnrec})">
+      onclick="cardClick('${l.id}','${escJs(l.company_name||'')}',${isUnrec})">
       <!-- 상단: 이름 + 상태 -->
       <div class="lead-card-top">
         <div>
@@ -3719,7 +3744,7 @@ function renderLeadCards(){
       </div>
       <!-- 액션 버튼 -->
       <div class="lead-card-actions" style="margin-top:12px" onclick="event.stopPropagation()">
-        <button class="btn btn-primary" onclick="openActM('${l.id}','${esc(l.company_name||'')}')"
+        <button class="btn btn-primary" onclick="openActM('${l.id}','${escJs(l.company_name||'')}')"
           style="background:${isUnrec?'var(--err)':''};border-color:${isUnrec?'var(--err)':''}">
           ✏️ ${isUnrec?'지금 기록!':'활동 기록'}
         </button>
@@ -4518,6 +4543,17 @@ function showScreen(id, btn){
 
 // ── 유틸 ─────────────────────────────────────────────────
 function esc(s){const d=document.createElement('div');d.textContent=String(s||'');return d.innerHTML;}
+// onclick 인라인 내부에서 JS 문자열 리터럴로 사용되는 값 이스케이프
+// 예: onclick="openX('${escJs(name)}')" — name에 ", ', \, 개행 포함되어도 안전
+function escJs(s){
+  return String(s==null?'':s)
+    .replace(/\\/g,'\\\\')
+    .replace(/'/g,"\\'")
+    .replace(/"/g,'\\"')
+    .replace(/\n/g,'\\n')
+    .replace(/\r/g,'\\r')
+    .replace(/\t/g,'\\t');
+}
 // KST(UTC+9) 기준 날짜 추출 헬퍼
 function toKstDate(v){
   if(!v) return null;
@@ -5911,8 +5947,8 @@ function colVal(l, key, acts){
       // activities 캐시 없으면 leads.tm_content 로 fallback (대전TM 기록)
       if(!latest){
         const _tmFb=l.tm_content?('[TM] '+l.tm_content).slice(0,40):'';
-        if(_tmFb) return`<td style="font-size:11px;max-width:220px;color:var(--gray-600);cursor:pointer;overflow:visible;font-style:italic" onclick="event.stopPropagation();openActMHistory('${l.id}','${esc(l.company_name||'')}')">${esc(_tmFb)}</td>`;
-        return`<td style="font-size:11px;color:var(--gray-300);cursor:pointer" onclick="event.stopPropagation();openActMHistory('${l.id}','${esc(l.company_name||'')}')">-</td>`;
+        if(_tmFb) return`<td style="font-size:11px;max-width:220px;color:var(--gray-600);cursor:pointer;overflow:visible;font-style:italic" onclick="event.stopPropagation();openActMHistory('${l.id}','${escJs(l.company_name||'')}')">${esc(_tmFb)}</td>`;
+        return`<td style="font-size:11px;color:var(--gray-300);cursor:pointer" onclick="event.stopPropagation();openActMHistory('${l.id}','${escJs(l.company_name||'')}')">-</td>`;
       }
       const preview=esc((latest.content||'').slice(0,40));
       const extra=cnt>1?` <span style="font-size:10px;color:var(--gray-400);white-space:nowrap">+${cnt-1}</span>`:'';
@@ -5921,9 +5957,9 @@ function colVal(l, key, acts){
       const _acD=latest.created_at?new Date(latest.created_at).getTime():0;
       if(_tmD>_acD&&l.tm_content){
         const _tmPv=esc(('[TM] '+l.tm_content).slice(0,40));
-        return`<td style="font-size:11px;max-width:220px;color:var(--gray-700);cursor:pointer;overflow:visible" onclick="event.stopPropagation();openActMHistory('${l.id}','${esc(l.company_name||'')}')">${_tmPv}${extra}</td>`;
+        return`<td style="font-size:11px;max-width:220px;color:var(--gray-700);cursor:pointer;overflow:visible" onclick="event.stopPropagation();openActMHistory('${l.id}','${escJs(l.company_name||'')}')">${_tmPv}${extra}</td>`;
       }
-      return`<td style="font-size:11px;max-width:220px;color:var(--gray-700);cursor:pointer;overflow:visible" onclick="event.stopPropagation();openActMHistory('${l.id}','${esc(l.company_name||'')}')">${preview}${extra}</td>`;
+      return`<td style="font-size:11px;max-width:220px;color:var(--gray-700);cursor:pointer;overflow:visible" onclick="event.stopPropagation();openActMHistory('${l.id}','${escJs(l.company_name||'')}')">${preview}${extra}</td>`;
     }
 
     default: return`<td>-</td>`;
@@ -10891,8 +10927,8 @@ function tmV2Render(){
     const actionBtn=_tmV2Tab==='contacted'
       ?`<button class="btn btn-xs" style="background:var(--navy);color:#fff;border:none;font-size:10px;white-space:nowrap" onclick="event.stopPropagation();openTmTransferModal('${l.id}')">본사이관</button>`
       :_tmV2Tab==='hqtransfer'
-      ?`<button class="btn btn-xs" style="background:var(--gray-100);color:var(--gray-600);border:none;font-size:10px;white-space:nowrap" onclick="event.stopPropagation();openTmInput('${l.id}','${esc(l.company_name||'')}')">기록보기</button>`
-      :`<button class="btn btn-primary btn-xs" onclick="event.stopPropagation();openTmInput('${l.id}','${esc(l.company_name||'')}')">기록</button>`;
+      ?`<button class="btn btn-xs" style="background:var(--gray-100);color:var(--gray-600);border:none;font-size:10px;white-space:nowrap" onclick="event.stopPropagation();openTmInput('${l.id}','${escJs(l.company_name||'')}')">기록보기</button>`
+      :`<button class="btn btn-primary btn-xs" onclick="event.stopPropagation();openTmInput('${l.id}','${escJs(l.company_name||'')}')">기록</button>`;
 
     // 컬럼별 TD 맵
     const tdMap = {
@@ -10917,7 +10953,7 @@ function tmV2Render(){
     const tds = TM_COLS.filter(c=>vc.has(c.k)).map(c=>tdMap[c.k]||'<td>-</td>').join('');
 
     return`<tr style="cursor:pointer;border-bottom:1px solid var(--gray-100)"
-      onclick="openTmInput('${l.id}','${esc(l.company_name||'')}')"
+      onclick="openTmInput('${l.id}','${escJs(l.company_name||'')}')"
       onmouseover="this.style.background='var(--gray-50)'"
       onmouseout="this.style.background=''">${tds}</tr>`;
   }).join('');
@@ -11284,7 +11320,7 @@ function renderTmListView(){
             <td style="padding:9px 12px;font-size:11px;color:var(--blue);font-weight:600">${fmtD(l.tm_meeting)||'-'}</td>
             <td style="padding:9px 12px;font-size:11px;color:var(--gray-500);max-width:180px">${esc((lastAct?.content||'').slice(0,40)||'-')}</td>
             <td style="padding:9px 12px">
-              <button class="btn btn-primary btn-xs" onclick="event.stopPropagation();openTmInput('${l.id}','${esc(l.company_name||'')}')">기록</button>
+              <button class="btn btn-primary btn-xs" onclick="event.stopPropagation();openTmInput('${l.id}','${escJs(l.company_name||'')}')">기록</button>
             </td>
           </tr>`;
         }).join('')}
@@ -11394,7 +11430,7 @@ function _buildTmCard(l,acts){
 
   const btnRow=`<div style="display:flex;gap:6px;justify-content:flex-end;align-items:center">
     <button style="display:inline-flex;align-items:center;gap:4px;padding:6px 13px;font-size:12px;font-weight:700;color:#fff;background:#3182f6;border:none;border-radius:7px;cursor:pointer;white-space:nowrap;line-height:1"
-      onclick="event.stopPropagation();openTmInput('${l.id}','${esc(l.company_name||'')}')">
+      onclick="event.stopPropagation();openTmInput('${l.id}','${escJs(l.company_name||'')}')">
       <span style="font-size:13px">📞</span> TM 기록
     </button>
     ${l.status==='contacted'?`
@@ -11530,7 +11566,7 @@ function renderTmTable(){
     const lastAct=acts.filter(a=>a.lead_id===l.id&&a.type!=='assign').sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];
     const isCollabTrack=(function(){try{const cb=JSON.parse(l.collab_branches||'[]');return cb.includes('대전TM')&&!l.tm_transferred;}catch(e){return false;}})();
     return`<tr${isCollabTrack?' style="background:rgba(49,130,246,.03)"':''}>
-      <td style="font-weight:700;color:var(--navy);cursor:pointer" onclick="openTmInput('${l.id}','${esc(l.company_name||'')}')">
+      <td style="font-weight:700;color:var(--navy);cursor:pointer" onclick="openTmInput('${l.id}','${escJs(l.company_name||'')}')">
         ${esc(l.company_name||'-')}
         ${isCollabTrack?'<span class="badge" style="font-size:9px;background:rgba(49,130,246,.1);color:var(--blue);margin-left:4px">🔍추적</span>':''}
       </td>
@@ -11544,7 +11580,7 @@ function renderTmTable(){
       <td style="font-size:11px;color:var(--gray-400)">${l.branch_name?'<span class="badge badge-navy" style="font-size:9px">'+esc(l.branch_name)+'</span> ':''}${l.team_name?'<span class="badge badge-blue" style="font-size:9px">'+esc(l.team_name)+'</span>':''}</td>
       <td style="font-size:11px;color:var(--gray-400)">${fmtD(l.assigned_at||l.created_at)}</td>
       <td style="font-size:11px;color:var(--gray-500);overflow:visible">${esc(lastAct?.content?.slice(0,40)||'-')}</td>
-      <td><button class="btn btn-primary btn-xs" onclick="event.stopPropagation();openTmInput('${l.id}','${esc(l.company_name||'')}')">기록</button></td>
+      <td><button class="btn btn-primary btn-xs" onclick="event.stopPropagation();openTmInput('${l.id}','${escJs(l.company_name||'')}')">기록</button></td>
     </tr>`;
   }).join('');
 }
@@ -11558,6 +11594,17 @@ function openTmInput(lid,cname){
   (document.getElementById('tm-content')||{}).value='';
   (document.getElementById('tm-meeting-date')||{}).value='';
   curTmStatus='contacted';
+  // 리마인드 필드 초기화 (기존 값 있으면 세팅)
+  const _rEnable=document.getElementById('tm-reminder-enable');
+  const _rDate=document.getElementById('tm-reminder-date');
+  const _rMemo=document.getElementById('tm-reminder-memo');
+  const _rFields=document.getElementById('tm-reminder-fields');
+  const _rlead=(allLeads||[]).find(l=>l.id===lid)||(tmLeads||[]).find(l=>l.id===lid);
+  const _existingRDate=(_rlead?.reminder_date||'').slice(0,10);
+  if(_rEnable) _rEnable.checked=!!_existingRDate;
+  if(_rDate) _rDate.value=_existingRDate||'';
+  if(_rMemo) _rMemo.value=_rlead?.reminder_memo||'';
+  if(_rFields) _rFields.style.display=_existingRDate?'':'none';
   // 드랍 사유 초기화
   const _drWrap=document.getElementById('tm-drop-reason-wrap');
   if(_drWrap) _drWrap.style.display='none';
@@ -11761,11 +11808,40 @@ async function _renderTmCompanyHistory(lid, lead){
 
   const TYPE_ICON2={call:'📞',meeting:'🤝',email:'📧',online:'💻',note:'📝',proposal:'📋',contract:'🎉'};
 
-  const histHtml = allActsFull.length
-    ? `<div style="font-size:12px;font-weight:700;color:var(--blue);margin-bottom:8px">
-        🏢 기업 활동 히스토리 <span style="font-size:10px;font-weight:400;color:var(--gray-400)">(${allActsFull.length}건 · 오래된순)</span>
+  const histHeader = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <div style="font-size:12px;font-weight:700;color:var(--blue)">
+      🏢 기업 활동 히스토리 <span style="font-size:10px;font-weight:400;color:var(--gray-400)">(${allActsFull.length}건 · 오래된순)</span>
+    </div>
+    <button type="button" onclick="tmHistInlineToggle('${lid}')"
+      style="padding:4px 10px;font-size:11px;font-weight:700;color:#fff;background:#00a86b;border:none;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:3px">
+      ➕ 추가
+    </button>
+  </div>
+  <div id="tm-hist-inline-form" style="display:none;margin-bottom:8px;padding:10px;background:rgba(0,168,107,.06);border:1px solid rgba(0,168,107,.25);border-radius:var(--r-sm)">
+    <div style="display:flex;gap:6px;margin-bottom:6px">
+      <div style="flex:1">
+        <div style="font-size:10px;font-weight:700;color:var(--gray-500);margin-bottom:3px">📅 기록 일자 (소급 입력 가능)</div>
+        <input type="date" id="tm-hist-inline-date" style="width:100%;padding:6px 8px;border:1px solid var(--gray-200);border-radius:var(--r-sm);font-size:12px;font-family:inherit">
       </div>
-      ${allActsFull.map((a,i)=>{
+      <div style="flex-shrink:0;min-width:90px">
+        <div style="font-size:10px;font-weight:700;color:var(--gray-500);margin-bottom:3px">유형</div>
+        <select id="tm-hist-inline-type" style="width:100%;padding:6px 8px;border:1px solid var(--gray-200);border-radius:var(--r-sm);font-size:12px;font-family:inherit">
+          <option value="call">📞 통화</option>
+          <option value="meeting">🤝 미팅</option>
+          <option value="note">📝 메모</option>
+        </select>
+      </div>
+    </div>
+    <textarea id="tm-hist-inline-content" rows="2" placeholder="기록 내용을 입력하세요 (작성자: 대전센터)"
+      style="width:100%;padding:8px 10px;border:1px solid var(--gray-200);border-radius:var(--r-sm);font-size:12px;font-family:inherit;resize:vertical;margin-bottom:6px"></textarea>
+    <div style="display:flex;gap:6px;justify-content:flex-end">
+      <button type="button" onclick="tmHistInlineToggle('${lid}')" class="btn btn-outline btn-xs">취소</button>
+      <button type="button" onclick="tmHistInlineSave('${lid}')" class="btn btn-xs" style="background:#00a86b;color:#fff;border-color:#00a86b">💾 저장</button>
+    </div>
+  </div>`;
+
+  const histHtml = allActsFull.length
+    ? histHeader + `${allActsFull.map((a,i)=>{
         const isTmAct=['대전센터','대전'].includes(String(a.author||'').trim());
         const borderColor=isTmAct?'var(--ok)':'var(--blue)';
         const bgColor=isTmAct?'rgba(0,192,115,.06)':'var(--gray-50)';
@@ -11786,9 +11862,67 @@ async function _renderTmCompanyHistory(lid, lead){
           </div>
         </div>`;
       }).join('')}`
-    : `<div style="font-size:11px;color:var(--gray-400);padding:4px 0">이전 활동 기록이 없습니다</div>`;
+    : histHeader + `<div style="font-size:11px;color:var(--gray-400);padding:4px 0">이전 활동 기록이 없습니다</div>`;
 
   wrap.innerHTML = dateBanner + histHtml;
+}
+
+// ── 기업 활동 히스토리 인라인 추가 — 토글 ─────────────────
+function tmHistInlineToggle(lid){
+  const form = document.getElementById('tm-hist-inline-form');
+  if(!form) return;
+  const isHidden = form.style.display === 'none' || !form.style.display;
+  if(isHidden){
+    form.style.display = 'block';
+    // 기본 날짜 = 오늘
+    const dateEl = document.getElementById('tm-hist-inline-date');
+    if(dateEl && !dateEl.value) dateEl.value = new Date().toISOString().slice(0,10);
+    const typeEl = document.getElementById('tm-hist-inline-type');
+    if(typeEl) typeEl.value = 'call';
+    const contentEl = document.getElementById('tm-hist-inline-content');
+    if(contentEl){ contentEl.value = ''; setTimeout(()=>contentEl.focus(), 50); }
+  } else {
+    form.style.display = 'none';
+  }
+}
+
+// ── 기업 활동 히스토리 인라인 추가 — 저장 ─────────────────
+async function tmHistInlineSave(lid){
+  if(!lid){ showToast('리드 정보가 없습니다','error'); return; }
+  const date = document.getElementById('tm-hist-inline-date')?.value || '';
+  const type = document.getElementById('tm-hist-inline-type')?.value || 'call';
+  const content = (document.getElementById('tm-hist-inline-content')?.value || '').trim();
+  if(!content){ showToast('기록 내용을 입력하세요','error'); return; }
+  if(!date){ showToast('기록 일자를 선택하세요','error'); return; }
+  // 미래 날짜 방지 (소급 기록 용도이므로 오늘까지만 허용)
+  const today = new Date().toISOString().slice(0,10);
+  if(date > today){ showToast('미래 날짜는 선택할 수 없습니다','error'); return; }
+
+  try{
+    // activities 테이블에 직접 기록 (type, author, content, date, created_at 제어)
+    const actRow = {
+      id: uuid(),
+      lead_id: lid,
+      type: type,
+      content: content,
+      stage: '',
+      author: curUser?.name || '대전센터',
+      date: date,
+      created_at: date + 'T' + new Date().toISOString().slice(11) // 선택 날짜 + 현재 시각
+    };
+    await sbPost('activities', actRow);
+    // 캐시 반영
+    if(Array.isArray(allActivities)) allActivities.unshift(actRow);
+    // 폼 닫기 + 히스토리 다시 렌더
+    const form = document.getElementById('tm-hist-inline-form');
+    if(form) form.style.display = 'none';
+    const lead = (tmLeads||[]).find(l=>l.id===lid) || (allLeads||[]).find(l=>l.id===lid);
+    await _renderTmCompanyHistory(lid, lead);
+    showToast('기록이 히스토리에 추가되었습니다','success');
+  }catch(e){
+    console.error('tmHistInlineSave error', e);
+    showToast('저장 중 오류가 발생했습니다','error');
+  }
 }
 
 // openLeadDetailModal — lead 객체를 받아 패널 오픈 (openPanel 래퍼)
@@ -11811,7 +11945,7 @@ function openLeadDetailModal(lead){
       </div>`).join('')}
       <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end">
         <button class="btn btn-outline" onclick="closeOv('ov-tm-lead-detail')">닫기</button>
-        <button class="btn btn-primary" onclick="closeOv('ov-tm-lead-detail');openTmInput('${lead.id}','${esc(lead.company_name||'')}')">📞 TM기록</button>
+        <button class="btn btn-primary" onclick="closeOv('ov-tm-lead-detail');openTmInput('${lead.id}','${escJs(lead.company_name||'')}')">📞 TM기록</button>
       </div>
     </div>`;
     ov.classList.add('open');
@@ -11864,7 +11998,7 @@ function openTmDetail(lid){
     </div>`:'<div style="font-size:12px;color:var(--gray-400);margin-bottom:14px;padding:8px 0">활동 기록 없음</div>'}
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="btn btn-outline" onclick="closeOv('ov-tm-detail')">닫기</button>
-      <button class="btn btn-primary" onclick="closeOv('ov-tm-detail');openTmInput('${lead.id}','${esc(lead.company_name||'')}')">📞 TM 기록</button>
+      <button class="btn btn-primary" onclick="closeOv('ov-tm-detail');openTmInput('${lead.id}','${escJs(lead.company_name||'')}')">📞 TM 기록</button>
     </div>
   </div>`;
   ov.classList.add('open');
@@ -12155,8 +12289,43 @@ async function saveTmRecord(){
       created_at:new Date().toISOString()
     });
   }
+
+  // 5. 리마인드 이관 처리 (체크박스 ON인 경우)
+  const _rEnable=document.getElementById('tm-reminder-enable')?.checked;
+  if(_rEnable){
+    const rDate=document.getElementById('tm-reminder-date')?.value||'';
+    const rMemo=document.getElementById('tm-reminder-memo')?.value.trim()||'';
+    const _today=new Date().toISOString().slice(0,10);
+    if(!rDate){
+      showToast('리마인드 예정일을 선택하세요.','error');
+      return;
+    }
+    if(rDate<_today){
+      showToast('리마인드 예정일은 오늘 이후여야 합니다.','error');
+      return;
+    }
+    // 기존 lead의 collab_branches에 대전TM 추가
+    const lead=(allLeads||[]).find(l=>l.id===lid);
+    let cb=[];
+    try{cb=JSON.parse(lead?.collab_branches||'[]');}catch(e){cb=[];}
+    if(!cb.includes('대전TM')) cb.push('대전TM');
+    const rData={
+      reminder_date:rDate,
+      reminder_memo:rMemo,
+      reminder_source:curUser?.name||'',
+      tm_transferred:true,
+      collab_branches:JSON.stringify(cb)
+    };
+    await dbU('leads', lid, rData);
+    await logActivity(lid,'note',`⏰ [리마인드 이관] ${rDate} 재콜 예정${rMemo?' — '+rMemo:''}`,'','');
+    if(allLeads){
+      const _i=allLeads.findIndex(l=>l.id===lid);
+      if(_i>=0) allLeads[_i]={...allLeads[_i],...rData};
+    }
+  }
+
   closeM('modal-tm-input');
-  showToast('TM 기록 저장','success');
+  showToast(_rEnable?`TM 기록 저장 — 리마인드 ${document.getElementById('tm-reminder-date').value} 등록`:'TM 기록 저장','success');
   // 로컬 캐시 즉시 갱신 — TM 기록 반영 (진행내용 컬럼 즉시 표시용)
   if(allLeads){
     const _tIdx=allLeads.findIndex(x=>x.id===lid);
@@ -12581,6 +12750,26 @@ function setReminderPreset(months){
   d.setMonth(d.getMonth()+months);
   const iso=d.toISOString().slice(0,10);
   const el=document.getElementById('reminder-date');
+  if(el) el.value=iso;
+}
+
+// 대전TM 기록 모달 내 리마인드 필드 토글
+function tmToggleReminderFields(show){
+  const el=document.getElementById('tm-reminder-fields');
+  if(el) el.style.display=show?'':'none';
+  // 켜질 때 기본값으로 6개월 후 세팅 (날짜 미입력 시)
+  if(show){
+    const d=document.getElementById('tm-reminder-date');
+    if(d && !d.value) tmSetReminderPreset(6);
+  }
+}
+
+// 대전TM 기록 모달 내 리마인드 날짜 프리셋
+function tmSetReminderPreset(months){
+  const d=new Date();
+  d.setMonth(d.getMonth()+months);
+  const iso=d.toISOString().slice(0,10);
+  const el=document.getElementById('tm-reminder-date');
   if(el) el.value=iso;
 }
 
@@ -13611,7 +13800,7 @@ async function rcRender(){
       <td style="padding:7px 10px;max-width:260px">${laTxt}</td>
       <td style="padding:7px 10px;white-space:nowrap" onclick="event.stopPropagation()">
         <button class="btn btn-sm btn-outline" style="color:var(--err);border-color:var(--err);font-size:11px;margin-right:4px" onclick="rcRecallOne('${id}')">↩ 회수</button>
-        <button class="btn btn-sm btn-outline" style="color:#ef4444;border-color:#ef4444;font-size:11px;background:rgba(239,68,68,.06)" onclick="rcDropOne('${id}','${esc(t.company_name||'')}')" title="드랍 처리">🚫 드랍</button>
+        <button class="btn btn-sm btn-outline" style="color:#ef4444;border-color:#ef4444;font-size:11px;background:rgba(239,68,68,.06)" onclick="rcDropOne('${id}','${escJs(t.company_name||'')}')" title="드랍 처리">🚫 드랍</button>
       </td>
     </tr>`;
   }
@@ -16308,7 +16497,7 @@ function renderMyLeadsTable(){
     const extL={...l};
     extL._na=na;
     return`<tr>
-      <td style="font-weight:700;color:var(--navy);cursor:pointer" onclick="openActM('${l.id}','${esc(l.company_name||'')}')">
+      <td style="font-weight:700;color:var(--navy);cursor:pointer" onclick="openActM('${l.id}','${escJs(l.company_name||'')}')">
         ${esc(l.company_name||'-')}
       </td>
       ${visCols.slice(1).map(c=>{
