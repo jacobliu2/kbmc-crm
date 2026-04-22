@@ -106,7 +106,10 @@ header{
   font-size:15px;font-weight:700;
   color:var(--gray-900);margin-right:24px;
   letter-spacing:-.3px;flex-shrink:0;
+  cursor:pointer;user-select:none;transition:opacity .12s;
 }
+.logo:hover{opacity:.7}
+.logo:active{opacity:.5}
 .logo span{color:var(--blue)}
 nav{display:flex;gap:2px;flex:1;overflow-x:auto}
 nav::-webkit-scrollbar{display:none}
@@ -909,7 +912,7 @@ tbody tr.selected td{background:var(--blue-50)!important}
   <!-- 모바일 슬라이드 메뉴 -->
   <div id="mob-nav-drawer" style="display:none;position:fixed;top:0;right:0;bottom:0;width:220px;background:#fff;z-index:200;box-shadow:-4px 0 20px rgba(0,0,0,.15);flex-direction:column;padding:0">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--gray-100)">
-      <span style="font-size:15px;font-weight:800;color:var(--navy)">KBMC CRM</span>
+      <span onclick="closeMobNav();goHome()" style="font-size:15px;font-weight:800;color:var(--navy);cursor:pointer;user-select:none" title="메인화면">KBMC CRM</span>
       <button onclick="closeMobNav()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--gray-400);padding:4px">✕</button>
     </div>
     <div id="mob-nav-list" style="display:flex;flex-direction:column;padding:10px 0;overflow-y:auto;flex:1"></div>
@@ -921,7 +924,7 @@ tbody tr.selected td{background:var(--blue-50)!important}
   </div>
 
   <header>
-    <div class="logo">KBMC <span>CRM</span></div>
+    <div class="logo" onclick="goHome()" title="메인화면으로 이동">KBMC <span>CRM</span></div>
     <nav id="main-nav"></nav>
     <div class="huser">
       <!-- 햄버거 버튼 (모바일만) -->
@@ -1783,6 +1786,20 @@ tbody tr.selected td{background:var(--blue-50)!important}
           </div>
           <div style="font-size:11px;color:var(--gray-400);margin-top:6px">완료처리 시 해피콜 탭에서 제외됩니다</div>
         </div>
+
+        <!-- 담당 팀장에게 알림 발송 (대전TM 전용) -->
+        <div id="tm-notify-wrap" style="display:none;margin-bottom:14px;padding:14px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.25);border-radius:var(--r-sm)">
+          <div style="font-size:12px;font-weight:700;color:#b45309;margin-bottom:4px">📢 담당 팀장에게 알림</div>
+          <div style="font-size:11px;color:var(--gray-500);margin-bottom:10px">대전에서 확인 후 진행 어려움 / 미팅 불가 시, 해당 DB의 담당팀장에게 공지로 알려 빠른 후속 조치를 요청할 수 있습니다.</div>
+          <div class="fg" style="margin-bottom:8px">
+            <label style="font-size:11px;font-weight:700;color:var(--gray-500)">알림 메모 <span style="font-weight:400">(선택 — 비워두면 위의 TM 내용이 사용됩니다)</span></label>
+            <textarea id="tm-notify-memo" rows="2" placeholder="예) 대표님 이번 달 미팅 어려우시다 함. 담당팀장이 재통화 부탁드립니다."
+              style="width:100%;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;resize:vertical"></textarea>
+          </div>
+          <div id="tm-notify-target-info" style="font-size:11px;color:var(--gray-500);margin-bottom:8px"></div>
+          <button class="btn btn-sm" style="background:#f59e0b;color:#fff;border-color:#f59e0b;white-space:nowrap" onclick="tmNotifyLeaders()">📢 담당팀장에게 알림 발송</button>
+        </div>
+
         <div class="mf">
           <button class="btn btn-outline" onclick="closeM('modal-tm-input')">취소</button>
           <button class="btn btn-primary" onclick="saveTmRecord()">저장</button>
@@ -4384,6 +4401,20 @@ const NAV_CFG = {
   tm:[{id:'tm-panel',l:'📞 관리 DB'},{id:'notices',l:'📢 공지함'}],
 };
 const RL={admin:'관리자',dbmanager:'DB관리자',branch:'지점장',team:'팀장',tm:'대전TM'};
+
+// ── KBMC CRM 로고 클릭 → 역할별 메인화면으로 이동 ───────────────
+function goHome(){
+  try{
+    if(!curUser||!curUser.role){ return; }
+    const nav = NAV_CFG[curUser.role] || [];
+    if(!nav.length) return;
+    const firstId = nav[0].id;
+    if(typeof showScreen==='function'){
+      const btn = document.querySelector('#main-nav .nb[data-s="'+firstId+'"]');
+      showScreen(firstId, btn||null);
+    }
+  }catch(e){ console.warn('goHome error',e); }
+}
 
 function startApp(){
 
@@ -11475,9 +11506,138 @@ function openTmInput(lid,cname){
     }
     if(lead?.happycall_memo&&hcContentEl) hcContentEl.value=lead.happycall_memo;
   }
+  // ── 담당 팀장 알림 섹션 (대전TM 전용)
+  try{
+    const notifyWrap=document.getElementById('tm-notify-wrap');
+    const notifyMemo=document.getElementById('tm-notify-memo');
+    const notifyInfo=document.getElementById('tm-notify-target-info');
+    if(notifyWrap){
+      // 대상 팀장 이름 계산
+      const targets = _tmNotifyResolveTargets(lead);
+      // 대전TM 역할 && 대상 팀장이 있는 경우에만 표시
+      const showIt = curUser.role==='tm' && targets.length>0;
+      notifyWrap.style.display = showIt?'':'none';
+      if(notifyMemo) notifyMemo.value='';
+      if(notifyInfo){
+        if(targets.length){
+          notifyInfo.innerHTML='<strong>대상 팀장:</strong> '+targets.map(esc).join('·')+' <span style="color:var(--gray-400)">('+targets.length+'명)</span>';
+        } else {
+          notifyInfo.innerHTML='<span style="color:var(--err)">⚠ 담당 팀장 정보가 없어 알림 발송이 불가합니다</span>';
+        }
+      }
+    }
+  }catch(e){ console.warn('tm-notify init error',e); }
   // ── 기업 히스토리 — 모달 열린 직후 렌더링
   openM('modal-tm-input');
   setTimeout(()=>_renderTmCompanyHistory(lid, lead), 100);
+}
+
+// ── 대전TM → 담당팀장 알림: 대상 팀장 이름 해석 ─────────────
+// 재배정/회수/TM이관 이력이 있는 DB에서 "진짜 담당 팀장"을 찾아내는 헬퍼
+function _tmNotifyResolveTargets(lead){
+  if(!lead) return [];
+  const excluded = ['대전센터','대전TM','미배정',''];
+  const names = new Set();
+  // 1. team_names 배열 (복수 배정)
+  try{
+    const arr = typeof lead.team_names==='string' ? JSON.parse(lead.team_names||'[]') : (lead.team_names||[]);
+    if(Array.isArray(arr)){
+      arr.forEach(n=>{ const s=String(n||'').trim(); if(s && !excluded.includes(s)) names.add(s); });
+    }
+  }catch(e){}
+  // 2. team_name 단일
+  const t1 = String(lead.team_name||'').trim();
+  if(t1 && !excluded.includes(t1)) names.add(t1);
+  // 3. original_team_name (회수 전 담당자 보존 필드가 있을 경우)
+  const t2 = String(lead.original_team_name||'').trim();
+  if(t2 && !excluded.includes(t2)) names.add(t2);
+  return [...names];
+}
+
+// ── 대전TM → 담당팀장 알림 발송 ─────────────────────────────
+async function tmNotifyLeaders(){
+  try{
+    const lid=document.getElementById('tm-lead-id')?.value;
+    if(!lid){ showToast('리드 정보가 없습니다','error'); return; }
+    const lead = tmLeads.find(l=>l.id===lid) || allLeads.find(l=>l.id===lid);
+    if(!lead){ showToast('리드를 찾을 수 없습니다','error'); return; }
+    const targets = _tmNotifyResolveTargets(lead);
+    if(!targets.length){ showToast('담당 팀장 정보가 없습니다','error'); return; }
+
+    // 알림 메모: 지정된 것이 있으면 그것, 없으면 TM 내용 사용
+    const memoEl = document.getElementById('tm-notify-memo');
+    const contentEl = document.getElementById('tm-content');
+    const memo = (memoEl?.value||'').trim();
+    const tmContent = (contentEl?.value||'').trim();
+    const bodyMemo = memo || tmContent;
+    if(!bodyMemo){
+      showToast('알림 메모 또는 TM 내용을 먼저 입력하세요','error');
+      return;
+    }
+
+    if(!confirm(targets.join('·')+' 팀장에게 알림을 발송하시겠습니까?\n\n해당 팀장이 다음 로그인 시 공지함에서 확인합니다.')) return;
+
+    const today = new Date().toISOString().slice(0,10);
+    const endDate = new Date(Date.now()+7*86400000).toISOString().slice(0,10);
+    const companyName = lead.company_name || '-';
+    const phone = lead.phone || '';
+    const author = (curUser&&curUser.name) || '대전TM';
+
+    const notices = (typeof getNoticesV2==='function') ? getNoticesV2() : [];
+    const newRows = [];
+
+    for(const tn of targets){
+      const title = '📞 대전TM 확인결과 공유 — '+companyName;
+      const content =
+        tn+' 팀장님, 대전TM에서 "'+companyName+'" 확인 결과를 공유드립니다.\n\n'+
+        '[고객사] '+companyName+(phone?' ('+phone+')':'')+'\n'+
+        '[대전 확인내용]\n'+bodyMemo+'\n\n'+
+        '해당 DB 후속 진행 부탁드립니다.\n\n'+
+        '— '+author+' · '+today;
+      const row = {
+        id: (typeof uuid==='function') ? uuid() : ('n_'+Date.now()+'_'+Math.random().toString(36).slice(2,8)),
+        title: title,
+        content: content,
+        target_role: 'team',
+        target_roles: ['team'],
+        target_branches: [],
+        target_names: [tn],
+        start_date: today,
+        end_date: endDate,
+        author: author,
+        is_tm_notify: true,
+        lead_id: lid,
+        created_at: new Date().toISOString()
+      };
+      notices.unshift(row);
+      newRows.push(row);
+    }
+
+    if(typeof saveNoticesV2==='function') saveNoticesV2(notices);
+
+    // Supabase 저장 (팀장 PC에 실시간 전달)
+    if(typeof _sbSaveNotice==='function'){
+      try{
+        await Promise.all(newRows.map(r=>_sbSaveNotice(r)));
+      }catch(e){ console.warn('sb notice save error',e); }
+    }
+
+    // 활동 로그 기록 (이력 보존)
+    if(typeof logActivity==='function'){
+      try{
+        await logActivity(lid,'note','[대전TM→팀장 알림] '+targets.join('·')+': '+bodyMemo,'','');
+      }catch(e){}
+    }
+
+    if(typeof renderAdminNoticeList==='function') renderAdminNoticeList();
+    showToast(targets.length+'명 팀장에게 알림 발송 완료 ('+targets.join('·')+')','success');
+
+    // 메모 입력창 초기화
+    if(memoEl) memoEl.value='';
+  }catch(e){
+    console.error('tmNotifyLeaders error',e);
+    showToast('알림 발송 중 오류 발생','error');
+  }
 }
 // ── 기업 히스토리 렌더 (TM 기록 모달 상단) ─────────────
 async function _renderTmCompanyHistory(lid, lead){
@@ -15778,10 +15938,24 @@ function _toTs(raw){
 }
 function applySort(data){
   if(!_sortKey){
-    // 기본 정렬: tm_hq_transferred(대전재콜) 건을 assigned_at 내림차순으로 상단 표시
-    const hqItems=data.filter(l=>l.tm_hq_transferred===true||l.tm_hq_transferred==='true')
+    // 기본 정렬: tm_hq_transferred(대전재콜) 건 중 "아직 팀장에게 재배정되지 않은 건"만
+    // assigned_at 내림차순으로 상단 표시.
+    // 재배정 완료(team_name 있음) 시 일반 건처럼 섞임.
+    const _isHqPending = l => {
+      if(!(l.tm_hq_transferred===true||l.tm_hq_transferred==='true')) return false;
+      // 팀장 배정 여부 확인: team_name 또는 team_names 중 "대전센터/대전TM/빈값" 외에 실제 팀장이 있으면 재배정 완료로 간주
+      const excluded = new Set(['','대전센터','대전TM','미배정']);
+      const tn = String(l.team_name||'').trim();
+      if(tn && !excluded.has(tn)) return false;
+      try{
+        const arr = JSON.parse(l.team_names||'[]');
+        if(Array.isArray(arr)&&arr.some(n=>{const s=String(n||'').trim(); return s && !excluded.has(s);})) return false;
+      }catch(e){}
+      return true; // tm_hq_transferred=true 이면서 실제 팀장 없음 → 재배정 대기
+    };
+    const hqItems = data.filter(_isHqPending)
       .sort((a,b)=>new Date(b.assigned_at||0)-new Date(a.assigned_at||0));
-    const rest=data.filter(l=>!(l.tm_hq_transferred===true||l.tm_hq_transferred==='true'));
+    const rest = data.filter(l=>!_isHqPending(l));
     return [...hqItems,...rest];
   }
   // dir: asc=오래된순(작은값 앞), desc=최신순(큰값 앞)
