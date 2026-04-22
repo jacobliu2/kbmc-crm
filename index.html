@@ -4543,16 +4543,23 @@ function showScreen(id, btn){
 
 // ── 유틸 ─────────────────────────────────────────────────
 function esc(s){const d=document.createElement('div');d.textContent=String(s||'');return d.innerHTML;}
-// onclick 인라인 내부에서 JS 문자열 리터럴로 사용되는 값 이스케이프
-// 예: onclick="openX('${escJs(name)}')" — name에 ", ', \, 개행 포함되어도 안전
+// HTML 속성(onclick 등) 안에서 JS 문자열 리터럴로 사용되는 값에 대한 안전 이스케이프
+// 핵심: 1) JS 레벨 이스케이프(백슬래시, 작은따옴표, 개행) 2) HTML 엔티티 이스케이프(", <, >, &, ')
+// 브라우저가 HTML 속성 파싱 시 엔티티를 원래 문자로 복원 → JS 파서가 깨지지 않은 문자열 리터럴로 인식
+// 예: onclick="openX('${escJs(name)}')" — name에 ", ', \, <, >, & 포함되어도 전부 안전
 function escJs(s){
   return String(s==null?'':s)
+    // 1단계: JS 문자열 리터럴 안전화 (순서 중요: 백슬래시 먼저)
     .replace(/\\/g,'\\\\')
     .replace(/'/g,"\\'")
-    .replace(/"/g,'\\"')
     .replace(/\n/g,'\\n')
     .replace(/\r/g,'\\r')
-    .replace(/\t/g,'\\t');
+    .replace(/\t/g,'\\t')
+    // 2단계: HTML 속성 안전화 (엔티티 인코딩) — 브라우저가 속성 파싱 시 원래 문자로 복원
+    .replace(/&/g,'&amp;')
+    .replace(/"/g,'&quot;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;');
 }
 // KST(UTC+9) 기준 날짜 추출 헬퍼
 function toKstDate(v){
