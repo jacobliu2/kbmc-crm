@@ -12148,7 +12148,17 @@ function openAddLead(){
 function updateLeadsStatsMini(){
   const el=document.getElementById('leads-stats-mini'); if(!el)return;
   const total=filtered.length;
-  const unassigned=filtered.filter(l=>!l.branch_name).length;
+  // 미배정 카운트 — 빠른탭 '미배정' 필터 조건과 동일하게 맞춤
+  // (드랍·삭제·보류·유영준이관·TM이관·본사이관완료·초도상담완료 제외)
+  const unassigned=filtered.filter(l=>
+    (!l.branch_name||l.branch_name==='')
+    &&!['drop','deleted'].includes(l.status)
+    &&!['드랍','보류'].includes(l.current_stage||'')
+    &&!(l.yj_transferred===true||l.yj_transferred==='true')
+    &&!(l.tm_transferred===true||l.tm_transferred==='true')
+    &&!(l.tm_hq_transferred===true||l.tm_hq_transferred==='true')
+    &&!(l.yj_done===true||l.yj_done==='true')
+  ).length;
   const contract=filtered.filter(l=>l.current_stage==='계약').length;
   el.innerHTML=`표시: <strong>${total}</strong>건 | 미배정: <strong style="color:var(--err)">${unassigned}</strong> | 계약: <strong style="color:var(--ok)">${contract}</strong>`;
 }
