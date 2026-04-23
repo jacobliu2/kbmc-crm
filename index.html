@@ -16484,12 +16484,13 @@ function _toTs(raw){
 }
 function applySort(data){
   if(!_sortKey){
-    // 기본 정렬: tm_hq_transferred(대전재콜) 건 중 "아직 팀장에게 재배정되지 않은 건"만
-    // assigned_at 내림차순으로 상단 표시.
-    // 재배정 완료(team_name 있음) 시 일반 건처럼 섞임.
+    // 기본 정렬:
+    // ① tm_hq_transferred(대전재콜) 건 중 "아직 팀장에게 재배정되지 않은 건" 최상단 고정
+    //    (assigned_at 내림차순)
+    // ② 나머지는 distributed_at(분배날짜) 내림차순
+    //    → 최초 인입된 건도, 재배정된 건도 모두 "최신 분배건"이 상단에 위치
     const _isHqPending = l => {
       if(!(l.tm_hq_transferred===true||l.tm_hq_transferred==='true')) return false;
-      // 팀장 배정 여부 확인: team_name 또는 team_names 중 "대전센터/대전TM/빈값" 외에 실제 팀장이 있으면 재배정 완료로 간주
       const excluded = new Set(['','대전센터','대전TM','미배정']);
       const tn = String(l.team_name||'').trim();
       if(tn && !excluded.has(tn)) return false;
@@ -16497,11 +16498,20 @@ function applySort(data){
         const arr = JSON.parse(l.team_names||'[]');
         if(Array.isArray(arr)&&arr.some(n=>{const s=String(n||'').trim(); return s && !excluded.has(s);})) return false;
       }catch(e){}
-      return true; // tm_hq_transferred=true 이면서 실제 팀장 없음 → 재배정 대기
+      return true;
     };
     const hqItems = data.filter(_isHqPending)
       .sort((a,b)=>new Date(b.assigned_at||0)-new Date(a.assigned_at||0));
-    const rest = data.filter(l=>!_isHqPending(l));
+    const rest = data.filter(l=>!_isHqPending(l))
+      .sort((a,b)=>{
+        // distributed_at 내림차순(최신이 위), 값 없으면 맨 아래
+        const av = _toTs(a.distributed_at);
+        const bv = _toTs(b.distributed_at);
+        if(!av && !bv) return 0;
+        if(!av) return 1;
+        if(!bv) return -1;
+        return bv - av;
+      });
     return [...hqItems,...rest];
   }
   // dir: asc=오래된순(작은값 앞), desc=최신순(큰값 앞)
