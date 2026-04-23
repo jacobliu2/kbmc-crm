@@ -4017,10 +4017,13 @@ async function _loadAllActivities(){
   const PAGE = 1000;
   let offset = 0;
   const all = [];
+  // 성능 최적화: 전체 컬럼 대신 목록·히스토리 렌더에 필요한 필드만 조회
+  // 제외: updated_at, deleted_at 등 대용량·비사용 컬럼
+  const SELECT_COLS = 'id,lead_id,type,content,stage,author,date,created_at';
   while(true){
     try{
       const r = await fetch(
-        SB_URL+'/rest/v1/activities?select=*&order=created_at.desc',
+        SB_URL+'/rest/v1/activities?select='+SELECT_COLS+'&order=created_at.desc',
         { headers:{
             ...sbH(),
             'Range-Unit':'items',
@@ -4561,6 +4564,14 @@ function escJs(s){
     .replace(/</g,'&lt;')
     .replace(/>/g,'&gt;');
 }
+// KST(UTC+9) 기준 날짜 추출 헬퍼
+function toKstDate(v){
+  if(!v) return null;
+  const d=new Date(v); if(isNaN(d)) return null;
+  const kst=new Date(d.getTime()+9*3600*1000);
+  return kst.toISOString().slice(0,10);
+}
+
 // ═══════════════════════════════════════════════════════════
 // 히스토리 공통 헬퍼 — 4개 뷰(관리자 DB상세, TM 기록모달, 팀장 DB상세, 회수 미리보기)에서 공유
 // ═══════════════════════════════════════════════════════════
@@ -6400,6 +6411,7 @@ async function openPanel(lead){
   window._panelLeadId = lead.id;
 
   // ── 활동 이력 로드 (Supabase 모드: 최신 직접 조회)
+  // assign 포함 (status_change만 제외) — 히스토리 통합 뷰에서 배정 이벤트 표시
   let acts;
   if(!testMode){
     const rows = await sbGet(`activities?select=*&lead_id=eq.${lead.id}&order=created_at.desc&limit=200`);
@@ -6409,9 +6421,9 @@ async function openPanel(lead){
       if(Array.isArray(allActivities)){
         rows.forEach(r=>{ if(!allActivities.find(a=>a.id===r.id)) allActivities.unshift(r); });
       }
-      // sbGet 결과 + allActivities 캐시 합산 (sbGet이 빈배열이어도 캐시에 있으면 표시)
-      const cached = (allActivities||[]).filter(a=>a.lead_id===lead.id && a.type!=='assign');
-      const sbRows = (rows||[]).filter(a=>a.type!=='assign'); // 대전TM 활동 포함 전체 조회
+      // sbGet 결과 + allActivities 캐시 합산
+      const cached = (allActivities||[]).filter(a=>a.lead_id===lead.id && a.type!=='status_change');
+      const sbRows = (rows||[]).filter(a=>a.type!=='status_change');
       // 중복 제거 후 합산
       const merged = [...sbRows];
       cached.forEach(a=>{ if(!merged.find(r=>r.id===a.id)) merged.push(a); });
@@ -6419,11 +6431,11 @@ async function openPanel(lead){
     } else {
       // sbGet 실패(null) → allActivities 캐시 fallback
       acts = (allActivities?.length ? allActivities : allActivities||[])
-             .filter(a=>a.lead_id===lead.id && a.type!=='assign')
+             .filter(a=>a.lead_id===lead.id && a.type!=='status_change')
              .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
     }
   } else {
-    acts = allActivities||[].filter(a=>a.lead_id===lead.id&&a.type!=='assign')
+    acts = (allActivities||[]).filter(a=>a.lead_id===lead.id&&a.type!=='status_change')
            .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
   }
   window._ldetailActs = acts;
@@ -6575,14 +6587,9 @@ function _renderLDetailHistory(acts, leadId){
       </div>`;
   }
 
-  // assign 이벤트를 allActivities에서 복원 (호출자가 이미 필터링해서 넘겼을 수 있음)
+  // 호출자에서 이미 assign 포함된 acts를 넘김 (status_change만 제외)
+  // 여기서는 추가 스캔 없이 유입 가상 이벤트만 합치기
   let enrichedActs = [...(acts||[])];
-  const assignActs = (allActivities||[]).filter(a=>a.lead_id===leadId && a.type==='assign');
-  assignActs.forEach(aa=>{
-    if(!enrichedActs.find(x=>x.id===aa.id)) enrichedActs.push(aa);
-  });
-  // 최신순(desc) 유지
-  enrichedActs.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
 
   // 유입 가상 이벤트 (최신순 리스트의 맨 뒤에 추가)
   const inflowAct = _buildInflowVirtualAct(lead);
@@ -7138,9 +7145,9 @@ async function confirmEditActivity(){
   showToast('활동기록 수정 완료','success');
   _renderActModalHistory(leadId);
   renderLeadsTable(); // curPage 유지하면서 진행내용만 갱신
-  // 상세 모달이 열려있으면 갱신
+  // 상세 모달이 열려있으면 갱신 (assign 포함)
   const cachedActs=(allActivities||[])
-    .filter(a=>a.lead_id===leadId&&a.type!=='assign')
+    .filter(a=>a.lead_id===leadId&&a.type!=='status_change')
     .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
   _renderLDetailHistory(cachedActs, leadId);
 }
@@ -7160,7 +7167,7 @@ async function deleteActivity(actId, leadId){
   _renderActModalHistory(leadId);
   renderLeadsTable(); // curPage 유지하면서 진행내용만 갱신
   const cachedActs=(allActivities||[])
-    .filter(a=>a.lead_id===leadId&&a.type!=='assign')
+    .filter(a=>a.lead_id===leadId&&a.type!=='status_change')
     .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
   _renderLDetailHistory(cachedActs, leadId);
 }
@@ -7932,7 +7939,7 @@ async function saveActivity(){
   // 상세 모달이 열려있으면 히스토리 탭 즉시 갱신
   if(document.getElementById('modal-lead-detail')?.classList.contains('open')){
     const cachedActs = (allActivities||[])
-      .filter(a=>a.lead_id===lid&&a.type!=='assign')
+      .filter(a=>a.lead_id===lid&&a.type!=='status_change')
       .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
     _renderLDetailHistory(cachedActs, lid);
   }
