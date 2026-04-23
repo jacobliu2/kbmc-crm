@@ -4561,13 +4561,122 @@ function escJs(s){
     .replace(/</g,'&lt;')
     .replace(/>/g,'&gt;');
 }
-// KST(UTC+9) 기준 날짜 추출 헬퍼
-function toKstDate(v){
-  if(!v) return null;
-  const d=new Date(v); if(isNaN(d)) return null;
-  const kst=new Date(d.getTime()+9*3600*1000);
-  return kst.toISOString().slice(0,10);
+// ═══════════════════════════════════════════════════════════
+// 히스토리 공통 헬퍼 — 4개 뷰(관리자 DB상세, TM 기록모달, 팀장 DB상세, 회수 미리보기)에서 공유
+// ═══════════════════════════════════════════════════════════
+
+// ① 현재 담당 배지 — 히스토리 최상단에 표시
+function _buildCurrentOwnerBadge(lead){
+  if(!lead) return '';
+  const branch = String(lead.branch_name||'').trim();
+  const team = String(lead.team_name||'').trim();
+  const isTm = branch==='대전' || branch==='대전TM' || lead.tm_transferred===true||lead.tm_transferred==='true';
+  const isUnassigned = !branch && !team;
+  let label, bg, color;
+  if(isUnassigned){
+    label = '📍 현재: 미배정';
+    bg = 'rgba(239,68,68,.08)'; color = 'var(--err)';
+  } else if(isTm){
+    label = `📍 현재: 대전TM센터${team&&team!=='대전센터'?' - '+esc(team):''}`;
+    bg = 'rgba(124,58,237,.08)'; color = '#7c3aed';
+  } else {
+    label = `📍 현재: ${esc(branch||'-')}${team?' - '+esc(team):''}`;
+    bg = 'rgba(49,130,246,.08)'; color = 'var(--blue)';
+  }
+  return `<div style="display:inline-flex;align-items:center;padding:4px 10px;background:${bg};color:${color};border-radius:10px;font-size:11px;font-weight:700;margin-bottom:10px">${label}</div>`;
 }
+
+// ② 유입 가상 이벤트 — 히스토리 맨 처음에 자동 생성 (DB 저장 안 함, 렌더 시점 생성)
+// 반환: 활동 객체 형식 { id, type:'inflow', content, date, created_at, author:'시스템' }
+function _buildInflowVirtualAct(lead){
+  if(!lead) return null;
+  const applyDate = lead.applied_at || lead.distributed_at || lead.created_at || '';
+  if(!applyDate) return null;
+  const dateStr = String(applyDate).slice(0,10);
+  const inflow = String(lead.inflow||'').trim() || '직접 등록';
+  const consult = String(lead.consult_type||'').trim() || '일반 상담';
+  return {
+    id: '_inflow_'+lead.id,
+    lead_id: lead.id,
+    type: 'inflow',
+    content: `${dateStr}에 ${inflow}을(를) 통해 ${consult} 신청`,
+    date: dateStr,
+    created_at: applyDate,
+    author: '시스템',
+    stage: ''
+  };
+}
+
+// ③ 히스토리 항목 하나를 렌더링 (일반 활동 vs 배정 이벤트 vs 유입 가상 이벤트 구분)
+// style: 'card'(대전TM 모달 스타일) or 'row'(관리자/팀장 DB상세 스타일)
+function _renderHistoryItem(a, idx, style='card'){
+  const ICON = {
+    call:'📞', meeting:'🤝', email:'📧', online:'💻', note:'📝',
+    proposal:'📋', contract:'🎉', internal:'🏢', other:'📌',
+    status_change:'🔄', assign:'🔀', inflow:'📥'
+  };
+  const icon = ICON[a.type] || '📌';
+  const author = esc(a.author||'-');
+  const dateDisp = (a.date||a.created_at||'').slice(0,10);
+  const content = esc((a.content||'').slice(0,200));
+  // ── 유입 가상 이벤트 ──
+  if(a.type === 'inflow'){
+    if(style==='card'){
+      return `<div style="display:flex;gap:8px;padding:8px 10px;background:rgba(49,130,246,.06);border-radius:var(--r-sm);margin-bottom:5px;border-left:3px solid var(--blue)">
+        <span style="font-size:11px;font-weight:800;color:var(--gray-400);flex-shrink:0;min-width:18px">${idx+1}.</span>
+        <span style="font-size:13px;flex-shrink:0">📥</span>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+            <span style="font-size:11px;font-weight:700;color:var(--blue)">유입</span>
+            <span style="font-size:10px;color:var(--gray-400)">${dateDisp}</span>
+          </div>
+          <div style="font-size:12px;color:var(--gray-700)">${content}</div>
+        </div>
+      </div>`;
+    }
+    return `<div style="display:flex;gap:10px;padding:11px 0;border-bottom:1px solid var(--gray-100);background:rgba(49,130,246,.03)">
+      <span style="font-size:16px;flex-shrink:0;margin-top:1px">📥</span>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+          <span style="font-size:11px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.3px">유입</span>
+          <span style="font-size:10px;color:var(--gray-400)">${dateDisp}</span>
+        </div>
+        <div style="font-size:13px;color:var(--navy);font-weight:600">${content}</div>
+      </div>
+    </div>`;
+  }
+  // ── 배정 이벤트 (운영 이벤트) ──
+  if(a.type === 'assign'){
+    if(style==='card'){
+      return `<div style="display:flex;gap:8px;padding:7px 10px;background:var(--gray-50);border-radius:var(--r-sm);margin-bottom:5px;border:1px dashed var(--gray-300)">
+        <span style="font-size:11px;font-weight:800;color:var(--gray-400);flex-shrink:0;min-width:18px">${idx+1}.</span>
+        <span style="font-size:13px;flex-shrink:0">🔀</span>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+            <span style="font-size:10px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.3px">운영 이벤트 · ${author}</span>
+            <span style="font-size:10px;color:var(--gray-400)">${dateDisp}</span>
+          </div>
+          <div style="font-size:12px;color:var(--gray-600)">${content}</div>
+        </div>
+      </div>`;
+    }
+    return `<div style="display:flex;gap:10px;padding:9px 8px;border-bottom:1px solid var(--gray-100);background:var(--gray-50);border-left:3px dashed var(--gray-300)">
+      <span style="font-size:15px;flex-shrink:0;margin-top:1px;opacity:.7">🔀</span>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+          <span style="font-size:10px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.3px">운영 이벤트 · ${author}</span>
+          <span style="font-size:10px;color:var(--gray-400)">${dateDisp}</span>
+        </div>
+        <div style="font-size:12px;color:var(--gray-600)">${content}</div>
+      </div>
+    </div>`;
+  }
+  // ── 일반 활동 (call, meeting, email, note, proposal 등) ──
+  // 스타일별 렌더링은 각 호출 지점이 자체 처리. 여기서는 사용 안 함 (하위 호환)
+  return '';
+}
+
+
 function fmtD(v){
   if(!v)return'-';
   const s=String(v).trim();
@@ -6418,9 +6527,19 @@ function _renderLDetailInfo(lead){
 // ── 히스토리 탭 렌더 ─────────────────────────────────────────
 async function saveDistDate(lid, val){
   if(!val) return;
+  // 이전 값 조회 (활동로그용)
+  const _prev = (allLeads||[]).find(l=>l.id===lid)?.distributed_at || '';
+  const _prevDisp = _prev ? String(_prev).slice(0,10) : '(없음)';
+  const _newDisp = String(val).slice(0,10);
   const ok=await dbU('leads',lid,{distributed_at:val});
   if(ok){
     if(allLeads){const i=allLeads.findIndex(l=>l.id===lid);if(i>=0)allLeads[i].distributed_at=val;}
+    // 활동로그 남김 (이전값과 다를 때만)
+    if(_prevDisp !== _newDisp){
+      try{
+        await logActivity(lid, 'note', `[분배날짜 수정] ${_prevDisp} → ${_newDisp} (관리자 직접 수정)`, '', '');
+      }catch(e){ console.warn('saveDistDate log fail', e); }
+    }
     showToast('분배날짜 저장됨','success');
     filterLeads?.();
   } else {
@@ -6432,10 +6551,15 @@ function _renderLDetailHistory(acts, leadId){
   const el = document.getElementById('ldetail-history-body'); if(!el) return;
   const ICON={call:'📞',meeting:'🤝',email:'📧',online:'💻',note:'📝',proposal:'📋',contract:'🎉',internal:'🏢',other:'📌',status_change:'🔄'};
 
+  // 리드 조회 (배지·유입 생성용)
+  const lead = allLeads?.find(l=>l.id===leadId) || myLeads?.find(l=>l.id===leadId) || window._panelLead;
+
+  // 현재 담당 배지
+  const ownerBadge = _buildCurrentOwnerBadge(lead);
+
   // 팀장 역할일 때 날짜 배너 표시
   let dateBanner = '';
   if(curUser?.role === 'team'){
-    const lead = allLeads?.find(l=>l.id===leadId) || myLeads?.find(l=>l.id===leadId);
     const applyDate  = lead?.applied_at || lead?.distributed_at || lead?.created_at || '';
     const assignDate = lead?.assigned_at || '';
     dateBanner = `
@@ -6451,12 +6575,27 @@ function _renderLDetailHistory(acts, leadId){
       </div>`;
   }
 
-  if(!acts.length){
-    el.innerHTML = dateBanner + '<div style="text-align:center;padding:32px 16px;font-size:13px;color:var(--gray-300)">활동 기록이 없습니다</div>';
+  // assign 이벤트를 allActivities에서 복원 (호출자가 이미 필터링해서 넘겼을 수 있음)
+  let enrichedActs = [...(acts||[])];
+  const assignActs = (allActivities||[]).filter(a=>a.lead_id===leadId && a.type==='assign');
+  assignActs.forEach(aa=>{
+    if(!enrichedActs.find(x=>x.id===aa.id)) enrichedActs.push(aa);
+  });
+  // 최신순(desc) 유지
+  enrichedActs.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+
+  // 유입 가상 이벤트 (최신순 리스트의 맨 뒤에 추가)
+  const inflowAct = _buildInflowVirtualAct(lead);
+  if(inflowAct) enrichedActs.push(inflowAct);
+
+  if(!enrichedActs.length){
+    el.innerHTML = ownerBadge + dateBanner + '<div style="text-align:center;padding:32px 16px;font-size:13px;color:var(--gray-300)">활동 기록이 없습니다</div>';
     return;
   }
   const isAdminDH=curUser?.role==='admin';
-  el.innerHTML = dateBanner + acts.map((a,_idx)=>{
+  el.innerHTML = ownerBadge + dateBanner + enrichedActs.map((a,_idx)=>{
+    // 유입·배정 이벤트는 공통 헬퍼 (row 스타일)
+    if(a.type==='inflow' || a.type==='assign') return _renderHistoryItem(a, _idx, 'row');
     // 대전TM 기록 판별: author가 대전센터이거나 대전TM 계정
     const _isTmAct = ['대전센터','대전'].includes(String(a.author||'').trim());
     const _num = _idx+1; // 번호 (오래된순 정렬 기준)
@@ -6882,13 +7021,25 @@ function switchActModalTab(tab, btn){
 
 function _renderActModalHistory(leadId){
   const el=document.getElementById('act-modal-history-body'); if(!el) return;
-  const acts=(allActivities||[])
-    .filter(a=>a.lead_id===leadId && a.type!=='assign') // 배정 제외, 단계변경 포함
+  // assign 포함 (단계변경 status_change만 제외)
+  let acts=(allActivities||[])
+    .filter(a=>a.lead_id===leadId && a.type!=='status_change')
     .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  // 유입 가상 이벤트 추가 — 리드 정보에서 동적 생성
+  const _lead = (allLeads||[]).find(l=>l.id===leadId) || (myLeads||[]).find(l=>l.id===leadId);
+  const _inflow = _buildInflowVirtualAct(_lead);
+  if(_inflow){
+    // 최신이 위로 오는 정렬이므로 유입은 맨 아래에 추가
+    acts = [...acts, _inflow];
+  }
   const ICON={call:'📞',meeting:'🤝',email:'📧',online:'💻',note:'📝',proposal:'📋',contract:'🎉',internal:'🏢',other:'📌',status_change:'🔄'};
   const isAdmin=curUser?.role==='admin';
+
+  // 현재 담당 배지
+  const ownerBadge = _buildCurrentOwnerBadge(_lead);
+
   if(!acts.length){
-    el.innerHTML=`<div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+    el.innerHTML=ownerBadge+`<div style="display:flex;justify-content:flex-end;margin-bottom:10px">
       <button onclick="switchActModalTab('form',document.getElementById('act-tab-form'))"
         style="padding:5px 13px;font-size:12px;font-weight:700;color:#fff;background:var(--navy);border:none;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px">
         ✚ 활동 추가
@@ -6898,14 +7049,17 @@ function _renderActModalHistory(leadId){
     return;
   }
   // 상단 추가 버튼 (항상 표시)
-  const addBtnHtml=`<div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+  const addBtnHtml=ownerBadge+`<div style="display:flex;justify-content:flex-end;margin-bottom:10px">
     <button onclick="switchActModalTab('form',document.getElementById('act-tab-form'))" 
       style="padding:5px 13px;font-size:12px;font-weight:700;color:#fff;background:var(--navy);border:none;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:4px">
       ✚ 활동 추가
     </button>
   </div>`;
-  el.innerHTML=addBtnHtml+acts.map(a=>`
-    <div style="display:flex;gap:10px;padding:11px 0;border-bottom:1px solid var(--gray-100)">
+  el.innerHTML=addBtnHtml+acts.map((a,idx)=>{
+    // 유입 가상 이벤트 + 배정 이벤트는 공통 헬퍼 (row 스타일)
+    if(a.type==='inflow' || a.type==='assign') return _renderHistoryItem(a, idx, 'row');
+    // 일반 활동 (기존 스타일)
+    return `<div style="display:flex;gap:10px;padding:11px 0;border-bottom:1px solid var(--gray-100)">
       <span style="font-size:16px;flex-shrink:0;margin-top:1px">${ICON[a.type]||'📌'}</span>
       <div style="flex:1;min-width:0">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
@@ -6919,7 +7073,8 @@ function _renderActModalHistory(leadId){
         ${a.stage?`<span style="font-size:10px;padding:1px 6px;background:var(--blue-50);color:var(--blue);border-radius:8px;margin-bottom:4px;display:inline-block">${esc(a.stage)}</span>`:''}
         <div style="font-size:12px;color:var(--gray-700);line-height:1.6;white-space:pre-wrap;word-break:break-all">${esc(a.content||'')}</div>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 // ── 관리자 활동기록 수정/삭제 ────────────────────────────
 function openEditActivity(actId){
@@ -11792,7 +11947,8 @@ async function _renderTmCompanyHistory(lid, lead){
     </div>`;
 
   // 활동기록 — allActivities 캐시 없으면 해당 리드만 직접 조회
-  let _tmActs = (allActivities||[]).filter(a=>a.lead_id===lid&&!['assign','status_change'].includes(a.type)&&(a.content||'').trim());
+  // assign 포함 (단계변경 status_change만 제외) — 배정 이력도 함께 보여줌
+  let _tmActs = (allActivities||[]).filter(a=>a.lead_id===lid && a.type!=='status_change' && (a.content||'').trim());
   if(_tmActs.length===0 && !testMode){
     try{
       const _r=await fetch(SB_URL+'/rest/v1/activities?select=*&lead_id=eq.'+lid+'&order=created_at.asc',{
@@ -11800,12 +11956,15 @@ async function _renderTmCompanyHistory(lid, lead){
       });
       if(_r.ok){
         const _rows=await _r.json().catch(()=>[]);
-        _tmActs=(_rows||[]).filter(a=>!['assign','status_change'].includes(a.type)&&(a.content||'').trim());
+        _tmActs=(_rows||[]).filter(a=>a.type!=='status_change' && (a.content||'').trim());
       }
     }catch(e){}
   }
-  // 전체 기록 로드 (최대 20건) — 오래된순 정렬 후 번호 부여
-  const allActs=_tmActs.sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).slice(-20);
+  // 유입 가상 이벤트 추가 (맨 앞)
+  const _inflowAct = _buildInflowVirtualAct(lead);
+  if(_inflowAct) _tmActs = [_inflowAct, ..._tmActs];
+  // 전체 기록 로드 (최대 30건) — 오래된순 정렬
+  const allActs=_tmActs.sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).slice(-30);
 
   const TYPE_ICON={call:'📞',meeting:'🤝',email:'📧',online:'💻',note:'📝',proposal:'📋',contract:'🎉'};
   wrap.style.display='block';
@@ -11815,7 +11974,10 @@ async function _renderTmCompanyHistory(lid, lead){
 
   const TYPE_ICON2={call:'📞',meeting:'🤝',email:'📧',online:'💻',note:'📝',proposal:'📋',contract:'🎉'};
 
-  const histHeader = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+  // 현재 담당 배지
+  const ownerBadge = _buildCurrentOwnerBadge(lead);
+
+  const histHeader = ownerBadge + `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
     <div style="font-size:12px;font-weight:700;color:var(--blue)">
       🏢 기업 활동 히스토리 <span style="font-size:10px;font-weight:400;color:var(--gray-400)">(${allActsFull.length}건 · 오래된순)</span>
     </div>
@@ -11849,6 +12011,9 @@ async function _renderTmCompanyHistory(lid, lead){
 
   const histHtml = allActsFull.length
     ? histHeader + `${allActsFull.map((a,i)=>{
+        // 유입 가상 이벤트 + 배정 이벤트는 공통 헬퍼로 처리
+        if(a.type==='inflow' || a.type==='assign') return _renderHistoryItem(a, i, 'card');
+        // 일반 활동 (기존 스타일 유지 — TM 초록색 구분)
         const isTmAct=['대전센터','대전'].includes(String(a.author||'').trim());
         const borderColor=isTmAct?'var(--ok)':'var(--blue)';
         const bgColor=isTmAct?'rgba(0,192,115,.06)':'var(--gray-50)';
@@ -11864,7 +12029,7 @@ async function _renderTmCompanyHistory(lid, lead){
               </div>
               <span style="font-size:10px;color:var(--gray-400)">${(a.date||a.created_at||'').slice(0,10)}</span>
             </div>
-            <div style="font-size:12px;color:var(--gray-700);white-space:pre-wrap;word-break:break-all">${esc((a.content||'').slice(0,120))}</div>
+            <div style="font-size:12px;color:var(--gray-700);white-space:pre-wrap;word-break:break-all">${esc((a.content||'').slice(0,200))}</div>
             ${a.stage?`<span style="font-size:10px;color:var(--blue);margin-top:1px;display:inline-block">${esc(a.stage)}</span>`:''}
           </div>
         </div>`;
@@ -14677,6 +14842,28 @@ async function distToYJ(){
   filterLeads(); updateLeadsSubTabCounts();
 }
 
+// ── 재배정 판정 + distributed_at 갱신 헬퍼 ────────────────────
+// 배정 로직을 통해 생성되는 모든 건에 대해 distributed_at을 현재 시점으로 갱신하고
+// 기존 분배일과 다르면 활동로그 자동 생성.
+// 반환: { distributed_at: 'YYYY-MM-DD', prevDist: '이전 날짜(로그용)', isRedist: boolean }
+function _buildRedistUpdate(lid){
+  const today = new Date().toISOString().slice(0,10);
+  const lead = (allLeads||[]).find(l=>l.id===lid);
+  const prev = lead?.distributed_at ? String(lead.distributed_at).slice(0,10) : '';
+  // 최초 배정 (prev가 없음): 단순 세팅, 로그 없음
+  // 재배정 (prev 존재 + 오늘 이전): 갱신 + 로그
+  const isRedist = !!prev && prev !== today;
+  return { distributed_at: today, prevDist: prev, isRedist };
+}
+
+// 재배정 로그 기록 — dbU 호출 이후에 호출
+async function _logRedist(lid, prevDist, today){
+  if(!prevDist || prevDist === today) return;
+  try{
+    await logActivity(lid, 'note', `[재배정] 분배날짜 ${prevDist} → ${today}`, '', '');
+  }catch(e){ console.warn('_logRedist fail', e); }
+}
+
 async function confirmDistribute(){
   const ids=[...selIds];
   if(!ids.length){showToast('선택된 DB가 없습니다.','error');return;}
@@ -14696,9 +14883,15 @@ async function confirmDistribute(){
         if(allLeads){const i=allLeads.findIndex(r=>r.id===id);if(i>=0)allLeads[i]={...allLeads[i],...u};}
         return [dbU('leads',id,u), logActivity(id,'assign','지점장+팀장 전체 회수'+(note?' ('+note+')':''),'assigned','')];
       } else if(_recallType==='daejeon'){
-        const u={team_name:'',branch_name:'대전',tm_transferred:true,assigned_at:new Date().toISOString()};
+        // 대전TM 이관 = 새로운 배정 → distributed_at 갱신 + 재배정 로그
+        const _r=_buildRedistUpdate(id);
+        const u={team_name:'',branch_name:'대전',tm_transferred:true,assigned_at:new Date().toISOString(),distributed_at:_r.distributed_at};
         if(allLeads){const i=allLeads.findIndex(r=>r.id===id);if(i>=0)allLeads[i]={...allLeads[i],...u};}
-        return [dbU('leads',id,u), logActivity(id,'assign','팀장 회수 후 대전TM 이관'+(note?' ('+note+')':''),'','')];
+        return [
+          dbU('leads',id,u),
+          logActivity(id,'assign','팀장 회수 후 대전TM 이관'+(note?' ('+note+')':''),'',''),
+          _logRedist(id, _r.prevDist, _r.distributed_at)
+        ];
       }
       return [];
     }));
@@ -14708,13 +14901,17 @@ async function confirmDistribute(){
 
   // ── 대전TM 이관 ──────────────────────────────────
   if(_distMode==='daejeon'){
-    const djData={branch_name:'대전',team_name:'대전센터',tm_transferred:true,assigned_at:new Date().toISOString()};
     closeOv('ov-distribute'); clearSel();
-    await Promise.all(ids.flatMap(id=>[
-      dbU('leads',id,djData),
-      logActivity(id,'assign','대전TM센터 이관'+(note?' ('+note+')':''),'','')
-    ]));
-    if(allLeads) ids.forEach(id=>{const i=allLeads.findIndex(r=>r.id===id);if(i>=0)allLeads[i]={...allLeads[i],...djData};});
+    await Promise.all(ids.flatMap(id=>{
+      const _r=_buildRedistUpdate(id);
+      const djData={branch_name:'대전',team_name:'대전센터',tm_transferred:true,assigned_at:new Date().toISOString(),distributed_at:_r.distributed_at};
+      if(allLeads){const i=allLeads.findIndex(r=>r.id===id);if(i>=0)allLeads[i]={...allLeads[i],...djData};}
+      return [
+        dbU('leads',id,djData),
+        logActivity(id,'assign','대전TM센터 이관'+(note?' ('+note+')':''),'',''),
+        _logRedist(id, _r.prevDist, _r.distributed_at)
+      ];
+    }));
     showToast(`${ids.length}건 대전TM 이관 완료`,'success');
     filterLeads(); updateLeadsSubTabCounts(); return;
   }
@@ -14727,15 +14924,20 @@ async function confirmDistribute(){
     for(const id of ids){
       const acts=(allActivities||[]).filter(a=>a.lead_id===id&&a.type!=='assign').slice(0,3);
       const summary=acts.map(a=>`[${a.author}] ${(a.content||'').slice(0,40)}`).join(' / ')||'진행내용 없음';
-      await dbU('leads',id,{
+      const _r=_buildRedistUpdate(id);
+      const hcUpdate={
         branch_name:'대전',team_name:'대전센터',
         tm_transferred:true,
         tm_happycall:summary,
         happycall_date:hcDateStr,
         happycall_done:false,
-        assigned_at:new Date().toISOString()
-      });
+        assigned_at:new Date().toISOString(),
+        distributed_at:_r.distributed_at
+      };
+      await dbU('leads',id,hcUpdate);
+      if(allLeads){const i=allLeads.findIndex(r=>r.id===id);if(i>=0)allLeads[i]={...allLeads[i],...hcUpdate};}
       await logActivity(id,'assign',`해피콜 이관 — 예정일 ${hcDateStr}`+(note?' ('+note+')':''),'','');
+      await _logRedist(id, _r.prevDist, _r.distributed_at);
     }
     closeOv('ov-distribute'); clearSel();
     showToast(`${ids.length}건 해피콜 이관 (예정일 ${hcDateStr})`,'success'); loadLeads(); return;
@@ -14774,14 +14976,18 @@ async function confirmDistribute(){
 
   // ── 대전TM 단독 배정 (관리자가 지점카드에서 대전TM 선택) ──
   if(_selBranch==='대전TM'){
-    const tmData={branch_name:'대전',team_name:'대전센터',tm_transferred:true,assigned_at:new Date().toISOString(),status:'assigned',yj_transferred:false};
     closeOv('ov-distribute'); clearSel();
     showToast(`${ids.length}건 대전TM 배정 중...`,'success');
-    await Promise.all(ids.flatMap(id=>[
-      dbU('leads',id,tmData),
-      logActivity(id,'assign','대전TM 직배정'+(note?' ('+note+')':''),'assigned','')
-    ]));
-    if(allLeads) ids.forEach(id=>{const i=allLeads.findIndex(r=>r.id===id);if(i>=0)allLeads[i]={...allLeads[i],...tmData};});
+    await Promise.all(ids.flatMap(id=>{
+      const _r=_buildRedistUpdate(id);
+      const tmData={branch_name:'대전',team_name:'대전센터',tm_transferred:true,assigned_at:new Date().toISOString(),status:'assigned',yj_transferred:false,distributed_at:_r.distributed_at};
+      if(allLeads){const i=allLeads.findIndex(r=>r.id===id);if(i>=0)allLeads[i]={...allLeads[i],...tmData};}
+      return [
+        dbU('leads',id,tmData),
+        logActivity(id,'assign','대전TM 직배정'+(note?' ('+note+')':''),'assigned',''),
+        _logRedist(id, _r.prevDist, _r.distributed_at)
+      ];
+    }));
     showToast(`${ids.length}건 대전TM 배정 완료`,'success');
     filterLeads(); updateLeadsSubTabCounts(); return;
   }
@@ -14826,11 +15032,17 @@ async function confirmDistribute(){
   const msg=`${_selBranch} 지점${teamDisplay?' → '+teamDisplay+' 배정':''}${selfNote}${collabNote}${tmNote}`+(note?' ('+note+')':'');
   closeOv('ov-distribute'); clearSel();
   showToast(`${ids.length}건 배정 처리 중...`,'success');
-  await Promise.all(ids.flatMap(id=>[
-    dbU('leads',id,assignData),
-    logActivity(id,'assign',msg,'assigned','초기접촉')
-  ]));
-  if(allLeads) ids.forEach(id=>{const i=allLeads.findIndex(r=>r.id===id);if(i>=0)allLeads[i]={...allLeads[i],...assignData};});
+  // 재배정 여부는 id별로 개별 판정 → distributed_at 개별 세팅
+  await Promise.all(ids.flatMap(id=>{
+    const _r=_buildRedistUpdate(id);
+    const _data={...assignData, distributed_at:_r.distributed_at};
+    if(allLeads){const i=allLeads.findIndex(r=>r.id===id);if(i>=0)allLeads[i]={...allLeads[i],..._data};}
+    return [
+      dbU('leads',id,_data),
+      logActivity(id,'assign',msg,'assigned','초기접촉'),
+      _logRedist(id, _r.prevDist, _r.distributed_at)
+    ];
+  }));
   showToast(`${ids.length}건 배정 완료`,'success');
   filterLeads(); updateLeadsSubTabCounts();
 }
