@@ -2534,7 +2534,7 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
         <input type="date" id="act-contract-date" style="padding:8px 12px;background:#fff;border:1.5px solid rgba(0,192,115,.4);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--gray-900);width:180px">
         <div style="font-size:11px;color:var(--gray-400);margin-top:4px">비워두면 오늘 날짜로 자동 저장됩니다</div>
       </div>
-      <div class="fg" style="margin-bottom:10px"><label>상담 내용 *</label>
+      <div class="fg" style="margin-bottom:10px"><label id="act-content-label">상담 내용 *</label>
         <textarea id="act-content" rows="4" placeholder="상담 내용을 입력하세요"></textarea>
       </div>
       <div class="fg" style="margin-bottom:12px"><label>서류접수 여부</label>
@@ -7831,6 +7831,21 @@ function pickStage(el, stage){
   if(dropReasonWrap) dropReasonWrap.style.display=(stage==='드랍')?'':'none';
   const holdReasonWrap=document.getElementById('act-hold-reason-wrap');
   if(holdReasonWrap) holdReasonWrap.style.display=(stage==='보류')?'':'none';
+  // 상담 내용 필수/선택 라벨 동적 변경 — 드랍/보류일 때는 선택 (각 사유가 대체)
+  const contentLabel=document.getElementById('act-content-label');
+  const contentInput=document.getElementById('act-content');
+  if(contentLabel){
+    if(stage==='드랍'){
+      contentLabel.textContent='상담 내용 (선택)';
+      if(contentInput) contentInput.placeholder='드랍사유 외 추가로 남길 내용이 있으면 입력하세요';
+    } else if(stage==='보류'){
+      contentLabel.textContent='상담 내용 (선택)';
+      if(contentInput) contentInput.placeholder='보류사유 외 추가로 남길 내용이 있으면 입력하세요';
+    } else {
+      contentLabel.textContent='상담 내용 *';
+      if(contentInput) contentInput.placeholder='상담 내용을 입력하세요';
+    }
+  }
   // 계약일 표시
   const cdWrap=document.getElementById('act-contract-date-wrap');
   if(cdWrap) cdWrap.style.display=(stage==='계약'||stage==='관리')?'':'none';
@@ -7864,22 +7879,29 @@ function onStageChange(sel){
 }
 async function saveActivity(){
   const lid=document.getElementById('act-lead-id').value;
-  const content=document.getElementById('act-content').value.trim();
+  let content=document.getElementById('act-content').value.trim();
   const type=document.getElementById('act-type').value;
   const stage=window._curActStage||document.getElementById('act-stage').value;
   const nextAct=document.getElementById('act-next').value.trim();
-  if(!content){showToast('상담 내용을 입력하세요.','error');return;}
+  const isDropStage=(window._curActStage==='드랍'||curActStatus==='drop');
+  const isHoldStage=(window._curActStage==='보류');
+  // 드랍/보류 단계: 사유가 상담내용을 대체 — 상담내용 필수 아님
+  if(!isDropStage && !isHoldStage && !content){showToast('상담 내용을 입력하세요.','error');return;}
   // 드랍 선택 시 사유 필수
-  if(window._curActStage==='드랍'||curActStatus==='drop'){
+  if(isDropStage){
     const dropCategory=document.getElementById('act-drop-category')?.value.trim()||'';
   const dropDetail=document.getElementById('act-drop-reason')?.value.trim();
   const dropReason=dropDetail?(dropCategory?`${dropCategory} - ${dropDetail}`:dropDetail):(dropCategory||'');
     if(!dropReason){showToast('드랍 사유를 입력하세요.','error');document.getElementById('act-drop-reason')?.focus();return;}
+    // 상담내용이 비어있으면 드랍사유를 자동으로 활동기록 내용으로 사용
+    if(!content) content = `[드랍] ${dropReason}`;
   }
   // 보류 선택 시 사유 필수
-  if(window._curActStage==='보류'){
+  if(isHoldStage){
     const holdReason=document.getElementById('act-hold-reason')?.value.trim();
     if(!holdReason){showToast('보류 사유를 입력하세요.','error');document.getElementById('act-hold-reason')?.focus();return;}
+    // 상담내용이 비어있으면 보류사유를 자동으로 활동기록 내용으로 사용
+    if(!content) content = `[보류] ${holdReason}`;
   }
   const actDate=document.getElementById('act-date')?.value||todayKst();
   // 상태 또는 단계 변경이 있으면 changeLeadStatus로 처리 (강제 로직 포함)
