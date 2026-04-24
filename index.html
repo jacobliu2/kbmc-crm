@@ -13734,6 +13734,12 @@ async function doSoftDelete(){
 let _leadsSubTab='active';
 
 function switchLeadsSubTab(tab, btn){
+  // 회수대상 탭을 떠날 때 선택 상태 초기화 (다음 진입 시 깨끗한 상태 보장)
+  if(_leadsSubTab==='recall' && tab!=='recall'){
+    if(typeof _rcSelected!=='undefined' && _rcSelected.size>0){
+      _rcSelected.clear();
+    }
+  }
   _leadsSubTab=tab;
   ['active','drop','recall','trash'].forEach(t=>{
     const el=document.getElementById('leads-panel-'+t);
@@ -14067,6 +14073,18 @@ async function rcRender(){
     </details>`;
   }).join('');
 
+  // 🛡️ 안전장치: _rcSelected에서 현재 _rcTargets에 없는 고아 ID 제거
+  // (페이지 이동·필터 변경 시 체크박스 UI는 리셋되지만 _rcSelected Set은 누적되어
+  //  일괄회수 실행 시 엉뚱한 DB가 회수+대전이관되는 치명적 버그 방지)
+  if(_rcSelected.size > 0){
+    const validIds = new Set(_rcTargets.map(t => t.id));
+    const stale = [..._rcSelected].filter(id => !validIds.has(id));
+    if(stale.length){
+      stale.forEach(id => _rcSelected.delete(id));
+      console.warn('[회수대상] 고아 선택 ID 자동 제거:', stale.length, '건');
+    }
+  }
+
   container.innerHTML=html||'<div style="text-align:center;padding:40px;color:var(--gray-400)">✅ 회수대상 DB가 없습니다</div>';
 }
 
@@ -14248,9 +14266,24 @@ async function rcRecallOne(id){
 
 // ── 일괄 회수 ─────────────────────────────────────────────────────────
 async function rcRecallSelected(){
+  // 🛡️ 1차 검증: 현재 회수대상 목록에 없는 고아 ID 제거
+  const validIds = new Set(_rcTargets.map(t => t.id));
+  const invalid = [..._rcSelected].filter(id => !validIds.has(id));
+  if(invalid.length){
+    invalid.forEach(id => _rcSelected.delete(id));
+    console.warn('[회수대상] rcRecallSelected - 고아 ID 제거:', invalid.length, '건');
+  }
   const ids=[..._rcSelected];
   if(!ids.length){showToast('선택된 DB가 없습니다','error');return;}
-  if(!confirm(ids.length+'건을 회수하고 대전TM으로 이관하시겠습니까?')) return;
+
+  // 🛡️ 2차 검증: 실제 회수될 회사명 목록을 사용자에게 표시
+  const names = ids.map(id => {
+    const t = _rcTargets.find(x => x.id === id);
+    return t ? (t.company_name || '(이름 없음)') : '(알 수 없음)';
+  });
+  const preview = names.slice(0, 5).join(', ') + (names.length > 5 ? ` 외 ${names.length-5}건` : '');
+  if(!confirm(`${ids.length}건을 회수하고 대전TM으로 이관하시겠습니까?\n\n대상: ${preview}`)) return;
+
   try{
     for(const id of ids){
       const t=_rcTargets.find(x=>x.id===id);
