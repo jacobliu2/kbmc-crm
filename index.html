@@ -2940,7 +2940,7 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
 </div>
 </div><!-- /#app -->
 <div class="toast" id="toast"></div>
-<!-- KBMC CRM v20260325_024914 -->
+<!-- KBMC CRM v20260427_self_assign_fix -->
 <script>
 // ── 영업시간 계산 (토·일·공휴일 제외) ──────────────────────
 const KR_HOLIDAYS_2025=[
@@ -9677,8 +9677,21 @@ async function saveLead(){
     if(typeof loadMyClients==='function') loadMyClients();
     return;
   }
-  if(id){await dbU('leads',id,data);}else{await dbI('leads',{...data,status:'assigned',registered_by:curUser?.name||''});}
-  closeM('modal-lead');showToast('저장 완료','success');
+  if(id){await dbU('leads',id,data);}
+  else{
+    // 팀장이 직접 등록한 경우: 본인 소속 자동 채움 (미배정 미끄러짐 방지)
+    const _isTeamSelf = curUser?.role==='team';
+    const _autoFill = _isTeamSelf ? {
+      branch_name: curUser?.branch || '',
+      team_name: curUser?.name || '',
+      assigned_at: new Date().toISOString(),
+      applied_at: data.distributed_at || null
+    } : {};
+    await dbI('leads',{...data, ...{status:'assigned',registered_by:curUser?.name||''}, ..._autoFill});
+    if(_isTeamSelf) showToast('본인 담당으로 자동 배정되었습니다','success');
+  }
+  closeM('modal-lead');
+  if(!(curUser?.role==='team')) showToast('저장 완료','success');
   if(document.querySelector('.screen.active')?.id==='screen-leads')loadLeads();
 }
 
