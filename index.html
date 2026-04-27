@@ -6057,6 +6057,15 @@ function colVal(l, key, acts){
       return '<td>'+(brBadge||tmBadge?brBadge+tmBadge:'-')+'</td>';
     })();
     case 'team_name': return(function(){
+      // 대전 관여 여부 사전 계산 (배정 완료된 건에도 옆에 표시)
+      const _hasDaejeon=(
+        (l.tm_transferred===true||l.tm_transferred==='true') ||
+        (l.tm_hq_transferred===true||l.tm_hq_transferred==='true') ||
+        (()=>{try{return JSON.parse(l.collab_branches||'[]').includes('대전TM');}catch(e){return false;}})()
+      );
+      const _djBadge = _hasDaejeon
+        ? '<span class="badge" style="font-size:9px;background:rgba(0,192,115,.12);color:#00a060;margin-left:3px;padding:1px 5px;border-radius:8px">대전</span>'
+        : '';
       // team_names 배열에서 전체 이름 파싱
       let names=[];
       try{names=JSON.parse(l.team_names||'[]');}catch(e){}
@@ -6079,7 +6088,7 @@ function colVal(l, key, acts){
           return`<span class="badge" style="font-size:10px;background:rgba(124,58,237,.1);color:#7c3aed;margin-right:2px">${esc(n)}</span>`;
         return`<span class="badge badge-blue" style="font-size:10px;margin-right:2px">${esc(n)}</span>`;
       }).join('');
-      return`<td style="white-space:nowrap">${badges}</td>`;
+      return`<td style="white-space:nowrap">${badges}${_djBadge}</td>`;
     })();
     case 'status':       return`<td>${stageBadge(l.current_stage)}</td>`;
     // 대전TM
