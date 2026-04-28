@@ -2476,6 +2476,8 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
     <div style="display:flex;border-bottom:2px solid var(--gray-100);margin:12px 24px 0;flex-shrink:0">
       <button class="act-modal-tab" id="act-tab-form" onclick="switchActModalTab('form',this)"
         style="padding:8px 16px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:700;color:var(--blue);border-bottom:2px solid var(--blue);margin-bottom:-2px;font-family:inherit">✏️ 활동 등록</button>
+      <button class="act-modal-tab" id="act-tab-info" onclick="switchActModalTab('info',this)"
+        style="padding:8px 16px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:500;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">📋 고객정보</button>
       <button class="act-modal-tab" id="act-tab-history" onclick="switchActModalTab('history',this)"
         style="padding:8px 16px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:500;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">📜 히스토리</button>
     </div>
@@ -2564,7 +2566,12 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
       </div>
     </div>
 
-    <!-- ② 히스토리 탭 -->
+    <!-- ② 고객정보 탭 -->
+    <div id="act-tab-panel-info" style="display:none;flex:1;overflow-y:auto;padding:16px 24px">
+      <div id="act-modal-info-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:0"></div>
+    </div>
+
+    <!-- ③ 히스토리 탭 -->
     <div id="act-tab-panel-history" style="display:none;flex:1;overflow-y:auto;padding:16px 24px">
       <div id="act-modal-history-body" style="display:flex;flex-direction:column;gap:0"></div>
     </div>
@@ -2940,7 +2947,7 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
 </div>
 </div><!-- /#app -->
 <div class="toast" id="toast"></div>
-<!-- KBMC CRM v20260427_self_assign_fix -->
+<!-- KBMC CRM v20260427_act_info_tab -->
 <script>
 // ── 영업시간 계산 (토·일·공휴일 제외) ──────────────────────
 const KR_HOLIDAYS_2025=[
@@ -7041,14 +7048,24 @@ function switchActModalTab(tab, btn){
   });
   if(btn){ btn.style.color='var(--blue)'; btn.style.borderBottom='2px solid var(--blue)'; btn.style.fontWeight='700'; }
   const form=document.getElementById('act-tab-panel-form');
+  const info=document.getElementById('act-tab-panel-info');
   const hist=document.getElementById('act-tab-panel-history');
   const footer=document.getElementById('act-modal-footer');
   if(form) form.style.display = tab==='form'?'':'none';
+  if(info) info.style.display = tab==='info'?'':'none';
   if(hist) hist.style.display = tab==='history'?'':'none';
-  // 히스토리 탭에서는 저장 버튼 숨김
+  // 입력 외 탭(고객정보·히스토리)에서는 저장 버튼 숨김
   if(footer){
     const saveBtn=footer.querySelector('[onclick="saveActivity()"]');
     if(saveBtn) saveBtn.style.display = tab==='form'?'':'none';
+  }
+  // 고객정보 탭 전환 시 — 최신 lead 데이터로 재렌더 (읽기 전용)
+  if(tab==='info'){
+    const lid=document.getElementById('act-lead-id')?.value;
+    if(lid){
+      const _lead=(allLeads||[]).find(l=>l.id===lid)||(myLeads||[]).find(l=>l.id===lid);
+      if(_lead) _renderActModalInfo(_lead);
+    }
   }
   // 히스토리 탭 전환 시 항상 최신 데이터로 재렌더
   if(tab==='history'){
@@ -7068,6 +7085,64 @@ function switchActModalTab(tab, btn){
       }
     }
   }
+}
+
+// ── 활동모달 고객정보 탭 렌더 (읽기 전용) ────────────────────
+function _renderActModalInfo(lead){
+  const grid=document.getElementById('act-modal-info-grid'); if(!grid||!lead) return;
+  const row=(l,v,opt={})=>`
+    <div style="padding:9px 14px;border-bottom:1px solid var(--gray-100);display:flex;gap:8px;align-items:flex-start">
+      <span style="font-size:11px;color:var(--gray-400);font-weight:500;min-width:72px;flex-shrink:0;padding-top:1px">${l}</span>
+      <span style="font-size:13px;color:${opt.err?'var(--err)':'var(--gray-800)'};font-weight:${opt.bold?'700':'500'};line-height:1.4">${esc(v)||'<span style="color:var(--gray-200)">—</span>'}</span>
+    </div>`;
+  // 상태·진행단계 (읽기 전용 — 변경은 활동등록 탭에서)
+  const statusHtml=`
+    <div style="padding:9px 14px;border-bottom:1px solid var(--gray-100);display:flex;gap:8px;align-items:center">
+      <span style="font-size:11px;color:var(--gray-400);font-weight:500;min-width:72px;flex-shrink:0">상태</span>
+      ${sBadge(lead.status)}
+    </div>
+    <div style="padding:9px 14px;border-bottom:1px solid var(--gray-100);display:flex;gap:8px;align-items:center">
+      <span style="font-size:11px;color:var(--gray-400);font-weight:500;min-width:72px;flex-shrink:0">진행단계</span>
+      <span style="font-size:13px;color:var(--gray-800);font-weight:600">${esc(lead.current_stage||'—')}</span>
+    </div>`;
+  // 관리지점 행
+  const _isTm=lead.branch_name==='대전'||lead.tm_transferred;
+  const _hasTmCollab=(function(){try{return JSON.parse(lead.collab_branches||'[]').includes('대전TM');}catch(e){return false;}})();
+  const _brLabel=_isTm
+    ?`<span style="font-size:13px;font-weight:700;color:#7c3aed">${esc(lead.branch_name||'대전TM')}</span>`
+    :(lead.branch_name?`<span style="font-size:13px;font-weight:500;color:var(--gray-800)">${esc(lead.branch_name)}</span>`:'<span style="color:var(--gray-200)">—</span>');
+  const _tmBadge=_isTm
+    ?'<span style="font-size:10px;font-weight:700;color:#7c3aed;background:rgba(124,58,237,.1);padding:1px 6px;border-radius:8px;margin-left:6px">대전TM</span>'
+    :(_hasTmCollab?'<span style="font-size:10px;font-weight:700;color:#7c3aed;background:rgba(124,58,237,.1);padding:1px 6px;border-radius:8px;margin-left:6px">대전</span>':'');
+  const _brRow=`<div style="padding:9px 14px;border-bottom:1px solid var(--gray-100);display:flex;gap:8px;align-items:center">
+    <span style="font-size:11px;color:var(--gray-400);font-weight:500;min-width:72px;flex-shrink:0">관리지점</span>
+    ${_brLabel}${_tmBadge}
+  </div>`;
+  // 관리팀장 행 (복수 포함)
+  let _teamNames=[];
+  try{_teamNames=JSON.parse(lead.team_names||'[]');}catch(e){}
+  if(!_teamNames.length&&lead.team_name) _teamNames=lead.team_name.split(', ').map(s=>s.trim()).filter(Boolean);
+  const _teamDisplay=_teamNames.length
+    ?_teamNames.map(t=>`<span style="font-size:12px;font-weight:600;color:var(--navy);background:rgba(15,40,90,.07);padding:2px 8px;border-radius:8px;margin-right:4px">${esc(t)}</span>`).join('')
+    :'<span style="color:var(--gray-200)">—</span>';
+  const _teamRow=`<div style="padding:9px 14px;border-bottom:1px solid var(--gray-100);display:flex;gap:8px;align-items:flex-start">
+    <span style="font-size:11px;color:var(--gray-400);font-weight:500;min-width:72px;flex-shrink:0;padding-top:3px">관리팀장</span>
+    <div style="display:flex;flex-wrap:wrap;gap:3px">${_teamDisplay}</div>
+  </div>`;
+  grid.innerHTML = statusHtml +
+    row('신청자',   lead.contact_name) +
+    row('연락처',   lead.phone) +
+    row('이메일',   lead.email) +
+    _brRow + _teamRow +
+    row('소재지',   lead.region) +
+    row('업종',     lead.industry) +
+    row('매출',     lead.revenue) +
+    row('상담유형', lead.consult_type) +
+    row('유입경로', lead.inflow) +
+    row('체납여부', lead.tax_delinquent, {err:lead.tax_delinquent&&lead.tax_delinquent!=='없음'}) +
+    row('분배날짜', lead.distributed_at?lead.distributed_at.slice(0,10):'') +
+    (lead.note?row('비고', lead.note):'') +
+    (lead.proposal?row('제안부분', lead.proposal):'');
 }
 
 function _renderActModalHistory(leadId){
