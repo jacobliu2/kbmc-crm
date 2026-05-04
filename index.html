@@ -2947,7 +2947,7 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
 </div>
 </div><!-- /#app -->
 <div class="toast" id="toast"></div>
-<!-- KBMC CRM v20260427_act_info_tab -->
+<!-- KBMC CRM v20260427_pagination_fix -->
 <script>
 // ── 영업시간 계산 (토·일·공휴일 제외) ──────────────────────
 const KR_HOLIDAYS_2025=[
@@ -4165,9 +4165,46 @@ async function dbQ(table, filters={}){
     Object.entries(filters).forEach(([k,v])=>{if(v!==undefined&&v!=='')d=d.filter(r=>r[k]===v);});
     return d;
   }
+  // ★ leads: PostgREST 기본 1000건 한계 우회 — Range 헤더 페이지네이션
+  if(table==='leads'){
+    const PAGE=1000;
+    let offset=0;
+    const all=[];
+    let qs='leads?select=*&order=created_at.desc&status=neq.deleted';
+    Object.entries(filters).forEach(([k,v])=>{if(v!==undefined&&v!=='')qs+=`&${k}=eq.${encodeURIComponent(v)}`;});
+    while(true){
+      try{
+        const r=await fetch(SB_URL+'/rest/v1/'+qs,{
+          headers:{...sbH(),'Range-Unit':'items','Range':offset+'-'+(offset+PAGE-1),'Prefer':'count=none'}
+        });
+        if(!r.ok){
+          if(offset===0){
+            showToast('⚠️ Supabase 연결 실패 — 데이터를 불러오지 못했습니다. 새로고침 해주세요.','error');
+            return [];
+          }
+          break;
+        }
+        const rows=await r.json().catch(()=>[]);
+        if(!rows||!rows.length) break;
+        all.push(...rows);
+        if(rows.length<PAGE) break;
+        offset+=PAGE;
+        if(offset>500000) break; // 안전 상한
+      }catch(e){
+        console.warn('dbQ leads err:',e.message);
+        if(offset===0){
+          showToast('⚠️ Supabase 연결 실패 — 데이터를 불러오지 못했습니다. 새로고침 해주세요.','error');
+          return [];
+        }
+        break;
+      }
+    }
+    console.log('[leads] 전체 로드 완료:',all.length,'건');
+    return all;
+  }
+  // 그 외 테이블은 기존 로직 유지
   let path=table+'?select=*&order=created_at.desc&limit='+(table==='activities'?100000:5000);
   Object.entries(filters).forEach(([k,v])=>{if(v!==undefined&&v!=='')path+=`&${k}=eq.${encodeURIComponent(v)}`;});
-  if(table==='leads') path+='&status=neq.deleted';
   const result=await sbGet(path);
   if(result===null){
     // testMode 자동전환 제거 — Supabase 실패를 명시적으로 알림
