@@ -2711,6 +2711,55 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
   </div>
 </div>
 
+<!-- ═══ 단계별 현황 대시보드 (관리자/지점장/팀장 공용) ═══ -->
+<div id="screen-stage-dashboard" class="screen">
+  <div class="page-header" style="margin-bottom:16px">
+    <div class="page-title">🎯 단계별 현황 대시보드</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <span id="sdash-meta" style="font-size:12px;color:var(--gray-400)"></span>
+      <button class="btn btn-outline btn-sm" onclick="loadStageDashboard()" id="sdash-refresh-btn">↻ 새로고침</button>
+    </div>
+  </div>
+
+  <!-- 상단: 스코프 선택 (지점/팀장 드롭다운) -->
+  <div id="sdash-scope-bar" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px;padding:12px 14px;background:#f8fafc;border:1px solid var(--gray-200);border-radius:8px">
+    <div style="display:flex;gap:6px;align-items:center">
+      <label style="font-size:12px;font-weight:700;color:var(--gray-500)">범위</label>
+      <select id="sdash-branch" onchange="onSdashBranchChange()" style="padding:6px 10px;background:#fff;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px;min-width:130px"></select>
+      <select id="sdash-team" onchange="renderStageDashboard()" style="padding:6px 10px;background:#fff;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px;min-width:130px"></select>
+    </div>
+    <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
+      <input type="text" id="sdash-search" oninput="renderStageDashboardList()" placeholder="🔍 회사명·연락처·팀장"
+        style="padding:6px 10px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px;width:220px">
+    </div>
+  </div>
+
+  <!-- 헤더: 현재 스코프 요약 -->
+  <div id="sdash-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:14px 18px;background:#fff;border:1px solid var(--gray-200);border-radius:10px;margin-bottom:14px">
+    <div>
+      <div id="sdash-crumb" style="font-size:11px;color:var(--gray-400);margin-bottom:3px">전체</div>
+      <div id="sdash-title" style="font-size:18px;font-weight:800;letter-spacing:-.3px">전체 현황</div>
+      <div id="sdash-sub" style="font-size:12px;color:var(--gray-500);margin-top:2px"></div>
+    </div>
+    <div style="text-align:right;padding:8px 16px;border-radius:8px;background:linear-gradient(135deg,#1e293b,#0f172a);color:#fff">
+      <div style="font-size:10px;opacity:.75;letter-spacing:.5px">총 배정 기업</div>
+      <div style="font-size:26px;font-weight:800;line-height:1"><span id="sdash-total">0</span><span style="font-size:12px;font-weight:600;opacity:.7;margin-left:3px">개</span></div>
+    </div>
+  </div>
+
+  <!-- 8단계 카드 -->
+  <div id="sdash-stages" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px"></div>
+
+  <!-- 사각지대 경고 (관리자만) -->
+  <div id="sdash-warn" style="display:none;margin-bottom:14px"></div>
+
+  <!-- 단계 탭 + 기업 리스트 -->
+  <div style="background:#fff;border:1px solid var(--gray-200);border-radius:10px;overflow:hidden">
+    <div style="padding:10px 14px;background:#fafbfd;border-bottom:1px solid var(--gray-200);display:flex;gap:6px;flex-wrap:wrap" id="sdash-tabs"></div>
+    <div id="sdash-list" style="max-height:600px;overflow-y:auto"></div>
+  </div>
+</div>
+
 <div id="screen-activity" class="screen">
   <!-- 오늘 할 일 위젯 (팀장/지점장) -->
   <div id="act-todo-widget" style="display:none;margin-bottom:16px"></div>
@@ -4488,10 +4537,10 @@ function doLogout(){
 
 // ── 앱 시작 ──────────────────────────────────────────────
 const NAV_CFG = {
-  admin:[{id:'admin',l:'📊 대시보드'},{id:'leads',l:'🗄️ DB관리'},{id:'activity',l:'📅 활동'},{id:'settings',l:'⚙️ 설정'}],
+  admin:[{id:'admin',l:'📊 대시보드'},{id:'leads',l:'🗄️ DB관리'},{id:'stage-dashboard',l:'🎯 단계별 현황'},{id:'activity',l:'📅 활동'},{id:'settings',l:'⚙️ 설정'}],
   dbmanager:[{id:'leads',l:'🗄️ DB관리'},{id:'activity',l:'📅 활동'},{id:'notices',l:'📢 공지함'}],
-  branch:[{id:'branch',l:'🏢 지점관리'},{id:'leads',l:'🗄️ DB관리'},{id:'my-clients',l:'🏆 고객관리'},{id:'activity',l:'📅 활동'},{id:'notices',l:'📢 공지함'}],
-  team:[{id:'leads',l:'🗄️ DB관리'},{id:'my-clients',l:'🏆 고객관리'},{id:'activity',l:'📅 활동'},{id:'notices',l:'📢 공지함'}],
+  branch:[{id:'branch',l:'🏢 지점관리'},{id:'leads',l:'🗄️ DB관리'},{id:'stage-dashboard',l:'🎯 단계별 현황'},{id:'my-clients',l:'🏆 고객관리'},{id:'activity',l:'📅 활동'},{id:'notices',l:'📢 공지함'}],
+  team:[{id:'leads',l:'🗄️ DB관리'},{id:'stage-dashboard',l:'🎯 단계별 현황'},{id:'my-clients',l:'🏆 고객관리'},{id:'activity',l:'📅 활동'},{id:'notices',l:'📢 공지함'}],
   tm:[{id:'tm-panel',l:'📞 관리 DB'},{id:'notices',l:'📢 공지함'}],
 };
 const RL={admin:'관리자',dbmanager:'DB관리자',branch:'지점장',team:'팀장',tm:'대전TM'};
@@ -4565,10 +4614,10 @@ function startApp(){
 function showScreen(id, btn){
   // 역할별 접근 가능 화면 화이트리스트
   const ALLOWED = {
-    admin:     ['admin','leads','activity','settings'],
+    admin:     ['admin','leads','stage-dashboard','activity','settings'],
     dbmanager: ['leads','activity','notices'],
-    branch:    ['branch','leads','my-clients','activity','notices'],
-    team:      ['leads','my-leads','my-clients','activity','notices'],
+    branch:    ['branch','leads','stage-dashboard','my-clients','activity','notices'],
+    team:      ['leads','stage-dashboard','my-leads','my-clients','activity','notices'],
     tm:        ['tm-panel','notices'],
   };
   const role = curUser?.role;
@@ -4584,7 +4633,8 @@ function showScreen(id, btn){
   closePanel();
   ({
     'admin':loadAdmin,'leads':loadLeads,'my-leads':loadMyLeads,'my-clients':loadMyClients,
-    'settings':loadSettings,'tm-panel':loadTmPanel,'branch':loadBranchScreen,'activity':loadActivityScreen,'notices':loadNoticesScreen
+    'settings':loadSettings,'tm-panel':loadTmPanel,'branch':loadBranchScreen,'activity':loadActivityScreen,'notices':loadNoticesScreen,
+    'stage-dashboard':loadStageDashboard
   }[id]||function(){})();
 }
 
@@ -9072,6 +9122,166 @@ async function exportStatExcel(){
   ws7['!cols']=[{wch:12},{wch:12},{wch:12},{wch:12},{wch:10}];
   window.XLSX.utils.book_append_sheet(WB,ws7,'팀별 미팅 현황');
 
+  // ─────────────────────────────────────────────────────────
+  // ── 시트8/9/10: 단계별 현황 매트릭스 + 기업명단 + 사각지대 ──
+  // ─────────────────────────────────────────────────────────
+  // 헬퍼: 리드의 담당 팀장 명단 (복수배정 지원)
+  const _stLeadTeams = (l)=>{
+    let arr=[];
+    try{ arr=JSON.parse(l.team_names||'[]'); }catch(_){}
+    if(!Array.isArray(arr)) arr=[];
+    if(!arr.length && l.team_name){
+      arr=String(l.team_name).split(',').map(s=>s.trim()).filter(Boolean);
+    }
+    return arr;
+  };
+  // 헬퍼: 단계 정규화
+  const _stNormStage = (l)=>{
+    const STG=['배정','접촉','상담','제안','계약','관리','보류','드랍'];
+    const s=String(l.current_stage||'').trim();
+    if(STG.includes(s)) return s;
+    if(s==='이관') return '접촉';
+    if(s==='약속') return '상담';
+    if(l.status==='drop') return '드랍';
+    if(l.status==='hold') return '보류';
+    return '배정';
+  };
+  const STG_LIST = ['배정','접촉','상담','제안','계약','관리','보류','드랍'];
+
+  // status≠deleted, 지점 있는 것만 (= 대시보드 "전체"와 동일 정의)
+  const _stAll = all.filter(l=>l.status!=='deleted' && l.branch_name);
+
+  // 지점장 본인을 자기 지점 팀장 명단에 동등 포함시킨 매트릭스용 맵
+  const _stTeamMap = {};
+  Object.keys(TEAM_MAP||{}).forEach(b=>{
+    _stTeamMap[b] = (TEAM_MAP[b]||[]).slice();
+    if(!_stTeamMap[b].includes(b)) _stTeamMap[b].push(b);
+    _stTeamMap[b].sort((x,y)=>x.localeCompare(y,'ko'));
+  });
+
+  // ─── 시트8: 지점/팀장별 단계 매트릭스 ───
+  const sheet8Data = [];
+  sheet8Data.push(['지점','팀장','구분','배정','접촉','상담','제안','계약','관리','보류','드랍','합계']);
+  let g8 = STG_LIST.map(()=>0);
+  Object.keys(_stTeamMap).forEach(br=>{
+    const teams = _stTeamMap[br];
+    // 지점 소계 (branch_name 기준)
+    const brLeads = _stAll.filter(l=>l.branch_name===br);
+    const brCounts = STG_LIST.map(s=>brLeads.filter(l=>_stNormStage(l)===s).length);
+    const brTotal = brCounts.reduce((a,b)=>a+b,0);
+    sheet8Data.push([br,'','🏛️ 지점 합계', ...brCounts, brTotal]);
+
+    // 팀장별 (복수배정 시 양쪽에 카운트)
+    teams.forEach(t=>{
+      const tLeads = _stAll.filter(l=>_stLeadTeams(l).includes(t) && l.branch_name===br);
+      const tCounts = STG_LIST.map(s=>tLeads.filter(l=>_stNormStage(l)===s).length);
+      const tTotal = tCounts.reduce((a,b)=>a+b,0);
+      const isSelf = (t===br);
+      sheet8Data.push([br, t, isSelf?'👑 지점장 본인':'팀장', ...tCounts, tTotal]);
+    });
+    // 빈 줄
+    sheet8Data.push([]);
+    brCounts.forEach((c,i)=>g8[i]+=c);
+  });
+  // 전체 합계
+  sheet8Data.push(['전체','','📊 총합계', ...g8, g8.reduce((a,b)=>a+b,0)]);
+  const ws8 = window.XLSX.utils.aoa_to_sheet(sheet8Data);
+  ws8['!cols']=[{wch:12},{wch:12},{wch:14},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:10}];
+  window.XLSX.utils.book_append_sheet(WB, ws8, '단계 매트릭스');
+
+  // ─── 시트9: 단계별 기업명단 (팀장별×단계별) ───
+  const sheet9Data = [];
+  sheet9Data.push(['지점','팀장','단계','회사명','연락처','담당자','진행단계']);
+  Object.keys(_stTeamMap).forEach(br=>{
+    const teams = _stTeamMap[br];
+    teams.forEach(t=>{
+      const tLeads = _stAll.filter(l=>_stLeadTeams(l).includes(t) && l.branch_name===br);
+      if(!tLeads.length) return;
+      // 단계 순서대로 그룹화
+      STG_LIST.forEach(s=>{
+        const stageLeads = tLeads.filter(l=>_stNormStage(l)===s)
+          .sort((a,b)=>String(a.company_name||'').localeCompare(String(b.company_name||''),'ko'));
+        if(!stageLeads.length) return;
+        stageLeads.forEach(l=>{
+          sheet9Data.push([
+            br,
+            t + (t===br?' (👑 본인)':''),
+            s,
+            l.company_name||'',
+            l.phone||'',
+            l.contact_name||'',
+            _stNormStage(l)
+          ]);
+        });
+      });
+      sheet9Data.push([]); // 팀장별 구분 빈 줄
+    });
+  });
+  const ws9 = window.XLSX.utils.aoa_to_sheet(sheet9Data);
+  ws9['!cols']=[{wch:12},{wch:18},{wch:8},{wch:28},{wch:14},{wch:12},{wch:10}];
+  window.XLSX.utils.book_append_sheet(WB, ws9, '단계별 기업명단');
+
+  // ─── 시트10: 사각지대 검증 (지점합 vs 팀장합 차이) ───
+  const sheet10Data = [];
+  sheet10Data.push(['검증 항목','건수','상세']);
+  sheet10Data.push(['전체 활성 리드 (status≠deleted)', all.filter(l=>l.status!=='deleted').length, '드랍 포함']);
+  sheet10Data.push(['├─ 지점 배정됨 (branch_name 있음)', _stAll.length, '대시보드 "전체" 기준']);
+  const noBranch = all.filter(l=>l.status!=='deleted' && !l.branch_name);
+  sheet10Data.push(['└─ ⚠️ 지점 미배정 (branch_name 없음)', noBranch.length, 'CRM "미배정 DB" 탭 기준']);
+  sheet10Data.push([]);
+
+  // 지점별 합계 vs 팀장별 합계 (지점장 본인 포함) 비교
+  sheet10Data.push(['── 지점별 합계 vs 팀장별 합계 정합성 ──']);
+  sheet10Data.push(['지점','지점 합계 (branch_name 기준)','팀장합 (지점장본인 포함)','차이','중복배정(중복카운트)']);
+  Object.keys(_stTeamMap).forEach(br=>{
+    const brLeads = _stAll.filter(l=>l.branch_name===br);
+    const brSum = brLeads.length;
+    const teams = _stTeamMap[br];
+    let teamSum = 0;
+    let dupCount = 0;
+    brLeads.forEach(l=>{
+      const ts = _stLeadTeams(l).filter(x=>teams.includes(x));
+      teamSum += ts.length;
+      if(ts.length>1) dupCount++;
+    });
+    sheet10Data.push([br, brSum, teamSum, teamSum-brSum, dupCount]);
+  });
+  sheet10Data.push([]);
+
+  // 팀장 미매핑 리드 상세
+  sheet10Data.push(['── 팀장 미매핑 리드 (지점은 있으나 등록 팀장 명단에 없음) ──']);
+  sheet10Data.push(['지점','team_name','team_names','회사명','연락처']);
+  let unmappedRows = [];
+  _stAll.forEach(l=>{
+    const br = l.branch_name;
+    const teams = _stTeamMap[br] || [];
+    const ts = _stLeadTeams(l);
+    if(ts.length === 0 || !ts.some(t=>teams.includes(t))){
+      unmappedRows.push([br, l.team_name||'', l.team_names||'', l.company_name||'', l.phone||'']);
+    }
+  });
+  if(unmappedRows.length === 0){
+    sheet10Data.push(['(모두 정상 매핑됨)']);
+  }else{
+    unmappedRows.forEach(r=>sheet10Data.push(r));
+    sheet10Data.push([]);
+    sheet10Data.push([`소계: ${unmappedRows.length}건`]);
+  }
+  sheet10Data.push([]);
+
+  // 지점 미배정 리드 상세 (있을 경우)
+  if(noBranch.length > 0){
+    sheet10Data.push(['── 지점 미배정 리드 상세 ──']);
+    sheet10Data.push(['회사명','연락처','담당자','등록일','status']);
+    noBranch.forEach(l=>{
+      sheet10Data.push([l.company_name||'', l.phone||'', l.contact_name||'', _fmtDate(l.created_at), l.status||'']);
+    });
+  }
+
+  const ws10 = window.XLSX.utils.aoa_to_sheet(sheet10Data);
+  ws10['!cols']=[{wch:24},{wch:18},{wch:30},{wch:24},{wch:14}];
+  window.XLSX.utils.book_append_sheet(WB, ws10, '사각지대 검증');
+
   const fname=`KBMC_통계_${period==='all'?'전체':ym}.xlsx`;
   window.XLSX.writeFile(WB,fname);
   closeM('modal-export');
@@ -9210,6 +9420,353 @@ function buildNav(){
     `<button class="nb${activeId===t.id?' active':''}" onclick="showScreen('${t.id}')">${t.l}</button>`
   ).join('');
 }
+
+// ═══════════════════════════════════════════════════════════
+// 🎯 단계별 현황 대시보드 (관리자/지점장/팀장 공용)
+// ═══════════════════════════════════════════════════════════
+const SDASH_STAGES = ['배정','접촉','상담','제안','계약','관리','보류','드랍'];
+const SDASH_ICON = {배정:'📌',접촉:'☎️',상담:'💬',제안:'📑',계약:'✍️',관리:'🛡️',보류:'⏸️',드랍:'❌'};
+const SDASH_COLOR = {
+  배정:'#0ea5e9', 접촉:'#0891b2', 상담:'#8b5cf6', 제안:'#ec4899',
+  계약:'#10b981', 관리:'#14b8a6', 보류:'#f59e0b', 드랍:'#ef4444'
+};
+
+let _sdashState = { branch:'', team:'', activeStage:null };
+
+// 리드의 담당 팀장 명단 추출 (CRM 본 코드 패턴 그대로)
+function sdashLeadTeams(l){
+  let arr=[];
+  try{ arr=JSON.parse(l.team_names||'[]'); }catch(e){}
+  if(!Array.isArray(arr)) arr=[];
+  if(!arr.length && l.team_name){
+    arr=String(l.team_name).split(',').map(s=>s.trim()).filter(Boolean);
+  }
+  return arr;
+}
+
+// 단계 정규화 (구단계 자동 변환)
+function sdashNormStage(l){
+  const s=String(l.current_stage||'').trim();
+  if(SDASH_STAGES.includes(s)) return s;
+  if(s==='이관') return '접촉';
+  if(s==='약속') return '상담';
+  if(l.status==='drop') return '드랍';
+  if(l.status==='hold') return '보류';
+  return '배정';
+}
+
+// 권한별 데이터 범위 결정 + 지점장 본인을 자기 지점 팀장 목록에 동등 포함
+function sdashGetScopeOptions(){
+  const role = curUser?.role;
+  const myName = curUser?.name;
+  // 지점장 본인 포함된 TEAM_MAP 사본
+  const map = {};
+  Object.keys(TEAM_MAP||{}).forEach(b=>{
+    map[b] = (TEAM_MAP[b]||[]).slice();
+    if(!map[b].includes(b)) map[b].push(b); // 지점장 본인 동등 포함
+    map[b].sort((x,y)=>x.localeCompare(y,'ko'));
+  });
+  if(role==='admin' || role==='dbmanager'){
+    return { branches:Object.keys(map), teamMap:map, allowAll:true };
+  }
+  if(role==='branch'){
+    // 자기 지점만
+    const m={}; m[myName] = map[myName] || [myName];
+    return { branches:[myName], teamMap:m, allowAll:false, lockBranch:myName };
+  }
+  if(role==='team'){
+    // 본인 소속 지점만, 본인만
+    const myBranch = Object.entries(TEAM_MAP||{}).find(([,v])=>v.includes(myName))?.[0]||'';
+    const m={}; m[myBranch]=[myName];
+    return { branches:[myBranch], teamMap:m, allowAll:false, lockBranch:myBranch, lockTeam:myName };
+  }
+  return { branches:[], teamMap:{}, allowAll:false };
+}
+
+// 메인 로더 (showScreen이 호출)
+async function loadStageDashboard(){
+  const screen = document.getElementById('screen-stage-dashboard');
+  if(!screen) return;
+  // 데이터 로드 (이미 메모리에 있으면 그대로, 없으면 fetch)
+  try{
+    if(!Array.isArray(allLeads) || !allLeads.length){
+      const data = await dbQ('leads').catch(()=>[]);
+      allLeads = (data||[]).filter(l=>l.status!=='deleted');
+    }
+  }catch(e){ console.warn('sdash leads load err:',e); }
+
+  // 권한별 스코프 초기화
+  const opts = sdashGetScopeOptions();
+  const brSel = document.getElementById('sdash-branch');
+  const tmSel = document.getElementById('sdash-team');
+  if(!brSel||!tmSel) return;
+
+  // 지점 드롭다운
+  if(opts.allowAll){
+    brSel.innerHTML = `<option value="">전체 지점</option>` +
+      opts.branches.map(b=>`<option value="${esc(b)}">${esc(b)}지점</option>`).join('');
+    brSel.disabled = false;
+    _sdashState.branch = '';
+  }else{
+    brSel.innerHTML = opts.branches.map(b=>`<option value="${esc(b)}">${esc(b)}지점</option>`).join('');
+    brSel.value = opts.lockBranch || '';
+    brSel.disabled = true;
+    _sdashState.branch = opts.lockBranch || '';
+  }
+
+  // 팀장 드롭다운 (지점에 따라 동적)
+  sdashRebuildTeamSelect(opts);
+
+  // 팀장이 잠겨있으면 강제
+  if(opts.lockTeam){
+    tmSel.value = opts.lockTeam;
+    tmSel.disabled = true;
+    _sdashState.team = opts.lockTeam;
+  }
+
+  _sdashState.activeStage = null;
+  renderStageDashboard();
+}
+
+function sdashRebuildTeamSelect(opts){
+  opts = opts || sdashGetScopeOptions();
+  const tmSel = document.getElementById('sdash-team');
+  if(!tmSel) return;
+  const br = _sdashState.branch;
+  let teams = [];
+  if(br){
+    teams = (opts.teamMap[br]||[]).slice();
+  }else if(opts.allowAll){
+    // 전체 지점 → 모든 팀장 (지점장 본인 포함)
+    teams = Object.values(opts.teamMap).flat();
+    teams = [...new Set(teams)].sort((x,y)=>x.localeCompare(y,'ko'));
+  }
+  tmSel.innerHTML = `<option value="">전체 팀장</option>` +
+    teams.map(t=>{
+      const isSelf = (t===br); // 지점장 본인
+      return `<option value="${esc(t)}">${isSelf?'👑 ':''}${esc(t)}${isSelf?' (본인)':''}</option>`;
+    }).join('');
+  if(opts.lockTeam){
+    tmSel.value = opts.lockTeam;
+    tmSel.disabled = true;
+  }else{
+    tmSel.disabled = false;
+    if(_sdashState.team && teams.includes(_sdashState.team)){
+      tmSel.value = _sdashState.team;
+    }else{
+      tmSel.value = '';
+      _sdashState.team = '';
+    }
+  }
+}
+
+function onSdashBranchChange(){
+  const br = document.getElementById('sdash-branch')?.value || '';
+  _sdashState.branch = br;
+  _sdashState.team = '';
+  _sdashState.activeStage = null;
+  sdashRebuildTeamSelect();
+  renderStageDashboard();
+}
+
+// 현재 스코프에 해당하는 리드
+function sdashLeadsInScope(){
+  const all = (allLeads||[]).filter(l=>l.status!=='deleted');
+  const opts = sdashGetScopeOptions();
+  const br = _sdashState.branch;
+  const tm = _sdashState.team;
+
+  // 권한 체크: branch는 자기 지점만, team은 본인만
+  if(opts.lockBranch && (!br || br!==opts.lockBranch)){
+    // 강제 자기 지점
+    _sdashState.branch = opts.lockBranch;
+  }
+  if(opts.lockTeam && (!tm || tm!==opts.lockTeam)){
+    _sdashState.team = opts.lockTeam;
+  }
+
+  let scope = all.filter(l=>l.branch_name); // 미배정 제외
+  // 지점 필터
+  if(_sdashState.branch){
+    scope = scope.filter(l=>l.branch_name===_sdashState.branch);
+  }else if(opts.lockBranch){
+    scope = scope.filter(l=>l.branch_name===opts.lockBranch);
+  }
+  // 팀장 필터
+  if(_sdashState.team){
+    scope = scope.filter(l=>sdashLeadTeams(l).includes(_sdashState.team));
+  }
+  return scope;
+}
+
+// 메인 렌더
+function renderStageDashboard(){
+  const leads = sdashLeadsInScope();
+  const total = leads.length;
+
+  // 헤더
+  let crumb='전체', title='전체 현황', sub='';
+  if(_sdashState.branch && !_sdashState.team){
+    crumb = `${_sdashState.branch}지점`;
+    title = `🏛️ ${_sdashState.branch}지점`;
+    const teams = (TEAM_MAP[_sdashState.branch]||[]).slice();
+    if(!teams.includes(_sdashState.branch)) teams.push(_sdashState.branch); // 지점장 본인 포함
+    sub = `팀장 ${teams.length}명 (지점장 본인 포함)`;
+  }else if(_sdashState.team){
+    const isSelf = (_sdashState.team===_sdashState.branch);
+    crumb = `${_sdashState.branch||'-'}지점 › ${_sdashState.team}${isSelf?' (지점장 본인)':''}`;
+    title = `${isSelf?'👑':'👤'} ${_sdashState.team}`;
+    sub = isSelf ? `${_sdashState.branch}지점장 본인 자기배정` : `${_sdashState.branch}지점 소속`;
+  }
+  document.getElementById('sdash-crumb').textContent = crumb;
+  document.getElementById('sdash-title').textContent = title;
+  document.getElementById('sdash-sub').textContent = sub;
+  document.getElementById('sdash-total').textContent = total;
+  const meta = `최종 갱신 ${new Date().toLocaleTimeString('ko-KR')}`;
+  const metaEl = document.getElementById('sdash-meta'); if(metaEl) metaEl.textContent = meta;
+
+  // 단계별 집계
+  const counts = {}; SDASH_STAGES.forEach(s=>counts[s]=0);
+  leads.forEach(l=>{ const s=sdashNormStage(l); counts[s]=(counts[s]||0)+1; });
+
+  // 8단계 카드
+  const stagesEl = document.getElementById('sdash-stages');
+  stagesEl.innerHTML = SDASH_STAGES.map(s=>{
+    const c = counts[s]||0;
+    const pct = total ? Math.round(c/total*1000)/10 : 0;
+    const isAct = _sdashState.activeStage===s;
+    const clr = SDASH_COLOR[s];
+    return `<div onclick="toggleSdashStage('${s}')" style="cursor:pointer;padding:12px 14px;background:#fff;border:1px solid ${isAct?clr:'var(--gray-200)'};border-top:3px solid ${clr};border-radius:8px;${isAct?'box-shadow:0 0 0 2px '+clr+'33;':''}transition:all .15s">
+      <div style="font-size:12px;font-weight:700;color:${clr};margin-bottom:4px">${SDASH_ICON[s]} ${s}</div>
+      <div style="font-size:24px;font-weight:800;line-height:1">${c}<span style="font-size:11px;font-weight:600;color:var(--gray-400);margin-left:2px">건</span></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:10px;color:var(--gray-500)">
+        <span>비율</span><span style="font-weight:700;color:var(--gray-900)">${pct}%</span>
+      </div>
+      <div style="margin-top:5px;height:3px;background:#f1f5f9;border-radius:2px;overflow:hidden">
+        <div style="height:100%;width:${Math.min(pct,100)}%;background:${clr};transition:width .4s"></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // 단계 탭
+  const tabsEl = document.getElementById('sdash-tabs');
+  tabsEl.innerHTML = `<button onclick="sdashFilterStage(null)" style="padding:5px 11px;border-radius:6px;font-size:12px;font-weight:600;background:${_sdashState.activeStage===null?'var(--navy)':'#fff'};color:${_sdashState.activeStage===null?'#fff':'var(--gray-500)'};border:1px solid ${_sdashState.activeStage===null?'var(--navy)':'var(--gray-200)'};cursor:pointer">전체 ${total}</button>` +
+    SDASH_STAGES.map(s=>{
+      const isAct=_sdashState.activeStage===s;
+      const clr=SDASH_COLOR[s];
+      return `<button onclick="sdashFilterStage('${s}')" style="padding:5px 11px;border-radius:6px;font-size:12px;font-weight:600;background:${isAct?clr:'#fff'};color:${isAct?'#fff':'var(--gray-600)'};border:1px solid ${isAct?clr:'var(--gray-200)'};cursor:pointer">${SDASH_ICON[s]} ${s} ${counts[s]||0}</button>`;
+    }).join('');
+
+  // 사각지대 경고 (관리자만)
+  const warnEl = document.getElementById('sdash-warn');
+  if(curUser?.role==='admin' && warnEl){
+    const issues = sdashFindIssues();
+    if(issues.unmappedTotal > 0 || issues.noBranchTotal > 0){
+      let html = '<div style="padding:10px 14px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;font-size:12px;color:#92400e">';
+      html += '<strong>⚠️ 사각지대 알림:</strong> ';
+      if(issues.unmappedTotal > 0) html += `팀장 미매핑 ${issues.unmappedTotal}건, `;
+      if(issues.noBranchTotal > 0) html += `지점 미배정 ${issues.noBranchTotal}건, `;
+      html = html.replace(/, $/,'');
+      html += ' — 엑셀 다운로드 시 "사각지대 검증" 시트에서 상세 확인 가능';
+      html += '</div>';
+      warnEl.innerHTML = html;
+      warnEl.style.display = 'block';
+    }else{
+      warnEl.style.display = 'none';
+    }
+  }
+
+  renderStageDashboardList();
+}
+
+function toggleSdashStage(s){
+  _sdashState.activeStage = (_sdashState.activeStage===s) ? null : s;
+  renderStageDashboard();
+}
+function sdashFilterStage(s){
+  _sdashState.activeStage = s;
+  renderStageDashboard();
+}
+
+// 사각지대 진단 (관리자용)
+function sdashFindIssues(){
+  const all = (allLeads||[]).filter(l=>l.status!=='deleted');
+  const noBranch = all.filter(l=>!l.branch_name);
+  const knownBranches = new Set(Object.keys(TEAM_MAP||{}));
+  const withBranch = all.filter(l=>l.branch_name);
+
+  // 팀장 미매핑 (지점장 본인 포함된 팀 명단 기준)
+  let unmappedTotal = 0;
+  withBranch.forEach(l=>{
+    const br = l.branch_name;
+    const teams = (TEAM_MAP[br]||[]).slice();
+    if(!teams.includes(br)) teams.push(br); // 지점장 본인 포함
+    const ts = sdashLeadTeams(l);
+    if(!ts.some(t=>teams.includes(t))) unmappedTotal++;
+  });
+  return { unmappedTotal, noBranchTotal:noBranch.length };
+}
+
+// 기업 리스트
+function renderStageDashboardList(){
+  const leads = sdashLeadsInScope();
+  const q = String(document.getElementById('sdash-search')?.value||'').trim().toLowerCase();
+  let list = leads;
+  if(_sdashState.activeStage){
+    list = list.filter(l=>sdashNormStage(l)===_sdashState.activeStage);
+  }
+  if(q){
+    list = list.filter(l=>{
+      const co=String(l.company_name||'').toLowerCase();
+      const ph=String(l.phone||'').toLowerCase();
+      const tn=sdashLeadTeams(l).join(',').toLowerCase();
+      const cn=String(l.contact_name||'').toLowerCase();
+      return co.includes(q)||ph.includes(q)||tn.includes(q)||cn.includes(q);
+    });
+  }
+  // 단계 → 회사명 정렬
+  const stageOrder={}; SDASH_STAGES.forEach((s,i)=>stageOrder[s]=i);
+  list.sort((a,b)=>{
+    const sa=stageOrder[sdashNormStage(a)]??99, sb=stageOrder[sdashNormStage(b)]??99;
+    if(sa!==sb) return sa-sb;
+    return String(a.company_name||'').localeCompare(String(b.company_name||''),'ko');
+  });
+
+  const body = document.getElementById('sdash-list');
+  if(!list.length){
+    body.innerHTML = `<div style="padding:50px 20px;text-align:center;color:var(--gray-400);font-size:13px"><div style="font-size:32px;margin-bottom:8px;opacity:.6">📭</div>해당 조건의 기업이 없습니다.</div>`;
+    return;
+  }
+  body.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead><tr>
+      <th style="position:sticky;top:0;background:#f8fafc;padding:9px 12px;text-align:left;font-weight:700;color:var(--gray-500);border-bottom:1px solid var(--gray-200);font-size:11px;width:36px;z-index:2">#</th>
+      <th style="position:sticky;top:0;background:#f8fafc;padding:9px 12px;text-align:left;font-weight:700;color:var(--gray-500);border-bottom:1px solid var(--gray-200);font-size:11px;z-index:2">회사명</th>
+      <th style="position:sticky;top:0;background:#f8fafc;padding:9px 12px;text-align:left;font-weight:700;color:var(--gray-500);border-bottom:1px solid var(--gray-200);font-size:11px;z-index:2">담당자</th>
+      <th style="position:sticky;top:0;background:#f8fafc;padding:9px 12px;text-align:left;font-weight:700;color:var(--gray-500);border-bottom:1px solid var(--gray-200);font-size:11px;z-index:2">연락처</th>
+      <th style="position:sticky;top:0;background:#f8fafc;padding:9px 12px;text-align:left;font-weight:700;color:var(--gray-500);border-bottom:1px solid var(--gray-200);font-size:11px;z-index:2">지점</th>
+      <th style="position:sticky;top:0;background:#f8fafc;padding:9px 12px;text-align:left;font-weight:700;color:var(--gray-500);border-bottom:1px solid var(--gray-200);font-size:11px;z-index:2">팀장</th>
+      <th style="position:sticky;top:0;background:#f8fafc;padding:9px 12px;text-align:left;font-weight:700;color:var(--gray-500);border-bottom:1px solid var(--gray-200);font-size:11px;z-index:2">단계</th>
+    </tr></thead>
+    <tbody>${list.map((l,i)=>{
+      const stg=sdashNormStage(l);
+      const teams=sdashLeadTeams(l);
+      const clr=SDASH_COLOR[stg];
+      return `<tr style="border-bottom:1px solid #f1f5f9">
+        <td style="padding:9px 12px;color:var(--gray-400)">${i+1}</td>
+        <td style="padding:9px 12px;font-weight:600">${esc(l.company_name||'-')}</td>
+        <td style="padding:9px 12px">${esc(l.contact_name||'')}</td>
+        <td style="padding:9px 12px;color:var(--gray-500);font-size:12px">${esc(l.phone||'')}</td>
+        <td style="padding:9px 12px;color:var(--gray-500)">${esc(l.branch_name||'-')}</td>
+        <td style="padding:9px 12px">${teams.length?teams.map(t=>esc(t)).join(', '):'<span style="color:var(--gray-300)">-</span>'}</td>
+        <td style="padding:9px 12px"><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:${clr}22;color:${clr}">${SDASH_ICON[stg]} ${stg}</span></td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// END 단계별 현황 대시보드
+// ═══════════════════════════════════════════════════════════
 
 function loadSbUi(){
   const c=JSON.parse(localStorage.getItem(SB_CFG_KEY)||'null');
