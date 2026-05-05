@@ -2726,7 +2726,7 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
     <div style="display:flex;gap:6px;align-items:center">
       <label style="font-size:12px;font-weight:700;color:var(--gray-500)">범위</label>
       <select id="sdash-branch" onchange="onSdashBranchChange()" style="padding:6px 10px;background:#fff;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px;min-width:130px"></select>
-      <select id="sdash-team" onchange="renderStageDashboard()" style="padding:6px 10px;background:#fff;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px;min-width:130px"></select>
+      <select id="sdash-team" onchange="onSdashTeamChange()" style="padding:6px 10px;background:#fff;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px;min-width:130px"></select>
     </div>
     <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
       <input type="text" id="sdash-search" oninput="renderStageDashboardList()" placeholder="🔍 회사명·연락처·팀장"
@@ -9148,8 +9148,23 @@ async function exportStatExcel(){
   };
   const STG_LIST = ['배정','접촉','상담','제안','계약','관리','보류','드랍'];
 
-  // status≠deleted, 지점 있는 것만 (= 대시보드 "전체"와 동일 정의)
-  const _stAll = all.filter(l=>l.status!=='deleted' && l.branch_name);
+  // 대전 건 식별 헬퍼 (CRM 본 코드 패턴)
+  const _stIsDaejeon = (l)=>{
+    if(!l) return false;
+    if(l.tm_transferred===true || l.tm_transferred==='true') return true;
+    if(l.tm_hq_transferred===true || l.tm_hq_transferred==='true') return true;
+    if(l.registered_by==='대전TM') return true;
+    try{
+      const cb = JSON.parse(l.collab_branches||'[]');
+      if(Array.isArray(cb) && cb.includes('대전TM')) return true;
+    }catch(e){}
+    return false;
+  };
+
+  // 일반 지점: status≠deleted, 지점 있고 대전 아님
+  const _stAll = all.filter(l=>l.status!=='deleted' && l.branch_name && !_stIsDaejeon(l));
+  // 대전 건 (사각지대 아님 — 별도 영역)
+  const _stDaejeon = all.filter(l=>l.status!=='deleted' && _stIsDaejeon(l));
 
   // 지점장 본인을 자기 지점 팀장 명단에 동등 포함시킨 매트릭스용 맵
   const _stTeamMap = {};
@@ -9183,8 +9198,16 @@ async function exportStatExcel(){
     sheet8Data.push([]);
     brCounts.forEach((c,i)=>g8[i]+=c);
   });
-  // 전체 합계
-  sheet8Data.push(['전체','','📊 총합계', ...g8, g8.reduce((a,b)=>a+b,0)]);
+  // ─── 대전TM 행 추가 ───
+  if(_stDaejeon.length > 0){
+    const dCounts = STG_LIST.map(s=>_stDaejeon.filter(l=>_stNormStage(l)===s).length);
+    const dTotal = dCounts.reduce((a,b)=>a+b,0);
+    sheet8Data.push(['대전TM','대전센터','📞 대전TM센터', ...dCounts, dTotal]);
+    sheet8Data.push([]);
+    dCounts.forEach((c,i)=>g8[i]+=c);
+  }
+  // 전체 합계 (지점 + 대전 통합)
+  sheet8Data.push(['전체','','📊 총합계 (지점+대전)', ...g8, g8.reduce((a,b)=>a+b,0)]);
   const ws8 = window.XLSX.utils.aoa_to_sheet(sheet8Data);
   ws8['!cols']=[{wch:12},{wch:12},{wch:14},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:10}];
   window.XLSX.utils.book_append_sheet(WB, ws8, '단계 매트릭스');
@@ -9217,17 +9240,44 @@ async function exportStatExcel(){
       sheet9Data.push([]); // 팀장별 구분 빈 줄
     });
   });
+  // ─── 대전TM 기업명단 추가 ───
+  if(_stDaejeon.length > 0){
+    sheet9Data.push(['── 📞 대전TM센터 ──']);
+    STG_LIST.forEach(s=>{
+      const stageLeads = _stDaejeon.filter(l=>_stNormStage(l)===s)
+        .sort((a,b)=>String(a.company_name||'').localeCompare(String(b.company_name||''),'ko'));
+      stageLeads.forEach(l=>{
+        sheet9Data.push([
+          '대전TM',
+          '대전센터',
+          s,
+          l.company_name||'',
+          l.phone||'',
+          l.contact_name||'',
+          _stNormStage(l)
+        ]);
+      });
+    });
+  }
   const ws9 = window.XLSX.utils.aoa_to_sheet(sheet9Data);
   ws9['!cols']=[{wch:12},{wch:18},{wch:8},{wch:28},{wch:14},{wch:12},{wch:10}];
   window.XLSX.utils.book_append_sheet(WB, ws9, '단계별 기업명단');
 
   // ─── 시트10: 사각지대 검증 (지점합 vs 팀장합 차이) ───
   const sheet10Data = [];
+  const _allActive = all.filter(l=>l.status!=='deleted');
   sheet10Data.push(['검증 항목','건수','상세']);
-  sheet10Data.push(['전체 활성 리드 (status≠deleted)', all.filter(l=>l.status!=='deleted').length, '드랍 포함']);
-  sheet10Data.push(['├─ 지점 배정됨 (branch_name 있음)', _stAll.length, '대시보드 "전체" 기준']);
-  const noBranch = all.filter(l=>l.status!=='deleted' && !l.branch_name);
-  sheet10Data.push(['└─ ⚠️ 지점 미배정 (branch_name 없음)', noBranch.length, 'CRM "미배정 DB" 탭 기준']);
+  sheet10Data.push(['전체 활성 리드 (status≠deleted)', _allActive.length, '드랍 포함, 대시보드 전체 합과 일치해야 함']);
+  sheet10Data.push(['├─ 지점 배정 (branch_name + 대전 아님)', _stAll.length, '4개 지점 정상 배정']);
+  sheet10Data.push(['├─ 📞 대전TM 영역', _stDaejeon.length, 'tm_transferred / tm_hq_transferred / collab_branches=대전TM / registered_by=대전TM']);
+  // 진짜 사각지대: 대전도 아니고 지점도 없음
+  const realNoBranch = _allActive.filter(l=>!l.branch_name && !_stIsDaejeon(l));
+  sheet10Data.push(['└─ ⚠️ 진짜 미배정 (대전도 아님, 지점도 없음)', realNoBranch.length, '실제 사각지대 — 조치 필요']);
+  // 검증
+  const sumCheck = _stAll.length + _stDaejeon.length + realNoBranch.length;
+  sheet10Data.push([`✓ 합계 검증: ${_stAll.length} + ${_stDaejeon.length} + ${realNoBranch.length} = ${sumCheck}`,
+    sumCheck === _allActive.length ? '✅ 일치' : `❌ 불일치 (${_allActive.length - sumCheck}건 차이)`,
+    '']);
   sheet10Data.push([]);
 
   // 지점별 합계 vs 팀장별 합계 (지점장 본인 포함) 비교
@@ -9269,11 +9319,11 @@ async function exportStatExcel(){
   }
   sheet10Data.push([]);
 
-  // 지점 미배정 리드 상세 (있을 경우)
-  if(noBranch.length > 0){
-    sheet10Data.push(['── 지점 미배정 리드 상세 ──']);
+  // 진짜 미배정 리드 상세 (대전도 아니고 지점도 없는 것만)
+  if(realNoBranch.length > 0){
+    sheet10Data.push(['── ⚠️ 진짜 미배정 리드 상세 (조치 필요) ──']);
     sheet10Data.push(['회사명','연락처','담당자','등록일','status']);
-    noBranch.forEach(l=>{
+    realNoBranch.forEach(l=>{
       sheet10Data.push([l.company_name||'', l.phone||'', l.contact_name||'', _fmtDate(l.created_at), l.status||'']);
     });
   }
@@ -9456,6 +9506,7 @@ function sdashNormStage(l){
 }
 
 // 권한별 데이터 범위 결정 + 지점장 본인을 자기 지점 팀장 목록에 동등 포함
+// + 대전TM을 가상 지점으로 추가 (관리자/DB관리자만)
 function sdashGetScopeOptions(){
   const role = curUser?.role;
   const myName = curUser?.name;
@@ -9467,7 +9518,9 @@ function sdashGetScopeOptions(){
     map[b].sort((x,y)=>x.localeCompare(y,'ko'));
   });
   if(role==='admin' || role==='dbmanager'){
-    return { branches:Object.keys(map), teamMap:map, allowAll:true };
+    // 대전TM 가상 지점 추가 (팀장명 = 대전센터)
+    map['대전TM'] = ['대전센터'];
+    return { branches:[...Object.keys(map).filter(b=>b!=='대전TM'), '대전TM'], teamMap:map, allowAll:true };
   }
   if(role==='branch'){
     // 자기 지점만
@@ -9501,14 +9554,15 @@ async function loadStageDashboard(){
   const tmSel = document.getElementById('sdash-team');
   if(!brSel||!tmSel) return;
 
-  // 지점 드롭다운
+  // 지점 드롭다운 (대전TM은 '지점' 접미사 빼고 '센터' 라벨)
+  const _brLabel = (b)=> b==='대전TM' ? '📞 대전TM센터' : `🏛️ ${esc(b)}지점`;
   if(opts.allowAll){
-    brSel.innerHTML = `<option value="">전체 지점</option>` +
-      opts.branches.map(b=>`<option value="${esc(b)}">${esc(b)}지점</option>`).join('');
+    brSel.innerHTML = `<option value="">전체 (지점+대전)</option>` +
+      opts.branches.map(b=>`<option value="${esc(b)}">${_brLabel(b)}</option>`).join('');
     brSel.disabled = false;
     _sdashState.branch = '';
   }else{
-    brSel.innerHTML = opts.branches.map(b=>`<option value="${esc(b)}">${esc(b)}지점</option>`).join('');
+    brSel.innerHTML = opts.branches.map(b=>`<option value="${esc(b)}">${_brLabel(b)}</option>`).join('');
     brSel.value = opts.lockBranch || '';
     brSel.disabled = true;
     _sdashState.branch = opts.lockBranch || '';
@@ -9569,6 +9623,27 @@ function onSdashBranchChange(){
   renderStageDashboard();
 }
 
+// 팀장 select 변경 핸들러 (state 동기화 후 렌더)
+function onSdashTeamChange(){
+  const tm = document.getElementById('sdash-team')?.value || '';
+  _sdashState.team = tm;
+  _sdashState.activeStage = null;
+  renderStageDashboard();
+}
+
+// 대전 건 식별 (CRM 본 코드 패턴: tm_transferred / tm_hq_transferred / collab_branches / registered_by)
+function sdashIsDaejeonLead(l){
+  if(!l) return false;
+  if(l.tm_transferred===true || l.tm_transferred==='true') return true;
+  if(l.tm_hq_transferred===true || l.tm_hq_transferred==='true') return true;
+  if(l.registered_by==='대전TM') return true;
+  try{
+    const cb = JSON.parse(l.collab_branches||'[]');
+    if(Array.isArray(cb) && cb.includes('대전TM')) return true;
+  }catch(e){}
+  return false;
+}
+
 // 현재 스코프에 해당하는 리드
 function sdashLeadsInScope(){
   const all = (allLeads||[]).filter(l=>l.status!=='deleted');
@@ -9578,21 +9653,30 @@ function sdashLeadsInScope(){
 
   // 권한 체크: branch는 자기 지점만, team은 본인만
   if(opts.lockBranch && (!br || br!==opts.lockBranch)){
-    // 강제 자기 지점
     _sdashState.branch = opts.lockBranch;
   }
   if(opts.lockTeam && (!tm || tm!==opts.lockTeam)){
     _sdashState.team = opts.lockTeam;
   }
 
-  let scope = all.filter(l=>l.branch_name); // 미배정 제외
-  // 지점 필터
+  // 대전TM 가상 지점 선택 시 — 대전 건만 표시
+  if(_sdashState.branch === '대전TM'){
+    let scope = all.filter(sdashIsDaejeonLead);
+    if(_sdashState.team){
+      // 대전센터만 있으니 그대로 통과 (필터 의미상 검색만 좁힘)
+      // 추후 대전 내 세부 담당자 분기 필요 시 여기 확장
+    }
+    return scope;
+  }
+
+  // 일반 지점: branch_name 있는 것 중 대전 건은 제외 (중복 카운트 방지)
+  let scope = all.filter(l=>l.branch_name && !sdashIsDaejeonLead(l));
   if(_sdashState.branch){
     scope = scope.filter(l=>l.branch_name===_sdashState.branch);
   }else if(opts.lockBranch){
     scope = scope.filter(l=>l.branch_name===opts.lockBranch);
   }
-  // 팀장 필터
+  // 팀장 필터 (대전센터는 일반 지점 팀장에 포함되지 않으므로 자연 제외)
   if(_sdashState.team){
     scope = scope.filter(l=>sdashLeadTeams(l).includes(_sdashState.team));
   }
@@ -9605,12 +9689,20 @@ function renderStageDashboard(){
   const total = leads.length;
 
   // 헤더
-  let crumb='전체', title='전체 현황', sub='';
-  if(_sdashState.branch && !_sdashState.team){
+  let crumb='전체', title='전체 현황 (지점+대전 통합)', sub='';
+  if(_sdashState.branch === '대전TM' && !_sdashState.team){
+    crumb = '대전TM센터';
+    title = '📞 대전TM센터';
+    sub = '대전 이관·재콜·본사이관 건 (tm_transferred / tm_hq_transferred / collab_branches=대전TM / registered_by=대전TM)';
+  }else if(_sdashState.branch === '대전TM' && _sdashState.team){
+    crumb = `대전TM센터 › ${_sdashState.team}`;
+    title = `📞 ${_sdashState.team}`;
+    sub = '대전TM센터 소속';
+  }else if(_sdashState.branch && !_sdashState.team){
     crumb = `${_sdashState.branch}지점`;
     title = `🏛️ ${_sdashState.branch}지점`;
     const teams = (TEAM_MAP[_sdashState.branch]||[]).slice();
-    if(!teams.includes(_sdashState.branch)) teams.push(_sdashState.branch); // 지점장 본인 포함
+    if(!teams.includes(_sdashState.branch)) teams.push(_sdashState.branch);
     sub = `팀장 ${teams.length}명 (지점장 본인 포함)`;
   }else if(_sdashState.team){
     const isSelf = (_sdashState.team===_sdashState.branch);
@@ -9691,20 +9783,23 @@ function sdashFilterStage(s){
 // 사각지대 진단 (관리자용)
 function sdashFindIssues(){
   const all = (allLeads||[]).filter(l=>l.status!=='deleted');
-  const noBranch = all.filter(l=>!l.branch_name);
-  const knownBranches = new Set(Object.keys(TEAM_MAP||{}));
-  const withBranch = all.filter(l=>l.branch_name);
+  // 대전 건은 사각지대 아님 — 별도 영역으로 정상 처리됨
+  const nonDaejeon = all.filter(l=>!sdashIsDaejeonLead(l));
+  const noBranch = nonDaejeon.filter(l=>!l.branch_name);
+  const withBranch = nonDaejeon.filter(l=>l.branch_name);
 
   // 팀장 미매핑 (지점장 본인 포함된 팀 명단 기준)
   let unmappedTotal = 0;
   withBranch.forEach(l=>{
     const br = l.branch_name;
     const teams = (TEAM_MAP[br]||[]).slice();
-    if(!teams.includes(br)) teams.push(br); // 지점장 본인 포함
+    if(!teams.includes(br)) teams.push(br);
     const ts = sdashLeadTeams(l);
     if(!ts.some(t=>teams.includes(t))) unmappedTotal++;
   });
-  return { unmappedTotal, noBranchTotal:noBranch.length };
+  // 참고: 대전 건 카운트도 함께 반환 (정보용)
+  const daejeonTotal = all.filter(sdashIsDaejeonLead).length;
+  return { unmappedTotal, noBranchTotal:noBranch.length, daejeonTotal };
 }
 
 // 기업 리스트
