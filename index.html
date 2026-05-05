@@ -9780,6 +9780,33 @@ function sdashFilterStage(s){
   renderStageDashboard();
 }
 
+// 회사명 클릭 시 표준 리드 상세 팝업 열기
+// (DB관리 화면과 동일한 openPanel 사용 — 권한·UI 일관성 보장)
+async function sdashOpenLead(id){
+  if(!id) return;
+  // 1순위: 메모리 allLeads에서 찾기
+  let lead = (allLeads||[]).find(l=>l.id===id);
+  // 2순위: 메모리에 없으면 DB에서 직접 조회 (캐시 누락 대비)
+  if(!lead){
+    try{
+      const fresh = await dbQ('leads').catch(()=>[]);
+      lead = (fresh||[]).find(l=>l.id===id);
+    }catch(e){ console.warn('sdashOpenLead 조회 실패:',e); }
+  }
+  if(!lead){
+    if(typeof showToast==='function') showToast('해당 리드를 찾을 수 없습니다','error');
+    return;
+  }
+  // 표준 팝업 호출 — openPanel이 있으면 우선, 없으면 openLeadDetailModal로 fallback
+  if(typeof openPanel==='function'){
+    openPanel(lead);
+  }else if(typeof openLeadDetailModal==='function'){
+    openLeadDetailModal(lead);
+  }else{
+    console.warn('상세 팝업 함수를 찾을 수 없음');
+  }
+}
+
 // 사각지대 진단 (관리자용)
 function sdashFindIssues(){
   const all = (allLeads||[]).filter(l=>l.status!=='deleted');
@@ -9848,7 +9875,7 @@ function renderStageDashboardList(){
       const clr=SDASH_COLOR[stg];
       return `<tr style="border-bottom:1px solid #f1f5f9">
         <td style="padding:9px 12px;color:var(--gray-400)">${i+1}</td>
-        <td style="padding:9px 12px;font-weight:600">${esc(l.company_name||'-')}</td>
+        <td style="padding:9px 12px;font-weight:700;color:var(--navy);cursor:pointer;text-decoration:none" onclick="sdashOpenLead('${esc(l.id)}')" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" title="클릭하여 상세보기">${esc(l.company_name||'-')}</td>
         <td style="padding:9px 12px">${esc(l.contact_name||'')}</td>
         <td style="padding:9px 12px;color:var(--gray-500);font-size:12px">${esc(l.phone||'')}</td>
         <td style="padding:9px 12px;color:var(--gray-500)">${esc(l.branch_name||'-')}</td>
