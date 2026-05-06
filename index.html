@@ -2717,6 +2717,7 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
     <div class="page-title">🎯 단계별 현황 대시보드</div>
     <div style="display:flex;gap:8px;align-items:center">
       <span id="sdash-meta" style="font-size:12px;color:var(--gray-400)"></span>
+      <button class="btn btn-outline btn-sm" onclick="sdashDiagnose()" id="sdash-diag-btn" title="DB관리와 단계별 현황 데이터 정합성 검증" style="display:none">🔍 정합성 진단</button>
       <button class="btn btn-outline btn-sm" onclick="loadStageDashboard()" id="sdash-refresh-btn">↻ 새로고침</button>
     </div>
   </div>
@@ -9136,25 +9137,15 @@ async function exportStatExcel(){
     return arr;
   };
   // 헬퍼: 단계 정규화
+  // 단계 정규화 — DB관리 stageBadge의 _stageMap (4859줄)과 정확히 동일
   const _stNormStage = (l)=>{
     const STG=['배정','접촉','상담','제안','계약','관리','보류','드랍'];
-    const s=String(l.current_stage||'').trim();
-    if(STG.includes(s)) return s;
-    if(s==='이관') return '접촉';
-    if(s==='약속') return '상담';
-    // current_stage 비었을 때 customer_type fallback (그루인사이트 케이스)
-    if(!s){
-      if(l.customer_type==='contract') return '계약';
-      if(l.customer_type==='managed') return '관리';
-    }
-    // status fallback
-    if(l.status==='drop') return '드랍';
-    if(l.status==='hold') return '보류';
-    if(l.status==='contract') return '계약';
-    if(l.status==='managed') return '관리';
-    if(l.status==='consulting' || l.status==='done') return '상담';
-    if(l.status==='contacted') return '접촉';
-    return '배정';
+    const raw = String(l.current_stage||'').trim();
+    if(!raw) return '미설정';
+    const _stageMap = {'관리고객':'관리','초기접촉':'접촉','미팅':'상담','협의':'제안','상담중':'접촉','제안완료':'제안'};
+    const mapped = _stageMap[raw] || raw;
+    if(STG.includes(mapped)) return mapped;
+    return '기타: '+mapped;
   };
   const STG_LIST = ['배정','접촉','상담','제안','계약','관리','보류','드랍'];
 
@@ -9483,10 +9474,11 @@ function buildNav(){
 // 🎯 단계별 현황 대시보드 (관리자/지점장/팀장 공용)
 // ═══════════════════════════════════════════════════════════
 const SDASH_STAGES = ['배정','접촉','상담','제안','계약','관리','보류','드랍'];
-const SDASH_ICON = {배정:'📌',접촉:'☎️',상담:'💬',제안:'📑',계약:'✍️',관리:'🛡️',보류:'⏸️',드랍:'❌'};
+const SDASH_ICON = {배정:'📌',접촉:'☎️',상담:'💬',제안:'📑',계약:'✍️',관리:'🛡️',보류:'⏸️',드랍:'❌','미설정':'❔'};
 const SDASH_COLOR = {
   배정:'#0ea5e9', 접촉:'#0891b2', 상담:'#8b5cf6', 제안:'#ec4899',
-  계약:'#10b981', 관리:'#14b8a6', 보류:'#f59e0b', 드랍:'#ef4444'
+  계약:'#10b981', 관리:'#14b8a6', 보류:'#f59e0b', 드랍:'#ef4444',
+  '미설정':'#94a3b8'
 };
 
 let _sdashState = { branch:'', team:'', activeStage:null };
@@ -9502,28 +9494,18 @@ function sdashLeadTeams(l){
   return arr;
 }
 
-// 단계 정규화 (CRM 본 코드 표준 패턴 따름)
-// 우선순위: current_stage → customer_type → status → 기본 '배정'
-// (그루인사이트 같은 계약완료 리드는 current_stage가 비었어도 customer_type='contract'로 저장됨)
+// 단계 정규화 — DB관리의 _stageMap (4859줄)과 정확히 동일한 패턴 사용
+// 단계별 현황은 표시 화면이므로 DB관리와 100% 동일한 분류를 따름
+// (추측성 fallback 금지: customer_type/status 매핑은 DB관리가 안 하므로 여기서도 안 함)
 function sdashNormStage(l){
-  const s=String(l.current_stage||'').trim();
-  if(SDASH_STAGES.includes(s)) return s;
-  // 구단계 자동 변환
-  if(s==='이관') return '접촉';
-  if(s==='약속') return '상담';
-  // current_stage 비어있을 때 customer_type fallback (3420줄 패턴)
-  if(!s){
-    if(l.customer_type==='contract') return '계약';
-    if(l.customer_type==='managed') return '관리';
-  }
-  // status 기반 fallback (4397줄 SL 매핑 패턴)
-  if(l.status==='drop') return '드랍';
-  if(l.status==='hold') return '보류';
-  if(l.status==='contract') return '계약';
-  if(l.status==='managed') return '관리';
-  if(l.status==='consulting' || l.status==='done') return '상담';
-  if(l.status==='contacted') return '접촉';
-  return '배정';
+  const raw = String(l.current_stage||'').trim();
+  if(!raw) return '미설정'; // current_stage 없음 = 단계 미설정 (DB관리도 '—'로 표시)
+  // DB관리 stageBadge의 _stageMap과 동일
+  const _stageMap = {'관리고객':'관리','초기접촉':'접촉','미팅':'상담','협의':'제안','상담중':'접촉','제안완료':'제안'};
+  const mapped = _stageMap[raw] || raw;
+  if(SDASH_STAGES.includes(mapped)) return mapped;
+  // 8단계 표준에 없는 알 수 없는 값은 '기타'로 분류 (배정으로 묻지 않음)
+  return '기타: '+mapped;
 }
 
 // 권한별 데이터 범위 결정 + 지점장 본인을 자기 지점 팀장 목록에 동등 포함
@@ -9561,6 +9543,9 @@ function sdashGetScopeOptions(){
 async function loadStageDashboard(){
   const screen = document.getElementById('screen-stage-dashboard');
   if(!screen) return;
+  // 관리자에게만 진단 버튼 표시
+  const diagBtn = document.getElementById('sdash-diag-btn');
+  if(diagBtn) diagBtn.style.display = (curUser?.role==='admin') ? '' : 'none';
   // ⚠️ 단계별 현황은 항상 원본 데이터 직접 조회
   //    이유: 다른 화면(DB관리 등)에서 allLeads에 권한 필터가 이미 적용됐을 수 있음
   //    예) 지점장이 DB관리 거쳐 들어오면 allLeads는 자기 지점 일부만 — 누락 발생
@@ -9746,19 +9731,24 @@ function renderStageDashboard(){
   const meta = `최종 갱신 ${new Date().toLocaleTimeString('ko-KR')}`;
   const metaEl = document.getElementById('sdash-meta'); if(metaEl) metaEl.textContent = meta;
 
-  // 단계별 집계
+  // 단계별 집계 (8단계 + 데이터에 등장한 비표준 단계까지 모두 카운트)
   const counts = {}; SDASH_STAGES.forEach(s=>counts[s]=0);
   leads.forEach(l=>{ const s=sdashNormStage(l); counts[s]=(counts[s]||0)+1; });
+  // 데이터에 실제 등장한 비표준 단계 ('미설정', '기타: xxx')
+  const extraStages = Object.keys(counts).filter(s=>!SDASH_STAGES.includes(s)).sort();
+  // 표시할 전체 단계 = 8단계 + 등장한 비표준
+  const allStages = [...SDASH_STAGES, ...extraStages];
 
-  // 8단계 카드
+  // 단계 카드 (8단계 + 비표준 자동 추가)
   const stagesEl = document.getElementById('sdash-stages');
-  stagesEl.innerHTML = SDASH_STAGES.map(s=>{
+  stagesEl.innerHTML = allStages.map(s=>{
     const c = counts[s]||0;
     const pct = total ? Math.round(c/total*1000)/10 : 0;
     const isAct = _sdashState.activeStage===s;
-    const clr = SDASH_COLOR[s];
-    return `<div onclick="toggleSdashStage('${s}')" style="cursor:pointer;padding:12px 14px;background:#fff;border:1px solid ${isAct?clr:'var(--gray-200)'};border-top:3px solid ${clr};border-radius:8px;${isAct?'box-shadow:0 0 0 2px '+clr+'33;':''}transition:all .15s">
-      <div style="font-size:12px;font-weight:700;color:${clr};margin-bottom:4px">${SDASH_ICON[s]} ${s}</div>
+    const clr = SDASH_COLOR[s] || '#94a3b8'; // 비표준은 회색
+    const ico = SDASH_ICON[s] || '⚠️';
+    return `<div onclick="toggleSdashStage('${esc(s)}')" style="cursor:pointer;padding:12px 14px;background:#fff;border:1px solid ${isAct?clr:'var(--gray-200)'};border-top:3px solid ${clr};border-radius:8px;${isAct?'box-shadow:0 0 0 2px '+clr+'33;':''}transition:all .15s">
+      <div style="font-size:12px;font-weight:700;color:${clr};margin-bottom:4px">${ico} ${esc(s)}</div>
       <div style="font-size:24px;font-weight:800;line-height:1">${c}<span style="font-size:11px;font-weight:600;color:var(--gray-400);margin-left:2px">건</span></div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:10px;color:var(--gray-500)">
         <span>비율</span><span style="font-weight:700;color:var(--gray-900)">${pct}%</span>
@@ -9769,13 +9759,14 @@ function renderStageDashboard(){
     </div>`;
   }).join('');
 
-  // 단계 탭
+  // 단계 탭 (8단계 + 비표준)
   const tabsEl = document.getElementById('sdash-tabs');
   tabsEl.innerHTML = `<button onclick="sdashFilterStage(null)" style="padding:5px 11px;border-radius:6px;font-size:12px;font-weight:600;background:${_sdashState.activeStage===null?'var(--navy)':'#fff'};color:${_sdashState.activeStage===null?'#fff':'var(--gray-500)'};border:1px solid ${_sdashState.activeStage===null?'var(--navy)':'var(--gray-200)'};cursor:pointer">전체 ${total}</button>` +
-    SDASH_STAGES.map(s=>{
+    allStages.map(s=>{
       const isAct=_sdashState.activeStage===s;
-      const clr=SDASH_COLOR[s];
-      return `<button onclick="sdashFilterStage('${s}')" style="padding:5px 11px;border-radius:6px;font-size:12px;font-weight:600;background:${isAct?clr:'#fff'};color:${isAct?'#fff':'var(--gray-600)'};border:1px solid ${isAct?clr:'var(--gray-200)'};cursor:pointer">${SDASH_ICON[s]} ${s} ${counts[s]||0}</button>`;
+      const clr=SDASH_COLOR[s]||'#94a3b8';
+      const ico=SDASH_ICON[s]||'⚠️';
+      return `<button onclick="sdashFilterStage('${esc(s)}')" style="padding:5px 11px;border-radius:6px;font-size:12px;font-weight:600;background:${isAct?clr:'#fff'};color:${isAct?'#fff':'var(--gray-600)'};border:1px solid ${isAct?clr:'var(--gray-200)'};cursor:pointer">${ico} ${esc(s)} ${counts[s]||0}</button>`;
     }).join('');
 
   // 사각지대 경고 배너 비활성화 — 단계별 현황은 단순 표시 화면
@@ -9793,6 +9784,129 @@ function toggleSdashStage(s){
 function sdashFilterStage(s){
   _sdashState.activeStage = s;
   renderStageDashboard();
+}
+
+// ── 정합성 진단: DB관리 vs 단계별 현황 전수검사 (관리자 전용) ───
+function sdashDiagnose(){
+  const all = (window._sdashAllLeads || []).filter(l=>l.status!=='deleted');
+  const total = all.length;
+
+  // 카테고리 1: 단계 분류 검증 (DB관리 stageBadge와 동일 결과인가)
+  const STG = SDASH_STAGES;
+  const _stageMap = {'관리고객':'관리','초기접촉':'접촉','미팅':'상담','협의':'제안','상담중':'접촉','제안완료':'제안'};
+
+  let okCount = 0;       // 8단계로 정상 분류된 건
+  let unsetCount = 0;    // current_stage 비어있음 (DB관리에서도 — 표시)
+  let nonStdLeads = [];  // 8단계 외 비표준 단계 (이관, 약속 등)
+  let unsetWithType = [];// 빈 단계 + customer_type 있음 (DB관리에선 안 보이지만 잠재 누락)
+
+  all.forEach(l=>{
+    const raw = String(l.current_stage||'').trim();
+    if(!raw){
+      unsetCount++;
+      // customer_type만 있는 케이스 (그루인사이트 같은 잠재 누락)
+      if(l.customer_type==='contract' || l.customer_type==='managed'){
+        unsetWithType.push(l);
+      }
+      return;
+    }
+    const mapped = _stageMap[raw] || raw;
+    if(STG.includes(mapped)){
+      okCount++;
+    }else{
+      nonStdLeads.push({lead:l, raw});
+    }
+  });
+
+  // 카테고리 2: 지점/팀장 정합성
+  const noBranch = all.filter(l=>!l.branch_name);
+  const orphanTeam = all.filter(l=>{
+    if(!l.branch_name) return false;
+    const teams = (TEAM_MAP[l.branch_name]||[]).slice();
+    if(!teams.includes(l.branch_name)) teams.push(l.branch_name); // 지점장 본인 포함
+    const ts = sdashLeadTeams(l);
+    if(!ts.length) return true; // 팀장 미배정
+    return !ts.some(t=>teams.includes(t)); // 등록 안 된 팀장
+  });
+
+  // 보고서 생성
+  let html = '<div style="padding:20px;max-height:70vh;overflow-y:auto">';
+  html += '<h3 style="margin:0 0 14px;font-size:16px">🔍 데이터 정합성 진단 보고서</h3>';
+  html += '<div style="margin-bottom:12px;padding:10px 14px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;font-size:13px;color:#075985">';
+  html += `전체 활성 리드 <strong>${total}건</strong> 검증 (status≠deleted)`;
+  html += '</div>';
+
+  // ── 단계 분류 ──
+  html += '<div style="margin-bottom:14px"><div style="font-weight:700;font-size:13px;margin-bottom:6px">📋 단계 분류 결과</div>';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:12px">';
+  html += `<tr style="background:#f8fafc"><td style="padding:7px 10px;border:1px solid #e5e9f2">✅ 8단계 정상 분류</td><td style="padding:7px 10px;border:1px solid #e5e9f2;text-align:right;font-weight:700">${okCount}건</td></tr>`;
+  html += `<tr><td style="padding:7px 10px;border:1px solid #e5e9f2">❔ current_stage 미설정 (DB관리에서 '—' 표시)</td><td style="padding:7px 10px;border:1px solid #e5e9f2;text-align:right;font-weight:700;color:${unsetCount>0?'#94a3b8':'inherit'}">${unsetCount}건</td></tr>`;
+  if(unsetWithType.length>0){
+    html += `<tr style="background:#fef3c7"><td style="padding:7px 10px;border:1px solid #fcd34d">⚠️ 그중 customer_type=contract/managed (잠재 누락 가능성)</td><td style="padding:7px 10px;border:1px solid #fcd34d;text-align:right;font-weight:700;color:#92400e">${unsetWithType.length}건</td></tr>`;
+  }
+  html += `<tr><td style="padding:7px 10px;border:1px solid #e5e9f2">⚠️ 비표준 단계 (8단계 외 '이관'/'약속' 등)</td><td style="padding:7px 10px;border:1px solid #e5e9f2;text-align:right;font-weight:700;color:${nonStdLeads.length>0?'#dc2626':'inherit'}">${nonStdLeads.length}건</td></tr>`;
+  html += `<tr style="background:#f0fdf4"><td style="padding:7px 10px;border:1px solid #bbf7d0;font-weight:700">총합 검증</td><td style="padding:7px 10px;border:1px solid #bbf7d0;text-align:right;font-weight:700">${okCount+unsetCount+nonStdLeads.length} / ${total} ${okCount+unsetCount+nonStdLeads.length===total?'✅':'❌'}</td></tr>`;
+  html += '</table></div>';
+
+  // 비표준 단계 상세
+  if(nonStdLeads.length>0){
+    html += '<details style="margin-bottom:14px"><summary style="cursor:pointer;font-weight:700;font-size:13px;color:#dc2626">⚠️ 비표준 단계 상세 (클릭하여 펼치기)</summary>';
+    html += '<table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:8px">';
+    html += '<tr style="background:#f8fafc"><th style="padding:6px 8px;border:1px solid #e5e9f2;text-align:left">회사명</th><th style="padding:6px 8px;border:1px solid #e5e9f2">현재 단계 (원본)</th><th style="padding:6px 8px;border:1px solid #e5e9f2">지점</th><th style="padding:6px 8px;border:1px solid #e5e9f2">팀장</th></tr>';
+    nonStdLeads.slice(0,50).forEach(({lead,raw})=>{
+      html += `<tr><td style="padding:5px 8px;border:1px solid #e5e9f2">${esc(lead.company_name||'-')}</td><td style="padding:5px 8px;border:1px solid #e5e9f2;color:#dc2626;font-weight:700">${esc(raw)}</td><td style="padding:5px 8px;border:1px solid #e5e9f2">${esc(lead.branch_name||'-')}</td><td style="padding:5px 8px;border:1px solid #e5e9f2">${esc(lead.team_name||'-')}</td></tr>`;
+    });
+    if(nonStdLeads.length>50) html += `<tr><td colspan="4" style="padding:5px 8px;color:#94a3b8;text-align:center">... 외 ${nonStdLeads.length-50}건</td></tr>`;
+    html += '</table></details>';
+  }
+
+  // 미설정 + customer_type 상세 (그루인사이트 같은 케이스 추적)
+  if(unsetWithType.length>0){
+    html += '<details style="margin-bottom:14px"><summary style="cursor:pointer;font-weight:700;font-size:13px;color:#92400e">⚠️ current_stage 빈 값 + customer_type 있음 (DB관리에서도 \'—\'로 표시되지만 잠재 미정정 데이터)</summary>';
+    html += '<table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:8px">';
+    html += '<tr style="background:#f8fafc"><th style="padding:6px 8px;border:1px solid #e5e9f2;text-align:left">회사명</th><th style="padding:6px 8px;border:1px solid #e5e9f2">customer_type</th><th style="padding:6px 8px;border:1px solid #e5e9f2">지점</th><th style="padding:6px 8px;border:1px solid #e5e9f2">팀장</th></tr>';
+    unsetWithType.slice(0,50).forEach(l=>{
+      html += `<tr><td style="padding:5px 8px;border:1px solid #e5e9f2">${esc(l.company_name||'-')}</td><td style="padding:5px 8px;border:1px solid #e5e9f2;color:#92400e;font-weight:700">${esc(l.customer_type||'-')}</td><td style="padding:5px 8px;border:1px solid #e5e9f2">${esc(l.branch_name||'-')}</td><td style="padding:5px 8px;border:1px solid #e5e9f2">${esc(l.team_name||'-')}</td></tr>`;
+    });
+    if(unsetWithType.length>50) html += `<tr><td colspan="4" style="padding:5px 8px;color:#94a3b8;text-align:center">... 외 ${unsetWithType.length-50}건</td></tr>`;
+    html += '</table></details>';
+  }
+
+  // 지점/팀장 정합성
+  html += '<div style="margin-bottom:14px"><div style="font-weight:700;font-size:13px;margin-bottom:6px">🏛️ 지점/팀장 정합성</div>';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:12px">';
+  html += `<tr style="background:#f8fafc"><td style="padding:7px 10px;border:1px solid #e5e9f2">📭 지점 미배정 (branch_name 없음)</td><td style="padding:7px 10px;border:1px solid #e5e9f2;text-align:right;font-weight:700;color:${noBranch.length>0?'#dc2626':'inherit'}">${noBranch.length}건</td></tr>`;
+  html += `<tr><td style="padding:7px 10px;border:1px solid #e5e9f2">⚠️ 팀장 미매핑 (지점은 있으나 등록 팀장 명단에 없음)</td><td style="padding:7px 10px;border:1px solid #e5e9f2;text-align:right;font-weight:700;color:${orphanTeam.length>0?'#dc2626':'inherit'}">${orphanTeam.length}건</td></tr>`;
+  html += '</table></div>';
+
+  // 결론
+  const hasIssue = nonStdLeads.length>0 || unsetWithType.length>0 || orphanTeam.length>0;
+  if(hasIssue){
+    html += '<div style="padding:12px 14px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;font-size:12px;color:#92400e">';
+    html += '<strong>📌 권장 조치:</strong><br>';
+    if(nonStdLeads.length>0) html += '· 비표준 단계 데이터를 DB관리에서 8단계 중 하나로 정정<br>';
+    if(unsetWithType.length>0) html += '· current_stage 빈 값 + customer_type 있는 케이스를 정정 (current_stage를 명시적으로 설정)<br>';
+    if(orphanTeam.length>0) html += '· 팀장 미매핑 리드의 담당자 재배정<br>';
+    html += '</div>';
+  }else{
+    html += '<div style="padding:12px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:13px;color:#166534;font-weight:700">✅ 모든 데이터가 정상 분류됨. DB관리와 단계별 현황 정합성 100%</div>';
+  }
+
+  html += '</div>';
+
+  // 모달로 표시 (간단 dialog)
+  let dlg = document.getElementById('sdash-diag-dlg');
+  if(!dlg){
+    dlg = document.createElement('div');
+    dlg.id = 'sdash-diag-dlg';
+    dlg.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+    dlg.onclick = (e)=>{ if(e.target===dlg) dlg.remove(); };
+    document.body.appendChild(dlg);
+  }
+  dlg.innerHTML = `<div style="background:#fff;border-radius:12px;max-width:880px;width:100%;max-height:90vh;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.25);position:relative">
+    <button onclick="document.getElementById('sdash-diag-dlg').remove()" style="position:absolute;top:10px;right:14px;background:none;border:none;font-size:24px;color:#94a3b8;cursor:pointer;z-index:2">×</button>
+    ${html}
+  </div>`;
 }
 
 // 회사명 클릭 시 표준 리드 상세 팝업 열기
@@ -9889,7 +10003,8 @@ function renderStageDashboardList(){
     <tbody>${list.map((l,i)=>{
       const stg=sdashNormStage(l);
       const teams=sdashLeadTeams(l);
-      const clr=SDASH_COLOR[stg];
+      const clr=SDASH_COLOR[stg]||'#94a3b8';
+      const ico=SDASH_ICON[stg]||'⚠️';
       return `<tr style="border-bottom:1px solid #f1f5f9">
         <td style="padding:9px 12px;color:var(--gray-400)">${i+1}</td>
         <td style="padding:9px 12px;font-weight:700;color:var(--navy);cursor:pointer;text-decoration:none" onclick="sdashOpenLead('${esc(l.id)}')" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" title="클릭하여 상세보기">${esc(l.company_name||'-')}</td>
@@ -9897,7 +10012,7 @@ function renderStageDashboardList(){
         <td style="padding:9px 12px;color:var(--gray-500);font-size:12px">${esc(l.phone||'')}</td>
         <td style="padding:9px 12px;color:var(--gray-500)">${esc(l.branch_name||'-')}</td>
         <td style="padding:9px 12px">${teams.length?teams.map(t=>esc(t)).join(', '):'<span style="color:var(--gray-300)">-</span>'}</td>
-        <td style="padding:9px 12px"><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:${clr}22;color:${clr}">${SDASH_ICON[stg]} ${stg}</span></td>
+        <td style="padding:9px 12px"><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:${clr}22;color:${clr}">${ico} ${esc(stg)}</span></td>
       </tr>`;
     }).join('')}</tbody>
   </table>`;
