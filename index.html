@@ -2761,6 +2761,53 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
   </div>
 </div>
 
+<!-- ═══ 대전 업무현황 (관리자 전용) ═══ -->
+<div id="screen-dj-status" class="screen">
+  <div class="page-header">
+    <div class="page-title">📞 대전 업무현황 <span style="font-size:11px;font-weight:600;color:#fff;background:#7c3aed;padding:3px 8px;border-radius:6px;margin-left:6px">관리자 전용</span></div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <span id="dj-status-updated" style="font-size:11px;color:var(--gray-400)"></span>
+      <button class="btn btn-outline btn-sm" onclick="loadDjStatus()">🔄 새로고침</button>
+    </div>
+  </div>
+
+  <!-- 로딩 -->
+  <div id="dj-status-loading" style="padding:40px;text-align:center;color:var(--gray-400);font-size:13px">데이터를 불러오는 중…</div>
+
+  <div id="dj-status-body" style="display:none">
+    <!-- KPI -->
+    <div id="dj-kpi" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px"></div>
+
+    <!-- 흐름도 -->
+    <div style="background:#fff;border:1px solid var(--gray-200);border-radius:10px;padding:18px;margin-bottom:14px">
+      <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:12px">대전TM 처리 흐름 <span style="font-size:11px;color:var(--gray-400);font-weight:500">· 입력 → 작업 → 결과</span></div>
+      <div id="dj-flow" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center"></div>
+    </div>
+
+    <!-- 탭 -->
+    <div style="background:#fff;padding:6px;border-radius:10px;border:1px solid var(--gray-200);margin-bottom:14px;display:flex;gap:4px;overflow-x:auto">
+      <button class="dj-tab active" data-djtab="overview" onclick="djSwitchTab('overview',this)" style="flex:1;min-width:110px;padding:10px 14px;border:none;background:var(--navy);color:#fff;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;border-radius:8px;white-space:nowrap">종합 현황</button>
+      <button class="dj-tab" data-djtab="funnel" onclick="djSwitchTab('funnel',this)" style="flex:1;min-width:110px;padding:10px 14px;border:none;background:transparent;color:var(--gray-500);font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;border-radius:8px;white-space:nowrap">전환율 퍼널</button>
+      <button class="dj-tab" data-djtab="byBranch" onclick="djSwitchTab('byBranch',this)" style="flex:1;min-width:110px;padding:10px 14px;border:none;background:transparent;color:var(--gray-500);font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;border-radius:8px;white-space:nowrap">지점별</button>
+      <button class="dj-tab" data-djtab="byLeader" onclick="djSwitchTab('byLeader',this)" style="flex:1;min-width:110px;padding:10px 14px;border:none;background:transparent;color:var(--gray-500);font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;border-radius:8px;white-space:nowrap">팀장별</button>
+      <button class="dj-tab" data-djtab="typeA" onclick="djSwitchTab('typeA',this)" style="flex:1;min-width:120px;padding:10px 14px;border:none;background:transparent;color:var(--gray-500);font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;border-radius:8px;white-space:nowrap">유형 A (회수)</button>
+      <button class="dj-tab" data-djtab="typeB" onclick="djSwitchTab('typeB',this)" style="flex:1;min-width:120px;padding:10px 14px;border:none;background:transparent;color:var(--gray-500);font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;border-radius:8px;white-space:nowrap">유형 B (직접)</button>
+      <button class="dj-tab" data-djtab="comanage" onclick="djSwitchTab('comanage',this)" style="flex:1;min-width:110px;padding:10px 14px;border:none;background:transparent;color:var(--gray-500);font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;border-radius:8px;white-space:nowrap">공동 관리</button>
+      <button class="dj-tab" data-djtab="postmanage" onclick="djSwitchTab('postmanage',this)" style="flex:1;min-width:110px;padding:10px 14px;border:none;background:transparent;color:var(--gray-500);font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;border-radius:8px;white-space:nowrap">사후 관리</button>
+    </div>
+
+    <!-- 패널들 -->
+    <div id="dj-panel-overview" class="dj-panel"></div>
+    <div id="dj-panel-funnel" class="dj-panel" style="display:none"></div>
+    <div id="dj-panel-byBranch" class="dj-panel" style="display:none"></div>
+    <div id="dj-panel-byLeader" class="dj-panel" style="display:none"></div>
+    <div id="dj-panel-typeA" class="dj-panel" style="display:none"></div>
+    <div id="dj-panel-typeB" class="dj-panel" style="display:none"></div>
+    <div id="dj-panel-comanage" class="dj-panel" style="display:none"></div>
+    <div id="dj-panel-postmanage" class="dj-panel" style="display:none"></div>
+  </div>
+</div>
+
 <div id="screen-activity" class="screen">
   <!-- 오늘 할 일 위젯 (팀장/지점장) -->
   <div id="act-todo-widget" style="display:none;margin-bottom:16px"></div>
@@ -4538,7 +4585,7 @@ function doLogout(){
 
 // ── 앱 시작 ──────────────────────────────────────────────
 const NAV_CFG = {
-  admin:[{id:'admin',l:'📊 대시보드'},{id:'leads',l:'🗄️ DB관리'},{id:'stage-dashboard',l:'🎯 단계별 현황'},{id:'activity',l:'📅 활동'},{id:'settings',l:'⚙️ 설정'}],
+  admin:[{id:'admin',l:'📊 대시보드'},{id:'leads',l:'🗄️ DB관리'},{id:'stage-dashboard',l:'🎯 단계별 현황'},{id:'dj-status',l:'📞 대전 업무현황'},{id:'activity',l:'📅 활동'},{id:'settings',l:'⚙️ 설정'}],
   dbmanager:[{id:'leads',l:'🗄️ DB관리'},{id:'activity',l:'📅 활동'},{id:'notices',l:'📢 공지함'}],
   branch:[{id:'branch',l:'🏢 지점관리'},{id:'leads',l:'🗄️ DB관리'},{id:'stage-dashboard',l:'🎯 단계별 현황'},{id:'my-clients',l:'🏆 고객관리'},{id:'activity',l:'📅 활동'},{id:'notices',l:'📢 공지함'}],
   team:[{id:'leads',l:'🗄️ DB관리'},{id:'stage-dashboard',l:'🎯 단계별 현황'},{id:'my-clients',l:'🏆 고객관리'},{id:'activity',l:'📅 활동'},{id:'notices',l:'📢 공지함'}],
@@ -4615,7 +4662,7 @@ function startApp(){
 function showScreen(id, btn){
   // 역할별 접근 가능 화면 화이트리스트
   const ALLOWED = {
-    admin:     ['admin','leads','stage-dashboard','activity','settings'],
+    admin:     ['admin','leads','stage-dashboard','dj-status','activity','settings'],
     dbmanager: ['leads','activity','notices'],
     branch:    ['branch','leads','stage-dashboard','my-clients','activity','notices'],
     team:      ['leads','stage-dashboard','my-leads','my-clients','activity','notices'],
@@ -4635,7 +4682,7 @@ function showScreen(id, btn){
   ({
     'admin':loadAdmin,'leads':loadLeads,'my-leads':loadMyLeads,'my-clients':loadMyClients,
     'settings':loadSettings,'tm-panel':loadTmPanel,'branch':loadBranchScreen,'activity':loadActivityScreen,'notices':loadNoticesScreen,
-    'stage-dashboard':loadStageDashboard
+    'stage-dashboard':loadStageDashboard,'dj-status':loadDjStatus
   }[id]||function(){})();
 }
 
@@ -10020,6 +10067,913 @@ function renderStageDashboardList(){
 
 // ═══════════════════════════════════════════════════════════
 // END 단계별 현황 대시보드
+// ═══════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════
+// 📞 대전 업무현황 (관리자 전용)
+// — 분류 로직: index.html 5383라인의 typeA/typeB 분류 기준과 동일
+//   유형 A: auto_recalled=true (팀장 미접촉으로 회수 후 대전 이관)
+//   유형 B: registered_by='대전TM' AND NOT auto_recalled (대전 직접 업로드)
+// ═══════════════════════════════════════════════════════════
+const DJ_STAGES = ['배정','접촉','상담','제안','계약','관리','보류','드랍'];
+const DJ_COLOR = {
+  navy:'#1e3a5f', blue:'#2874a6', blueLight:'#3498db', accent:'#e67e22',
+  success:'#27ae60', warning:'#f39c12', danger:'#c0392b', purple:'#8e44ad',
+  gray:'#95a5a6', grayLight:'#bdc3c7'
+};
+let _djState = { activeTab:'overview', data:null };
+
+// 단계 정규화 (sdashNormStage와 동일 원칙)
+function djNormStage(l){
+  const raw = String(l.current_stage||'').trim();
+  if(!raw) return '미배정'; // 대전 대시보드에서는 미설정을 '미배정'으로 표기
+  const _stageMap = {'관리고객':'관리','초기접촉':'접촉','미팅':'상담','협의':'제안','상담중':'접촉','제안완료':'제안'};
+  const mapped = _stageMap[raw] || raw;
+  if(DJ_STAGES.includes(mapped)) return mapped;
+  return '미배정';
+}
+
+// 리드의 담당 팀장 명단
+function djLeadTeams(l){
+  let arr=[];
+  try{ arr=JSON.parse(l.team_names||'[]'); }catch(e){}
+  if(!Array.isArray(arr)) arr=[];
+  if(!arr.length && l.team_name){
+    arr=String(l.team_name).split(',').map(s=>s.trim()).filter(Boolean);
+  }
+  return arr;
+}
+
+// 메인 로더
+async function loadDjStatus(){
+  if(curUser?.role!=='admin'){
+    showToast('관리자만 접근 가능합니다.','error');
+    return;
+  }
+  const loading = document.getElementById('dj-status-loading');
+  const body = document.getElementById('dj-status-body');
+  if(loading) loading.style.display='block';
+  if(body) body.style.display='none';
+
+  try{
+    const all = await dbQ('leads').catch(()=>null);
+    const leads = Array.isArray(all) ? all.filter(l=>l.status!=='deleted') : [];
+
+    // 유형 A: auto_recalled=true
+    const typeA = leads.filter(l => l.auto_recalled===true || l.auto_recalled==='true');
+    // 유형 B: registered_by='대전TM' AND NOT auto_recalled (중복 방지)
+    const typeB = leads.filter(l => {
+      if(l.registered_by!=='대전TM') return false;
+      if(l.auto_recalled===true || l.auto_recalled==='true') return false;
+      return true;
+    });
+
+    _djState.data = { all:leads, typeA, typeB };
+
+    // 갱신 시각
+    const upd = document.getElementById('dj-status-updated');
+    if(upd) upd.textContent = '업데이트: ' + new Date().toLocaleString('ko-KR',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+
+    djRenderAll();
+
+    if(loading) loading.style.display='none';
+    if(body) body.style.display='block';
+
+    // 현재 활성 탭 다시 렌더
+    djSwitchTab(_djState.activeTab||'overview', document.querySelector('.dj-tab[data-djtab="'+(_djState.activeTab||'overview')+'"]'));
+  }catch(e){
+    console.error('loadDjStatus error', e);
+    if(loading) loading.textContent='데이터 로드 실패: '+e.message;
+  }
+}
+
+// 탭 전환
+function djSwitchTab(name, btn){
+  _djState.activeTab = name;
+  document.querySelectorAll('.dj-tab').forEach(b=>{
+    b.classList.remove('active');
+    b.style.background='transparent';
+    b.style.color='var(--gray-500)';
+  });
+  if(btn){
+    btn.classList.add('active');
+    btn.style.background='var(--navy)';
+    btn.style.color='#fff';
+  }
+  document.querySelectorAll('.dj-panel').forEach(p=>p.style.display='none');
+  const panel = document.getElementById('dj-panel-'+name);
+  if(panel) panel.style.display='block';
+}
+
+// 통계 산출
+function djComputeStats(d){
+  const typeA=d.typeA, typeB=d.typeB;
+  const total=typeA.length+typeB.length;
+
+  // 단계별 카운트
+  const stageA = {}, stageB = {};
+  DJ_STAGES.forEach(s=>{stageA[s]=0;stageB[s]=0;});
+  stageA['미배정']=0; stageB['미배정']=0;
+  typeA.forEach(l=>{const s=djNormStage(l); stageA[s]=(stageA[s]||0)+1;});
+  typeB.forEach(l=>{const s=djNormStage(l); stageB[s]=(stageB[s]||0)+1;});
+
+  // 실제 작업량 = 미배정 제외
+  const workA = typeA.length - (stageA['미배정']||0);
+  const workB = typeB.length - (stageB['미배정']||0);
+  const work = workA + workB;
+
+  // 단계 이상 도달 (작업량 기준 = 미배정 제외, 드랍/보류 제외)
+  const reachStage = (target) => {
+    const idx = DJ_STAGES.indexOf(target);
+    if(idx<0) return 0;
+    const validStages = DJ_STAGES.slice(idx, DJ_STAGES.indexOf('관리')+1); // 배정~관리만, 드랍/보류 제외
+    let cnt=0;
+    [typeA, typeB].forEach(arr=>{
+      arr.forEach(l=>{
+        const s=djNormStage(l);
+        if(validStages.includes(s)) cnt++;
+      });
+    });
+    return cnt;
+  };
+  const reachContact = reachStage('접촉');
+  const reachConsult = reachStage('상담');
+  const reachManage  = reachStage('관리');
+
+  // 공동 관리 (팀장 2인 이상 OR 팀장+대전TM)
+  const isCo = (l) => {
+    const teams = djLeadTeams(l);
+    if(teams.length>=2) return true;
+    let cb=[]; try{ cb=JSON.parse(l.collab_branches||'[]'); }catch(e){}
+    if(Array.isArray(cb) && cb.includes('대전TM') && teams.length>=1) return true;
+    return false;
+  };
+  const coAll = [...typeA, ...typeB].filter(isCo);
+
+  // 드랍 (현재 단계 = 드랍)
+  const dropA = typeA.filter(l=>djNormStage(l)==='드랍').length;
+  const dropB = typeB.filter(l=>djNormStage(l)==='드랍').length;
+
+  // 관리 진입 (사후관리)
+  const manageA = typeA.filter(l=>djNormStage(l)==='관리');
+  const manageB = typeB.filter(l=>djNormStage(l)==='관리');
+
+  return {
+    typeA, typeB, total, work, workA, workB,
+    stageA, stageB,
+    reachContact, reachConsult, reachManage,
+    coAll, dropA, dropB,
+    manageA, manageB,
+  };
+}
+
+// 전체 렌더
+function djRenderAll(){
+  if(!_djState.data) return;
+  const s = djComputeStats(_djState.data);
+  _djState.stats = s;
+  djRenderKpi(s);
+  djRenderFlow(s);
+  djRenderOverview(s);
+  djRenderFunnel(s);
+  djRenderByBranch(s);
+  djRenderByLeader(s);
+  djRenderTypeA(s);
+  djRenderTypeB(s);
+  djRenderComanage(s);
+  djRenderPostmanage(s);
+}
+
+// KPI 카드
+function djRenderKpi(s){
+  const el = document.getElementById('dj-kpi'); if(!el) return;
+  const pct = (n,d) => d? Math.round(n/d*1000)/10 : 0;
+  const cards = [
+    {label:'대전TM 전체 관여', value:s.total, unit:'건', sub:'회수+직접업로드', color:DJ_COLOR.navy},
+    {label:'대전TM 실제 작업량', value:s.work, unit:'건', sub:pct(s.work,s.total)+'% · 미배정 제외', color:DJ_COLOR.accent},
+    {label:'접촉 이상 도달', value:s.reachContact, unit:'건', sub:pct(s.reachContact,s.total)+'% · 접촉+상담+관리', color:DJ_COLOR.blueLight},
+    {label:'상담 이상 도달', value:s.reachConsult, unit:'건', sub:pct(s.reachConsult,s.total)+'% · 상담+관리', color:DJ_COLOR.warning},
+    {label:'관리 진입', value:s.reachManage, unit:'건', sub:pct(s.reachManage,s.total)+'% · 사후관리 연결', color:DJ_COLOR.success},
+    {label:'공동 관리 DB', value:s.coAll.length, unit:'건', sub:'팀장+대전TM or 팀장2인', color:DJ_COLOR.purple},
+    {label:'드랍 처리', value:s.dropA+s.dropB, unit:'건', sub:`A ${s.dropA} + B ${s.dropB}`, color:DJ_COLOR.danger},
+  ];
+  el.innerHTML = cards.map(c=>`
+    <div style="background:#fff;border:1px solid var(--gray-200);border-radius:10px;padding:14px 16px;position:relative;overflow:hidden">
+      <div style="position:absolute;top:0;left:0;width:4px;height:100%;background:${c.color}"></div>
+      <div style="font-size:11px;color:var(--gray-500);font-weight:500;margin-bottom:4px">${c.label}</div>
+      <div style="font-size:22px;font-weight:800;color:var(--navy);font-family:'Montserrat',sans-serif">${c.value}<span style="font-size:12px;color:var(--gray-400);margin-left:2px;font-weight:500">${c.unit}</span></div>
+      <div style="font-size:10px;color:var(--gray-400);margin-top:2px">${c.sub}</div>
+    </div>
+  `).join('');
+}
+
+// 흐름도
+function djRenderFlow(s){
+  const el = document.getElementById('dj-flow'); if(!el) return;
+  const nodeStyle = (bg,brd) => `display:flex;flex-direction:column;align-items:center;padding:12px 16px;background:${bg};border:2px solid ${brd};border-radius:10px;min-width:110px`;
+  const arr = `<div style="font-size:18px;color:var(--gray-300);font-weight:700">→</div>`;
+  const plus = `<div style="font-size:18px;color:var(--gray-300);font-weight:700">+</div>`;
+  const eq = `<div style="font-size:18px;color:var(--gray-300);font-weight:700">=</div>`;
+  el.innerHTML = `
+    <div style="${nodeStyle('#fff','var(--gray-200)')}">
+      <div style="font-size:10px;color:var(--gray-500)">회수 이관 (A)</div>
+      <div style="font-size:22px;font-weight:800;color:${DJ_COLOR.blue}">${s.typeA.length}</div>
+      <div style="font-size:10px;color:var(--gray-400)">팀장 미접촉</div>
+    </div>
+    ${plus}
+    <div style="${nodeStyle('#fef9f3', DJ_COLOR.accent)}">
+      <div style="font-size:10px;color:var(--gray-500)">직접 업로드 (B)</div>
+      <div style="font-size:22px;font-weight:800;color:${DJ_COLOR.accent}">${s.typeB.length}</div>
+      <div style="font-size:10px;color:var(--gray-400)">대전 자체 등록</div>
+    </div>
+    ${eq}
+    <div style="${nodeStyle('#eef3f9', DJ_COLOR.navy)}">
+      <div style="font-size:10px;color:var(--gray-500)">전체 관여</div>
+      <div style="font-size:22px;font-weight:800;color:${DJ_COLOR.navy}">${s.total}</div>
+      <div style="font-size:10px;color:var(--gray-400)">100%</div>
+    </div>
+    ${arr}
+    <div style="${nodeStyle('#fef9f3', DJ_COLOR.accent)}">
+      <div style="font-size:10px;color:var(--gray-500)">실제 작업량</div>
+      <div style="font-size:22px;font-weight:800;color:${DJ_COLOR.accent}">${s.work}</div>
+      <div style="font-size:10px;color:var(--gray-400)">${s.total?Math.round(s.work/s.total*100):0}% · 미배정 제외</div>
+    </div>
+    ${arr}
+    <div style="${nodeStyle('#fff', DJ_COLOR.blueLight)}">
+      <div style="font-size:10px;color:var(--gray-500)">접촉 이상</div>
+      <div style="font-size:22px;font-weight:800;color:${DJ_COLOR.blueLight}">${s.reachContact}</div>
+      <div style="font-size:10px;color:var(--gray-400)">${s.total?Math.round(s.reachContact/s.total*1000)/10:0}%</div>
+    </div>
+    ${arr}
+    <div style="${nodeStyle('#e8f8ef', DJ_COLOR.success)}">
+      <div style="font-size:10px;color:var(--gray-500)">관리 진입</div>
+      <div style="font-size:22px;font-weight:800;color:${DJ_COLOR.success}">${s.reachManage}</div>
+      <div style="font-size:10px;color:var(--gray-400)">${s.total?Math.round(s.reachManage/s.total*1000)/10:0}%</div>
+    </div>
+  `;
+}
+
+// ────────────────────────────────────────────────
+// 패널: 종합 현황
+// ────────────────────────────────────────────────
+function djRenderOverview(s){
+  const el = document.getElementById('dj-panel-overview'); if(!el) return;
+  const total=s.total||1;
+  const pctA=Math.round(s.typeA.length/total*100);
+  const pctB=100-pctA;
+
+  // 유형별 단계 분포 비교용 데이터
+  const stageRows = DJ_STAGES.concat(['미배정']).map(st=>{
+    return {stage:st, a:s.stageA[st]||0, b:s.stageB[st]||0};
+  }).filter(r=>r.a||r.b);
+
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+      <div style="background:#fff;border:1px solid var(--gray-200);border-radius:10px;padding:18px">
+        <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:14px">유형별 비중</div>
+        <div style="display:flex;align-items:center;gap:18px">
+          <div style="flex:0 0 auto">
+            ${djDonutSvg([{v:s.typeA.length,c:DJ_COLOR.blue,l:'A'},{v:s.typeB.length,c:DJ_COLOR.accent,l:'B'}], 120)}
+          </div>
+          <div style="flex:1">
+            <div style="margin-bottom:10px">
+              <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="color:${DJ_COLOR.blue};font-weight:700">● A 회수이관</span><span style="font-weight:700">${s.typeA.length}건 (${pctA}%)</span></div>
+              <div style="height:6px;background:var(--gray-100);border-radius:3px"><div style="height:100%;width:${pctA}%;background:${DJ_COLOR.blue};border-radius:3px"></div></div>
+            </div>
+            <div>
+              <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="color:${DJ_COLOR.accent};font-weight:700">● B 직접업로드</span><span style="font-weight:700">${s.typeB.length}건 (${pctB}%)</span></div>
+              <div style="height:6px;background:var(--gray-100);border-radius:3px"><div style="height:100%;width:${pctB}%;background:${DJ_COLOR.accent};border-radius:3px"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="background:#fff;border:1px solid var(--gray-200);border-radius:10px;padding:18px">
+        <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:14px">전체 진행단계 분포 <span style="font-size:10px;font-weight:500;color:var(--gray-400)">유형 A+B 통합</span></div>
+        ${djBarRows(stageRows.map(r=>({label:r.stage, value:r.a+r.b, color:djStageColor(r.stage)})))}
+      </div>
+    </div>
+    <div style="background:#fff;border:1px solid var(--gray-200);border-radius:10px;padding:18px;margin-bottom:14px">
+      <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:14px">유형 A vs B: 진행단계 비교</div>
+      <div style="overflow-x:auto"><table style="width:100%;font-size:12px;border-collapse:collapse">
+        <thead><tr style="background:#fafbfd"><th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--gray-200)">단계</th><th style="padding:8px 10px;text-align:right;border-bottom:2px solid var(--gray-200);color:${DJ_COLOR.blue}">유형 A</th><th style="padding:8px 10px;text-align:right;border-bottom:2px solid var(--gray-200);color:${DJ_COLOR.accent}">유형 B</th><th style="padding:8px 10px;text-align:right;border-bottom:2px solid var(--gray-200)">합계</th></tr></thead>
+        <tbody>${stageRows.map(r=>`<tr style="border-bottom:1px solid var(--gray-100)">
+          <td style="padding:7px 10px;font-weight:600">${r.stage}</td>
+          <td style="padding:7px 10px;text-align:right;font-family:'Montserrat',monospace">${r.a}</td>
+          <td style="padding:7px 10px;text-align:right;font-family:'Montserrat',monospace">${r.b}</td>
+          <td style="padding:7px 10px;text-align:right;font-family:'Montserrat',monospace;font-weight:700">${r.a+r.b}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+    </div>
+    <div style="background:#fff;border:1px solid var(--gray-200);border-radius:10px;padding:18px">
+      <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:14px">주요 인사이트</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
+        ${djInsightCard(DJ_COLOR.warning, '유형 A 자동회수 비중', s.typeA.length?Math.round(s.typeA.filter(l=>String(l.auto_recall_reason||'').includes('5영업일')||String(l.recovery_reason||'').includes('5영업일')).length/s.typeA.length*100)+'%':'-', '회수 이관된 건의 자동 5영업일 경과 비중')}
+        ${djInsightCard(DJ_COLOR.danger, '유형 B TM 드랍률', s.typeB.length?Math.round(s.dropB/s.typeB.length*100)+'%':'-', `${s.typeB.length}건 중 ${s.dropB}건이 드랍 상태`)}
+        ${djInsightCard(DJ_COLOR.success, '대전 내부 순환 비중', s.typeA.length?Math.round(s.typeA.filter(l=>l.branch_name==='대전'||l.branch_name==='대전TM').length/s.typeA.length*100)+'%':'-', '유형 A 중 원래부터 대전 배정')}
+        ${djInsightCard(DJ_COLOR.navy, '관리 단계 전환율', s.total?Math.round(s.reachManage/s.total*1000)/10+'%':'-', `${s.total}건 중 ${s.reachManage}건이 관리단계 진입`)}
+      </div>
+    </div>
+  `;
+}
+
+// 도넛 SVG (작은 데이터셋 전용)
+function djDonutSvg(data, size){
+  const total = data.reduce((a,b)=>a+b.v,0) || 1;
+  const cx=size/2, cy=size/2, r=size*0.35, ir=size*0.22;
+  let acc=0;
+  const arcs = data.map(d=>{
+    const start = acc/total*Math.PI*2 - Math.PI/2;
+    acc += d.v;
+    const end = acc/total*Math.PI*2 - Math.PI/2;
+    const large = (end-start) > Math.PI ? 1 : 0;
+    const x1=cx+r*Math.cos(start), y1=cy+r*Math.sin(start);
+    const x2=cx+r*Math.cos(end), y2=cy+r*Math.sin(end);
+    const x3=cx+ir*Math.cos(end), y3=cy+ir*Math.sin(end);
+    const x4=cx+ir*Math.cos(start), y4=cy+ir*Math.sin(start);
+    return `<path d="M${x1} ${y1} A${r} ${r} 0 ${large} 1 ${x2} ${y2} L${x3} ${y3} A${ir} ${ir} 0 ${large} 0 ${x4} ${y4} Z" fill="${d.c}"/>`;
+  }).join('');
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${arcs}<text x="${cx}" y="${cy+5}" text-anchor="middle" font-family="Montserrat" font-size="20" font-weight="800" fill="${DJ_COLOR.navy}">${total}</text></svg>`;
+}
+
+// 단계별 색상
+function djStageColor(st){
+  const m = {배정:DJ_COLOR.blue, 접촉:DJ_COLOR.blueLight, 상담:DJ_COLOR.purple, 제안:'#ec4899',
+    계약:DJ_COLOR.success, 관리:'#14b8a6', 보류:DJ_COLOR.warning, 드랍:DJ_COLOR.danger, 미배정:DJ_COLOR.gray};
+  return m[st]||DJ_COLOR.gray;
+}
+
+// 막대 행 (HTML, Chart.js 미사용)
+function djBarRows(rows){
+  const max = Math.max(1, ...rows.map(r=>r.value));
+  return rows.map(r=>`
+    <div style="margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px"><span style="color:var(--gray-700);font-weight:600">${r.label}</span><span style="font-family:'Montserrat',monospace;font-weight:700;color:var(--navy)">${r.value}</span></div>
+      <div style="height:8px;background:var(--gray-100);border-radius:4px;overflow:hidden"><div style="height:100%;width:${r.value/max*100}%;background:${r.color};border-radius:4px;transition:width .3s"></div></div>
+    </div>
+  `).join('');
+}
+
+// 인사이트 카드
+function djInsightCard(color, title, value, desc){
+  return `<div style="padding:14px;background:#fafbfd;border-left:3px solid ${color};border-radius:8px">
+    <div style="font-size:11px;color:var(--gray-500);font-weight:600;margin-bottom:4px">${title}</div>
+    <div style="font-size:24px;font-weight:800;color:${color};font-family:'Montserrat',sans-serif;margin-bottom:4px">${value}</div>
+    <div style="font-size:11px;color:var(--gray-600);line-height:1.5">${desc}</div>
+  </div>`;
+}
+
+// ────────────────────────────────────────────────
+// 패널: 전환율 퍼널
+// ────────────────────────────────────────────────
+function djRenderFunnel(s){
+  const el = document.getElementById('dj-panel-funnel'); if(!el) return;
+  const total = s.total || 1;
+
+  // 누적 도달건수 (작업 안 됐어도 카운트)
+  const reachAny = (target) => {
+    // target 단계 이상 (배정/접촉/상담/제안/계약/관리) — 보류/드랍 제외
+    const order = ['배정','접촉','상담','제안','계약','관리'];
+    const idx = order.indexOf(target);
+    if(idx<0) return 0;
+    const valid = order.slice(idx);
+    let cnt=0;
+    [s.typeA, s.typeB].forEach(arr=>arr.forEach(l=>{
+      if(valid.includes(djNormStage(l))) cnt++;
+    }));
+    return cnt;
+  };
+  const step = ['배정','접촉','상담','제안','계약','관리'].map(st=>({
+    stage:st, value:reachAny(st)
+  }));
+
+  // 지점별 단계 도달 표
+  const branchSet = new Set();
+  [...s.typeA, ...s.typeB].forEach(l=>{
+    branchSet.add(l.branch_name||'(미배정)');
+  });
+  const branchRows = [...branchSet].map(b=>{
+    const inBranch = [...s.typeA, ...s.typeB].filter(l=>(l.branch_name||'(미배정)')===b);
+    const cnt = (target)=>{
+      const order = ['배정','접촉','상담','제안','계약','관리'];
+      const idx = order.indexOf(target);
+      if(idx<0) return 0;
+      const valid = order.slice(idx);
+      return inBranch.filter(l=>valid.includes(djNormStage(l))).length;
+    };
+    const allCnt = inBranch.length;
+    const unassigned = inBranch.filter(l=>djNormStage(l)==='미배정').length;
+    const workCnt = allCnt - unassigned;
+    return {
+      branch:b,
+      total:allCnt,
+      work:workCnt,
+      workRate:allCnt?Math.round(workCnt/allCnt*100):0,
+      assign:cnt('배정'),
+      contact:cnt('접촉'),
+      consult:cnt('상담'),
+      manage:cnt('관리'),
+    };
+  }).sort((a,b)=>b.total-a.total);
+
+  el.innerHTML = `
+    <div style="background:#eef3f9;border:1px solid #d6e3f0;border-radius:10px;padding:14px 18px;margin-bottom:14px;font-size:12px;line-height:1.7;color:var(--gray-700)">
+      <strong style="color:var(--navy)">단계별 전환율 = 대전TM이 얼마만큼 DB를 끌어올렸는가를 본다.</strong><br>
+      전체 ${s.total}건 → 배정 이상 ${step[0].value}건(${total?Math.round(step[0].value/total*1000)/10:0}%) → 접촉 이상 ${step[1].value}건(${total?Math.round(step[1].value/total*1000)/10:0}%) → 상담 이상 ${step[2].value}건(${total?Math.round(step[2].value/total*1000)/10:0}%) → 관리 이상 ${step[5].value}건(${total?Math.round(step[5].value/total*1000)/10:0}%).
+    </div>
+
+    <div style="background:#fff;border:1px solid var(--gray-200);border-radius:10px;padding:18px;margin-bottom:14px">
+      <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:14px">전체 퍼널 (${s.total}건 기준)</div>
+      ${step.map(r=>{
+        const pct = total?r.value/total*100:0;
+        return `<div style="margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+            <span style="font-weight:700;color:var(--gray-700)">${r.stage} 이상</span>
+            <span><span style="font-family:'Montserrat',monospace;font-weight:800;color:var(--navy)">${r.value}</span><span style="color:var(--gray-400);margin-left:6px">${Math.round(pct*10)/10}%</span></span>
+          </div>
+          <div style="height:14px;background:var(--gray-100);border-radius:4px;overflow:hidden">
+            <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,${DJ_COLOR.navy},${DJ_COLOR.blueLight});border-radius:4px;transition:width .4s"></div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+
+    <div style="background:#fff;border:1px solid var(--gray-200);border-radius:10px;padding:18px;margin-bottom:14px">
+      <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:14px">지점별 단계별 도달 건수 및 전환율 <span style="font-size:10px;font-weight:500;color:var(--gray-400)">회색 = 작업 안 된 건(미배정)</span></div>
+      <div style="overflow-x:auto"><table style="width:100%;font-size:12px;border-collapse:collapse;min-width:560px">
+        <thead><tr style="background:#fafbfd">
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--gray-200)">지점</th>
+          <th style="padding:8px 10px;text-align:right;border-bottom:2px solid var(--gray-200)">전체</th>
+          <th style="padding:8px 10px;text-align:right;border-bottom:2px solid var(--gray-200)">작업량</th>
+          <th style="padding:8px 10px;text-align:right;border-bottom:2px solid var(--gray-200)">작업률</th>
+          <th style="padding:8px 10px;text-align:right;border-bottom:2px solid var(--gray-200)">배정↑</th>
+          <th style="padding:8px 10px;text-align:right;border-bottom:2px solid var(--gray-200)">접촉↑</th>
+          <th style="padding:8px 10px;text-align:right;border-bottom:2px solid var(--gray-200)">상담↑</th>
+          <th style="padding:8px 10px;text-align:right;border-bottom:2px solid var(--gray-200)">관리</th>
+        </tr></thead>
+        <tbody>${branchRows.map(r=>`<tr style="border-bottom:1px solid var(--gray-100)">
+          <td style="padding:8px 10px;font-weight:600">${esc(r.branch)}</td>
+          <td style="padding:8px 10px;text-align:right;font-family:'Montserrat',monospace">${r.total}</td>
+          <td style="padding:8px 10px;text-align:right;font-family:'Montserrat',monospace;color:var(--gray-700)">${r.work}</td>
+          <td style="padding:8px 10px;text-align:right;font-family:'Montserrat',monospace;color:${r.workRate>=60?DJ_COLOR.success:r.workRate>=30?DJ_COLOR.warning:DJ_COLOR.danger};font-weight:700">${r.workRate}%</td>
+          <td style="padding:8px 10px;text-align:right;font-family:'Montserrat',monospace">${r.assign}</td>
+          <td style="padding:8px 10px;text-align:right;font-family:'Montserrat',monospace">${r.contact}</td>
+          <td style="padding:8px 10px;text-align:right;font-family:'Montserrat',monospace">${r.consult}</td>
+          <td style="padding:8px 10px;text-align:right;font-family:'Montserrat',monospace;color:${DJ_COLOR.success};font-weight:700">${r.manage}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+    </div>
+  `;
+}
+
+// ────────────────────────────────────────────────
+// 패널: 지점별 (유형별 비교)
+// ────────────────────────────────────────────────
+function djRenderByBranch(s){
+  const el = document.getElementById('dj-panel-byBranch'); if(!el) return;
+
+  const collect = (arr) => {
+    const m = {};
+    arr.forEach(l=>{
+      const b = l.branch_name||'(미배정)';
+      m[b] = (m[b]||0)+1;
+    });
+    return m;
+  };
+  const aMap = collect(s.typeA);
+  const bMap = collect(s.typeB);
+  const allBranches = new Set([...Object.keys(aMap), ...Object.keys(bMap)]);
+  const rows = [...allBranches].map(b=>({
+    branch:b, a:aMap[b]||0, b_:bMap[b]||0, total:(aMap[b]||0)+(bMap[b]||0)
+  })).sort((x,y)=>y.total-x.total);
+
+  el.innerHTML = `
+    <div style="background:#eef3f9;border:1px solid #d6e3f0;border-radius:10px;padding:14px 18px;margin-bottom:14px;font-size:12px;line-height:1.7;color:var(--gray-700)">
+      <strong style="color:var(--navy)">유형별 지점 분포.</strong> 유형 A는 원래 배정됐던 지점, 유형 B는 현재 배정된 지점 기준.
+    </div>
+    <div style="background:#fff;border:1px solid var(--gray-200);border-radius:10px;padding:18px">
+      <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:14px">지점별 유형 A / B 분포</div>
+      <div style="overflow-x:auto"><table style="width:100%;font-size:12px;border-collapse:collapse">
+        <thead><tr style="background:#fafbfd">
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--gray-200)">지점</th>
+          <th style="padding:8px 10px;text-align:right;border-bottom:2px solid var(--gray-200);color:${DJ_COLOR.blue}">유형 A (회수)</th>
+          <th style="padding:8px 10px;text-align:right;border-bottom:2px solid var(--gray-200);color:${DJ_COLOR.accent}">유형 B (직접)</th>
+          <th style="padding:8px 10px;text-align:right;border-bottom:2px solid var(--gray-200)">합계</th>
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--gray-200)">비중</th>
+        </tr></thead>
+        <tbody>${rows.map(r=>{
+          const maxTotal = rows[0]?.total || 1;
+          const pct = r.total/maxTotal*100;
+          return `<tr style="border-bottom:1px solid var(--gray-100)">
+            <td style="padding:8px 10px;font-weight:600">${esc(r.branch)}</td>
+            <td style="padding:8px 10px;text-align:right;font-family:'Montserrat',monospace;color:${DJ_COLOR.blue}">${r.a}</td>
+            <td style="padding:8px 10px;text-align:right;font-family:'Montserrat',monospace;color:${DJ_COLOR.accent}">${r.b_}</td>
+            <td style="padding:8px 10px;text-align:right;font-family:'Montserrat',monospace;font-weight:700">${r.total}</td>
+            <td style="padding:8px 10px"><div style="height:8px;background:var(--gray-100);border-radius:4px;width:140px"><div style="height:100%;width:${pct}%;background:${DJ_COLOR.navy};border-radius:4px"></div></div></td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>
+    </div>
+  `;
+}
+
+// ────────────────────────────────────────────────
+// 패널: 팀장별
+// ────────────────────────────────────────────────
+function djRenderByLeader(s){
+  const el = document.getElementById('dj-panel-byLeader'); if(!el) return;
+
+  // 팀장별 집계 (담당 팀장들에게 각각 카운트)
+  const m = {}; // {teamName: {a:0, b:0, total:0, stages:{}}}
+  const inc = (name, type, stage) => {
+    if(!m[name]) m[name] = {a:0, b:0, total:0, stages:{}};
+    m[name][type]++;
+    m[name].total++;
+    m[name].stages[stage] = (m[name].stages[stage]||0)+1;
+  };
+  s.typeA.forEach(l=>{
+    const teams = djLeadTeams(l);
+    const stage = djNormStage(l);
+    if(teams.length===0){
+      inc('(미배정)','a',stage);
+    } else {
+      teams.forEach(t=>inc(t,'a',stage));
+    }
+  });
+  s.typeB.forEach(l=>{
+    const teams = djLeadTeams(l);
+    const stage = djNormStage(l);
+    if(teams.length===0){
+      inc('(미배정)','b',stage);
+    } else {
+      teams.forEach(t=>inc(t,'b',stage));
+    }
+  });
+
+  const rows = Object.entries(m).map(([name,v])=>({name, ...v})).sort((x,y)=>y.total-x.total);
+
+  el.innerHTML = `
+    <div style="background:#eef3f9;border:1px solid #d6e3f0;border-radius:10px;padding:14px 18px;margin-bottom:14px;font-size:12px;line-height:1.7;color:var(--gray-700)">
+      <strong style="color:var(--navy)">팀장별 대전TM 관여 DB 현황.</strong> 복수 담당인 경우 각 팀장에게 중복 카운트됨.
+    </div>
+    <div style="background:#fff;border:1px solid var(--gray-200);border-radius:10px;padding:18px">
+      <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:14px">팀장별 유형 A / B 분포 (${rows.length}명)</div>
+      <div style="overflow-x:auto;max-height:560px;overflow-y:auto"><table style="width:100%;font-size:12px;border-collapse:collapse;min-width:540px">
+        <thead style="position:sticky;top:0;background:#fafbfd;z-index:2"><tr>
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--gray-200)">팀장</th>
+          <th style="padding:8px 10px;text-align:right;border-bottom:2px solid var(--gray-200);color:${DJ_COLOR.blue}">A</th>
+          <th style="padding:8px 10px;text-align:right;border-bottom:2px solid var(--gray-200);color:${DJ_COLOR.accent}">B</th>
+          <th style="padding:8px 10px;text-align:right;border-bottom:2px solid var(--gray-200)">합계</th>
+          <th style="padding:8px 10px;text-align:right;border-bottom:2px solid var(--gray-200);color:${DJ_COLOR.success}">관리</th>
+          <th style="padding:8px 10px;text-align:right;border-bottom:2px solid var(--gray-200);color:${DJ_COLOR.danger}">드랍</th>
+        </tr></thead>
+        <tbody>${rows.map(r=>`<tr style="border-bottom:1px solid var(--gray-100)">
+          <td style="padding:8px 10px;font-weight:600">${esc(r.name)}</td>
+          <td style="padding:8px 10px;text-align:right;font-family:'Montserrat',monospace;color:${DJ_COLOR.blue}">${r.a}</td>
+          <td style="padding:8px 10px;text-align:right;font-family:'Montserrat',monospace;color:${DJ_COLOR.accent}">${r.b}</td>
+          <td style="padding:8px 10px;text-align:right;font-family:'Montserrat',monospace;font-weight:700">${r.total}</td>
+          <td style="padding:8px 10px;text-align:right;font-family:'Montserrat',monospace;color:${DJ_COLOR.success};font-weight:600">${r.stages['관리']||0}</td>
+          <td style="padding:8px 10px;text-align:right;font-family:'Montserrat',monospace;color:${DJ_COLOR.danger}">${r.stages['드랍']||0}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+    </div>
+  `;
+}
+
+// ────────────────────────────────────────────────
+// 패널: 유형 A (회수 이관)
+// ────────────────────────────────────────────────
+function djRenderTypeA(s){
+  const el = document.getElementById('dj-panel-typeA'); if(!el) return;
+
+  // 회수사유 분류 (auto_recall_reason 우선, 없으면 recovery_reason)
+  const reasonMap = {};
+  s.typeA.forEach(l=>{
+    let r = String(l.auto_recall_reason||l.recovery_reason||'').trim();
+    if(!r) r = '미상';
+    // 표준화
+    if(r.includes('5영업일')) r = '마지막 기록 5영업일 경과';
+    else if(r.includes('120h')||r.includes('120시간')) r = '마지막 기록 120h 경과';
+    else if(r.includes('48h')||r.includes('48시간')||r.includes('미기록')) r = '분배 후 미기록(48h)';
+    else if(r.includes('수동')) r = '수동 회수';
+    else if(r==='미상') r='미상';
+    else r = '기타';
+    reasonMap[r] = (reasonMap[r]||0)+1;
+  });
+  const reasons = Object.entries(reasonMap).sort((a,b)=>b[1]-a[1]);
+
+  // 원래 지점 분포 (branch_name)
+  const branchMap = {};
+  s.typeA.forEach(l=>{
+    const b = l.branch_name||'(미배정)';
+    branchMap[b] = (branchMap[b]||0)+1;
+  });
+  const branches = Object.entries(branchMap).sort((a,b)=>b[1]-a[1]);
+
+  // 단계 분포
+  const stageRows = DJ_STAGES.concat(['미배정']).map(st=>({label:st, value:s.stageA[st]||0, color:djStageColor(st)})).filter(r=>r.value);
+
+  el.innerHTML = `
+    <div style="background:#fef9f3;border:1px solid #f3d9b8;border-radius:10px;padding:14px 18px;margin-bottom:14px;font-size:12px;line-height:1.7;color:var(--gray-700)">
+      <strong style="color:${DJ_COLOR.accent}">유형 A: 팀장 미접촉으로 회수된 ${s.typeA.length}건.</strong> 자동회수 룰(48h/5영업일/120h) 또는 수동회수로 대전TM에 이관된 DB.
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px">
+      <div style="background:#fff;border:1px solid var(--gray-200);border-radius:10px;padding:16px">
+        <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:12px">회수 사유</div>
+        ${djBarRows(reasons.map(([k,v])=>({label:k, value:v, color:DJ_COLOR.warning})))}
+      </div>
+      <div style="background:#fff;border:1px solid var(--gray-200);border-radius:10px;padding:16px">
+        <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:12px">원래 지점</div>
+        ${djBarRows(branches.map(([k,v])=>({label:k, value:v, color:DJ_COLOR.blue})))}
+      </div>
+      <div style="background:#fff;border:1px solid var(--gray-200);border-radius:10px;padding:16px">
+        <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:12px">현재 진행단계</div>
+        ${djBarRows(stageRows)}
+      </div>
+    </div>
+    <div style="background:#fff;border:1px solid var(--gray-200);border-radius:10px;padding:18px">
+      <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+        <span>유형 A 상세 (${s.typeA.length}건)</span>
+        <input type="text" id="dj-a-search" placeholder="회사명/연락처 검색" oninput="djFilterA()" style="padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;font-size:12px;font-family:inherit;width:180px">
+      </div>
+      <div style="overflow-x:auto;max-height:500px;overflow-y:auto"><table style="width:100%;font-size:12px;border-collapse:collapse;min-width:760px" id="dj-a-table">
+        <thead style="position:sticky;top:0;background:#fafbfd;z-index:2"><tr>
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--gray-200)">회사명</th>
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--gray-200)">연락처</th>
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--gray-200)">원래 지점</th>
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--gray-200)">회수 사유</th>
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--gray-200)">회수일</th>
+          <th style="padding:8px 10px;text-align:center;border-bottom:2px solid var(--gray-200)">현재 단계</th>
+        </tr></thead>
+        <tbody>${s.typeA.slice().sort((x,y)=>{
+          const ax = x.auto_recall_at||x.updated_at||'';
+          const ay = y.auto_recall_at||y.updated_at||'';
+          return ay.localeCompare(ax);
+        }).map(l=>{
+          const stg = djNormStage(l);
+          const reason = String(l.auto_recall_reason||l.recovery_reason||'-');
+          const date = (l.auto_recall_at||l.updated_at||'').slice(0,10);
+          return `<tr style="border-bottom:1px solid var(--gray-100)" class="dj-a-row" data-search="${esc((l.company_name||'')+' '+(l.phone||''))}">
+            <td style="padding:7px 10px;font-weight:700;color:var(--navy);cursor:pointer" onclick="djOpenLead('${esc(l.id)}')" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${esc(l.company_name||'-')}</td>
+            <td style="padding:7px 10px;color:var(--gray-500);font-family:'Montserrat',monospace">${esc(l.phone||'')}</td>
+            <td style="padding:7px 10px">${esc(l.branch_name||'-')}</td>
+            <td style="padding:7px 10px;color:var(--gray-600);font-size:11px">${esc(reason)}</td>
+            <td style="padding:7px 10px;color:var(--gray-500);font-size:11px">${esc(date)}</td>
+            <td style="padding:7px 10px;text-align:center"><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:${djStageColor(stg)}22;color:${djStageColor(stg)}">${esc(stg)}</span></td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>
+    </div>
+  `;
+}
+
+// 검색
+function djFilterA(){
+  const q = (document.getElementById('dj-a-search')?.value||'').toLowerCase().trim();
+  document.querySelectorAll('#dj-a-table .dj-a-row').forEach(tr=>{
+    const ds = (tr.dataset.search||'').toLowerCase();
+    tr.style.display = (!q || ds.includes(q)) ? '' : 'none';
+  });
+}
+function djFilterB(){
+  const q = (document.getElementById('dj-b-search')?.value||'').toLowerCase().trim();
+  const resF = document.getElementById('dj-b-result-filter')?.value||'all';
+  const stgF = document.getElementById('dj-b-stage-filter')?.value||'all';
+  document.querySelectorAll('#dj-b-table .dj-b-row').forEach(tr=>{
+    const ds = (tr.dataset.search||'').toLowerCase();
+    const res = tr.dataset.result||'';
+    const stg = tr.dataset.stage||'';
+    let show = true;
+    if(q && !ds.includes(q)) show=false;
+    if(resF!=='all' && res!==resF) show=false;
+    if(stgF!=='all' && stg!==stgF) show=false;
+    tr.style.display = show ? '' : 'none';
+  });
+}
+
+// 리드 상세 열기 (기존 openPanel 연동)
+async function djOpenLead(id){
+  if(typeof openPanel==='function'){
+    try{ await openPanel(id); }catch(e){ console.warn('openPanel error',e); }
+  }
+}
+
+// ────────────────────────────────────────────────
+// 패널: 유형 B (직접 업로드)
+// ────────────────────────────────────────────────
+function djRenderTypeB(s){
+  const el = document.getElementById('dj-panel-typeB'); if(!el) return;
+
+  // TM 결과 분포
+  const resMap = {};
+  s.typeB.forEach(l=>{
+    const r = String(l.tm_result||'').trim() || '(미설정)';
+    resMap[r] = (resMap[r]||0)+1;
+  });
+  const results = Object.entries(resMap).sort((a,b)=>b[1]-a[1]);
+
+  // 단계 분포
+  const stageRows = DJ_STAGES.concat(['미배정']).map(st=>({label:st, value:s.stageB[st]||0, color:djStageColor(st)})).filter(r=>r.value);
+
+  el.innerHTML = `
+    <div style="background:#fef9f3;border:1px solid #f3d9b8;border-radius:10px;padding:14px 18px;margin-bottom:14px;font-size:12px;line-height:1.7;color:var(--gray-700)">
+      <strong style="color:${DJ_COLOR.accent}">유형 B: 대전TM 직접 업로드 ${s.typeB.length}건.</strong> 대전TM이 자체적으로 발굴/업로드한 재콜 DB. TM 결과 처리 후 지점·팀장에 분배되거나 드랍됨.
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+      <div style="background:#fff;border:1px solid var(--gray-200);border-radius:10px;padding:16px">
+        <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:12px">TM 결과 분포</div>
+        ${djBarRows(results.map(([k,v])=>({label:k, value:v, color:k==='drop'?DJ_COLOR.danger:k==='contacted'?DJ_COLOR.success:DJ_COLOR.warning})))}
+      </div>
+      <div style="background:#fff;border:1px solid var(--gray-200);border-radius:10px;padding:16px">
+        <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:12px">현재 진행단계</div>
+        ${djBarRows(stageRows)}
+      </div>
+    </div>
+    <div style="background:#fff;border:1px solid var(--gray-200);border-radius:10px;padding:18px">
+      <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <span>유형 B 상세 (${s.typeB.length}건)</span>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <input type="text" id="dj-b-search" placeholder="회사명/팀장 검색" oninput="djFilterB()" style="padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;font-size:12px;font-family:inherit;width:180px">
+          <select id="dj-b-result-filter" onchange="djFilterB()" style="padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;font-size:12px;font-family:inherit"><option value="all">전체 TM결과</option>${Object.keys(resMap).map(r=>`<option value="${esc(r)}">${esc(r)}</option>`).join('')}</select>
+          <select id="dj-b-stage-filter" onchange="djFilterB()" style="padding:6px 10px;border:1px solid var(--gray-200);border-radius:6px;font-size:12px;font-family:inherit"><option value="all">전체 단계</option>${DJ_STAGES.concat(['미배정']).map(st=>`<option value="${st}">${st}</option>`).join('')}</select>
+        </div>
+      </div>
+      <div style="overflow-x:auto;max-height:500px;overflow-y:auto"><table style="width:100%;font-size:12px;border-collapse:collapse;min-width:780px" id="dj-b-table">
+        <thead style="position:sticky;top:0;background:#fafbfd;z-index:2"><tr>
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--gray-200)">회사명</th>
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--gray-200)">연락처</th>
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--gray-200)">담당 팀장</th>
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--gray-200)">등록일</th>
+          <th style="padding:8px 10px;text-align:center;border-bottom:2px solid var(--gray-200)">TM 결과</th>
+          <th style="padding:8px 10px;text-align:center;border-bottom:2px solid var(--gray-200)">현재 단계</th>
+        </tr></thead>
+        <tbody>${s.typeB.slice().sort((x,y)=>{
+          const ax = x.created_at||x.updated_at||'';
+          const ay = y.created_at||y.updated_at||'';
+          return ay.localeCompare(ax);
+        }).map(l=>{
+          const stg = djNormStage(l);
+          const teams = djLeadTeams(l);
+          const date = (l.created_at||l.updated_at||'').slice(0,10);
+          const res = String(l.tm_result||'').trim() || '-';
+          const resColor = res==='drop'?DJ_COLOR.danger:res==='contacted'?DJ_COLOR.success:res==='no_answer'?DJ_COLOR.warning:DJ_COLOR.gray;
+          return `<tr style="border-bottom:1px solid var(--gray-100)" class="dj-b-row" data-search="${esc((l.company_name||'')+' '+(l.phone||'')+' '+teams.join(' '))}" data-result="${esc(res)}" data-stage="${stg}">
+            <td style="padding:7px 10px;font-weight:700;color:var(--navy);cursor:pointer" onclick="djOpenLead('${esc(l.id)}')" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${esc(l.company_name||'-')}</td>
+            <td style="padding:7px 10px;color:var(--gray-500);font-family:'Montserrat',monospace">${esc(l.phone||'')}</td>
+            <td style="padding:7px 10px;font-size:11px">${teams.length?teams.map(t=>esc(t)).join(', '):'<span style="color:var(--gray-300)">-</span>'}</td>
+            <td style="padding:7px 10px;color:var(--gray-500);font-size:11px">${esc(date)}</td>
+            <td style="padding:7px 10px;text-align:center"><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:${resColor}22;color:${resColor}">${esc(res)}</span></td>
+            <td style="padding:7px 10px;text-align:center"><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:${djStageColor(stg)}22;color:${djStageColor(stg)}">${esc(stg)}</span></td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>
+    </div>
+  `;
+}
+
+// ────────────────────────────────────────────────
+// 패널: 공동 관리
+// ────────────────────────────────────────────────
+function djRenderComanage(s){
+  const el = document.getElementById('dj-panel-comanage'); if(!el) return;
+
+  // 분류: ① A에서 팀장 2인 공동, ② B에서 팀장+대전TM 공동, ③ B에서 팀장 2인 공동
+  const aDouble = s.typeA.filter(l=>djLeadTeams(l).length>=2);
+  const bWithDj = s.typeB.filter(l=>{
+    let cb=[]; try{ cb=JSON.parse(l.collab_branches||'[]'); }catch(e){}
+    return Array.isArray(cb) && cb.includes('대전TM') && djLeadTeams(l).length>=1;
+  });
+  const bDouble = s.typeB.filter(l=>{
+    if(djLeadTeams(l).length<2) return false;
+    let cb=[]; try{ cb=JSON.parse(l.collab_branches||'[]'); }catch(e){}
+    if(Array.isArray(cb) && cb.includes('대전TM')) return false; // bWithDj와 중복 방지
+    return true;
+  });
+
+  const allCo = [
+    ...aDouble.map(l=>({kind:'A: 팀장 2인',l})),
+    ...bWithDj.map(l=>({kind:'B: 팀장+대전TM',l})),
+    ...bDouble.map(l=>({kind:'B: 팀장 2인',l})),
+  ];
+
+  // 공동 유형별
+  const kindMap = {'A: 팀장 2인':aDouble.length, 'B: 팀장+대전TM':bWithDj.length, 'B: 팀장 2인':bDouble.length};
+  const kindRows = Object.entries(kindMap).filter(([,v])=>v>0).map(([k,v])=>({label:k, value:v, color:k.startsWith('A')?DJ_COLOR.blue:k.includes('대전TM')?DJ_COLOR.purple:DJ_COLOR.accent}));
+
+  // 공동관리 단계 분포
+  const stageMap = {};
+  allCo.forEach(({l})=>{
+    const st = djNormStage(l);
+    stageMap[st] = (stageMap[st]||0)+1;
+  });
+  const stageRows = Object.entries(stageMap).map(([k,v])=>({label:k, value:v, color:djStageColor(k)}));
+
+  el.innerHTML = `
+    <div style="background:#fef9f3;border:1px solid #f3d9b8;border-radius:10px;padding:14px 18px;margin-bottom:14px;font-size:12px;line-height:1.7;color:var(--gray-700)">
+      <strong style="color:${DJ_COLOR.purple}">공동 관리 DB ${allCo.length}건.</strong> 복수 담당자 공동으로 관리되는 건 — 
+      ① 유형 A 팀장 2인 공동 <strong>${aDouble.length}건</strong>, 
+      ② 유형 B 팀장+대전TM 공동 <strong>${bWithDj.length}건</strong>, 
+      ③ 유형 B 팀장 2인 공동 <strong>${bDouble.length}건</strong>.
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+      <div style="background:#fff;border:1px solid var(--gray-200);border-radius:10px;padding:16px">
+        <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:12px">공동 유형별</div>
+        ${kindRows.length?djBarRows(kindRows):'<div style="color:var(--gray-400);font-size:12px">데이터 없음</div>'}
+      </div>
+      <div style="background:#fff;border:1px solid var(--gray-200);border-radius:10px;padding:16px">
+        <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:12px">공동 관리 현재단계</div>
+        ${stageRows.length?djBarRows(stageRows):'<div style="color:var(--gray-400);font-size:12px">데이터 없음</div>'}
+      </div>
+    </div>
+    <div style="background:#fff;border:1px solid var(--gray-200);border-radius:10px;padding:18px">
+      <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:12px">공동 관리 상세 ${allCo.length}건</div>
+      <div style="overflow-x:auto;max-height:500px;overflow-y:auto"><table style="width:100%;font-size:12px;border-collapse:collapse;min-width:680px">
+        <thead style="position:sticky;top:0;background:#fafbfd;z-index:2"><tr>
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--gray-200)">구분</th>
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--gray-200)">회사명</th>
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--gray-200)">담당자</th>
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--gray-200)">연락처</th>
+          <th style="padding:8px 10px;text-align:center;border-bottom:2px solid var(--gray-200)">현재 단계</th>
+        </tr></thead>
+        <tbody>${allCo.map(({kind,l})=>{
+          const stg = djNormStage(l);
+          const teams = djLeadTeams(l);
+          let cb=[]; try{cb=JSON.parse(l.collab_branches||'[]');}catch(e){}
+          const cbStr = Array.isArray(cb)&&cb.length?` + ${cb.join(', ')}`:'';
+          return `<tr style="border-bottom:1px solid var(--gray-100)">
+            <td style="padding:7px 10px;font-size:11px;color:${kind.startsWith('A')?DJ_COLOR.blue:kind.includes('대전TM')?DJ_COLOR.purple:DJ_COLOR.accent};font-weight:700">${esc(kind)}</td>
+            <td style="padding:7px 10px;font-weight:700;color:var(--navy);cursor:pointer" onclick="djOpenLead('${esc(l.id)}')" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${esc(l.company_name||'-')}</td>
+            <td style="padding:7px 10px;font-size:11px">${teams.map(t=>esc(t)).join(', ')}${esc(cbStr)}</td>
+            <td style="padding:7px 10px;color:var(--gray-500);font-family:'Montserrat',monospace">${esc(l.phone||'')}</td>
+            <td style="padding:7px 10px;text-align:center"><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:${djStageColor(stg)}22;color:${djStageColor(stg)}">${esc(stg)}</span></td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>
+    </div>
+  `;
+}
+
+// ────────────────────────────────────────────────
+// 패널: 사후 관리
+// ────────────────────────────────────────────────
+function djRenderPostmanage(s){
+  const el = document.getElementById('dj-panel-postmanage'); if(!el) return;
+
+  const all = [...s.manageA.map(l=>({type:'A',l})), ...s.manageB.map(l=>({type:'B',l}))];
+  const rateA = s.typeA.length?Math.round(s.manageA.length/s.typeA.length*1000)/10:0;
+  const rateB = s.typeB.length?Math.round(s.manageB.length/s.typeB.length*1000)/10:0;
+  const rateTotal = s.total?Math.round((s.manageA.length+s.manageB.length)/s.total*1000)/10:0;
+
+  el.innerHTML = `
+    <div style="background:#e8f8ef;border:1px solid #b8e3c8;border-radius:10px;padding:14px 18px;margin-bottom:14px;font-size:12px;line-height:1.7;color:var(--gray-700)">
+      <strong style="color:${DJ_COLOR.success}">사후 관리 진입 ${s.manageA.length+s.manageB.length}건.</strong> 대전TM 경유 후 '관리' 단계에 도달한 DB — 
+      유형 A ${s.manageA.length}건, 유형 B ${s.manageB.length}건. 
+      ${s.total}건 중 관리단계 전환율 <strong>${rateTotal}%</strong>.
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+      <div style="background:#fff;border:1px solid var(--gray-200);border-radius:10px;padding:16px">
+        <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:12px">유형별 관리 전환율</div>
+        <div style="margin-bottom:14px">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="color:${DJ_COLOR.blue};font-weight:700">유형 A</span><span><span style="font-family:'Montserrat',monospace;font-weight:800">${s.manageA.length}</span>/${s.typeA.length} (${rateA}%)</span></div>
+          <div style="height:10px;background:var(--gray-100);border-radius:5px"><div style="height:100%;width:${rateA*5}%;background:${DJ_COLOR.blue};border-radius:5px"></div></div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="color:${DJ_COLOR.accent};font-weight:700">유형 B</span><span><span style="font-family:'Montserrat',monospace;font-weight:800">${s.manageB.length}</span>/${s.typeB.length} (${rateB}%)</span></div>
+          <div style="height:10px;background:var(--gray-100);border-radius:5px"><div style="height:100%;width:${rateB*5}%;background:${DJ_COLOR.accent};border-radius:5px"></div></div>
+        </div>
+      </div>
+      <div style="background:#fff;border:1px solid var(--gray-200);border-radius:10px;padding:16px;display:flex;flex-direction:column;justify-content:center;align-items:center">
+        <div style="font-size:11px;color:var(--gray-500);margin-bottom:4px">전체 관리 진입율</div>
+        <div style="font-size:48px;font-weight:800;color:${DJ_COLOR.success};font-family:'Montserrat',sans-serif;line-height:1">${rateTotal}%</div>
+        <div style="font-size:11px;color:var(--gray-400);margin-top:6px">${s.manageA.length+s.manageB.length} / ${s.total}건</div>
+      </div>
+    </div>
+    <div style="background:#fff;border:1px solid var(--gray-200);border-radius:10px;padding:18px">
+      <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:12px">사후 관리 상세 ${all.length}건</div>
+      <div style="overflow-x:auto"><table style="width:100%;font-size:12px;border-collapse:collapse;min-width:620px">
+        <thead><tr style="background:#fafbfd">
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--gray-200)">구분</th>
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--gray-200)">회사명</th>
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--gray-200)">담당자</th>
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--gray-200)">지점</th>
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--gray-200)">연락처</th>
+        </tr></thead>
+        <tbody>${all.map(({type,l})=>{
+          const teams = djLeadTeams(l);
+          return `<tr style="border-bottom:1px solid var(--gray-100)">
+            <td style="padding:8px 10px"><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:${type==='A'?DJ_COLOR.blue:DJ_COLOR.accent}22;color:${type==='A'?DJ_COLOR.blue:DJ_COLOR.accent}">유형 ${type}</span></td>
+            <td style="padding:8px 10px;font-weight:700;color:var(--navy);cursor:pointer" onclick="djOpenLead('${esc(l.id)}')" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${esc(l.company_name||'-')}</td>
+            <td style="padding:8px 10px;font-size:11px">${teams.map(t=>esc(t)).join(', ')||'-'}</td>
+            <td style="padding:8px 10px">${esc(l.branch_name||'-')}</td>
+            <td style="padding:8px 10px;color:var(--gray-500);font-family:'Montserrat',monospace">${esc(l.phone||'')}</td>
+          </tr>`;
+        }).join('')||'<tr><td colspan="5" style="padding:20px;text-align:center;color:var(--gray-400)">사후 관리 진입 건 없음</td></tr>'}</tbody>
+      </table></div>
+    </div>
+  `;
+}
+
+// ═══════════════════════════════════════════════════════════
+// END 대전 업무현황
 // ═══════════════════════════════════════════════════════════
 
 function loadSbUi(){
