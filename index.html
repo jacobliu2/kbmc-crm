@@ -947,6 +947,11 @@ tbody tr.selected td{background:var(--blue-50)!important}
         <span id="notif-badge" style="display:none;position:absolute;top:2px;right:2px;width:16px;height:16px;border-radius:50%;background:var(--err);color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;"></span>
         <div id="notif-panel" style="display:none;position:absolute;top:calc(100%+4px);right:0;width:320px;background:#fff;border:1px solid var(--gray-200);border-radius:var(--r);box-shadow:var(--sh-up);z-index:999;max-height:400px;overflow-y:auto"></div>
       </div>
+      <!-- 쪽지함 -->
+      <div style="position:relative;margin-right:4px;">
+        <button id="msg-btn" onclick="openMessagesScreen()" style="width:34px;height:34px;border-radius:8px;border:none;background:transparent;cursor:pointer;font-size:16px;position:relative;color:#fff" title="쪽지함">💌</button>
+        <span id="msg-badge" style="display:none;position:absolute;top:2px;right:2px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--err);color:#fff;font-size:9px;font-weight:700;align-items:center;justify-content:center;line-height:16px;text-align:center"></span>
+      </div>
       <!-- 사용자 메뉴 -->
       <a href="https://dbckd6359.wixsite.com/my-site-2" target="_blank" rel="noopener"
         title="생각창고 — 자가진단 · 재무분석"
@@ -2817,6 +2822,83 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
   </div>
 </div>
 
+<!-- ═══ 쪽지함 (모든 역할) ═══ -->
+<div id="screen-messages" class="screen">
+  <div class="page-header">
+    <div class="page-title">💌 쪽지함</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="btn btn-sm" style="background:var(--navy);color:#fff;border-color:var(--navy)" onclick="openComposeModal()" title="새 쪽지 보내기">✏️ 새 쪽지</button>
+      <button class="btn btn-outline btn-sm" onclick="loadMessages()" title="Supabase에서 다시 불러오기">🔄 새로고침</button>
+    </div>
+  </div>
+
+  <div style="background:#fff;border:1px solid var(--gray-200);border-radius:10px;overflow:hidden">
+    <!-- 탭 -->
+    <div style="display:flex;border-bottom:1px solid var(--gray-200);background:#fafbfd">
+      <button id="msg-tab-inbox" class="msg-tab" onclick="msgSwitchTab('inbox')" style="flex:1;padding:12px 16px;border:none;background:#fff;color:var(--navy);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;border-bottom:3px solid var(--navy)">📥 받은쪽지함 <span id="msg-count-inbox" style="font-size:11px;color:var(--gray-400);margin-left:4px"></span></button>
+      <button id="msg-tab-sent" class="msg-tab" onclick="msgSwitchTab('sent')" style="flex:1;padding:12px 16px;border:none;background:transparent;color:var(--gray-500);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;border-bottom:3px solid transparent">📤 보낸쪽지함 <span id="msg-count-sent" style="font-size:11px;color:var(--gray-400);margin-left:4px"></span></button>
+    </div>
+
+    <!-- 검색 -->
+    <div style="padding:10px 14px;border-bottom:1px solid var(--gray-200);display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input type="text" id="msg-search" oninput="renderMessagesList()" placeholder="🔍 제목·내용·상대방 이름 검색"
+        style="flex:1;min-width:180px;padding:7px 11px;border:1px solid var(--gray-200);border-radius:6px;font-size:12px;font-family:inherit">
+      <select id="msg-filter-unread" onchange="renderMessagesList()" style="padding:7px 10px;border:1px solid var(--gray-200);border-radius:6px;font-size:12px;font-family:inherit">
+        <option value="all">전체</option>
+        <option value="unread">안 읽음만</option>
+        <option value="read">읽음만</option>
+      </select>
+    </div>
+
+    <!-- 리스트 + 본문 (좌우 분할) -->
+    <div id="msg-layout" style="display:grid;grid-template-columns:380px 1fr;min-height:520px">
+      <div id="msg-list" style="border-right:1px solid var(--gray-200);max-height:620px;overflow-y:auto"></div>
+      <div id="msg-detail" style="padding:20px;overflow-y:auto;max-height:620px">
+        <div style="text-align:center;color:var(--gray-300);padding:80px 20px;font-size:13px">📬 쪽지를 선택하면 여기에 표시됩니다</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 쪽지 작성 모달 ═══ -->
+<div class="modal-overlay" id="modal-message-compose">
+  <div class="modal-content" style="max-width:640px">
+    <div class="mh">
+      <div class="mt" id="msg-compose-title">✏️ 새 쪽지 작성</div>
+      <button class="mc" onclick="closeComposeModal()">✕</button>
+    </div>
+    <div class="mb" style="padding:20px">
+      <input type="hidden" id="msg-compose-parent-id">
+      <input type="hidden" id="msg-compose-thread-root">
+
+      <div style="margin-bottom:14px">
+        <label style="display:block;font-size:12px;font-weight:700;color:var(--gray-500);margin-bottom:6px">받는 사람 <span style="color:var(--err)">*</span> <span id="msg-compose-recipient-count" style="font-size:11px;color:var(--gray-400);font-weight:500;margin-left:4px"></span></label>
+        <input type="text" id="msg-compose-recipient-search" oninput="msgFilterRecipients()" placeholder="🔍 이름·역할·지점으로 검색"
+          style="width:100%;padding:8px 11px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px;font-family:inherit;margin-bottom:6px">
+        <div id="msg-compose-selected" style="display:flex;flex-wrap:wrap;gap:4px;min-height:0;margin-bottom:6px"></div>
+        <div id="msg-compose-recipient-list" style="max-height:180px;overflow-y:auto;border:1px solid var(--gray-200);border-radius:6px;background:#fafbfd"></div>
+      </div>
+
+      <div style="margin-bottom:14px">
+        <label style="display:block;font-size:12px;font-weight:700;color:var(--gray-500);margin-bottom:6px">제목 <span style="color:var(--err)">*</span></label>
+        <input type="text" id="msg-compose-subject" placeholder="제목을 입력하세요"
+          style="width:100%;padding:8px 11px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px;font-family:inherit">
+      </div>
+
+      <div style="margin-bottom:14px">
+        <label style="display:block;font-size:12px;font-weight:700;color:var(--gray-500);margin-bottom:6px">내용 <span style="color:var(--err)">*</span></label>
+        <textarea id="msg-compose-content" rows="8" placeholder="내용을 입력하세요"
+          style="width:100%;padding:10px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px;font-family:inherit;resize:vertical"></textarea>
+      </div>
+
+      <div style="display:flex;justify-content:flex-end;gap:8px">
+        <button class="btn btn-outline btn-sm" onclick="closeComposeModal()">취소</button>
+        <button class="btn btn-sm" style="background:var(--navy);color:#fff;border-color:var(--navy)" onclick="sendMessage()">📨 보내기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="screen-activity" class="screen">
   <!-- 오늘 할 일 위젯 (팀장/지점장) -->
   <div id="act-todo-widget" style="display:none;margin-bottom:16px"></div>
@@ -3945,6 +4027,10 @@ function subscribeRealtime(){
       { event:'*', schema:'public', table:'notices' },
       (payload) => handleRealtimeChange('notices', payload)
     )
+    .on('postgres_changes',
+      { event:'*', schema:'public', table:'messages' },
+      (payload) => handleRealtimeChange('messages', payload)
+    )
     .subscribe((status) => {
       const st = document.getElementById('sb-status');
       if(status === 'SUBSCRIBED'){
@@ -4083,6 +4169,46 @@ function handleRealtimeChange(table, payload){
       }
       console.log('[Realtime] notices 갱신 완료');
     }, 400);
+  } else if(table === 'messages'){
+    // 쪽지 Realtime 변경 → 캐시 동기화 + 배지 갱신
+    const eventType = payload.eventType || payload.type;
+    const newRow = payload.new || payload.record;
+    const oldRow = payload.old || payload.old_record;
+    if(!_msgsCache) _msgsCache = [];
+
+    if(eventType === 'INSERT' && newRow){
+      if(!_msgsCache.find(m=>m.id===newRow.id)){
+        _msgsCache.unshift(newRow);
+        // 내가 수신자고 안 읽은 새 쪽지면 토스트 알림
+        try{
+          const myId = String(curUser?.id||curUser?.name||'');
+          if(String(newRow.recipient_id)===myId && !newRow.is_read && String(newRow.sender_id)!==myId){
+            if(typeof showToast==='function'){
+              showToast('💌 새 쪽지 — '+(newRow.sender_name||'')+': '+(newRow.subject||'').slice(0,30),'info');
+            }
+          }
+        }catch(e){}
+      }
+    } else if(eventType === 'UPDATE' && newRow){
+      const i = _msgsCache.findIndex(m=>m.id===newRow.id);
+      if(i>=0) _msgsCache[i] = {..._msgsCache[i], ...newRow};
+      else _msgsCache.unshift(newRow);
+    } else if(eventType === 'DELETE' && oldRow){
+      const i = _msgsCache.findIndex(m=>m.id===oldRow.id);
+      if(i>=0) _msgsCache.splice(i,1);
+    }
+
+    msgUpdateBadge();
+    // 쪽지함 화면이 열려있으면 다시 렌더
+    const scr = document.getElementById('screen-messages');
+    if(scr && scr.classList.contains('active')){
+      renderMessagesList();
+      // 현재 선택된 쪽지가 갱신됐으면 상세도 다시 표시
+      if(_msgState.selectedId){
+        const cur = _msgsCache.find(m=>m.id===_msgState.selectedId);
+        if(cur) renderMessageDetail(cur);
+      }
+    }
   }
 }
 
@@ -4663,6 +4789,14 @@ function startApp(){
   setInterval(checkAlerts,60000); checkAlerts();
   if(curUser?.role==='team')  // 5분마다 미기록 상태 갱신
   loadSbUi();
+
+  // 쪽지 캐시 초기 로드 + 헤더 배지 갱신 + 1분 주기 폴링
+  setTimeout(()=>{
+    refreshMessagesCache().catch(e=>console.warn('msg init load error',e));
+  }, 2000);
+  setInterval(()=>{
+    refreshMessagesCache().catch(()=>{});
+  }, 60000);
 }
 
 // ── 초기 데이터 삽입 ──────────────────────────────────────
@@ -4671,11 +4805,11 @@ function startApp(){
 function showScreen(id, btn){
   // 역할별 접근 가능 화면 화이트리스트
   const ALLOWED = {
-    admin:     ['admin','leads','stage-dashboard','dj-status','activity','settings'],
-    dbmanager: ['leads','activity','notices'],
-    branch:    ['branch','leads','stage-dashboard','my-clients','activity','notices'],
-    team:      ['leads','stage-dashboard','my-leads','my-clients','activity','notices'],
-    tm:        ['tm-panel','notices'],
+    admin:     ['admin','leads','stage-dashboard','dj-status','activity','settings','messages'],
+    dbmanager: ['leads','activity','notices','messages'],
+    branch:    ['branch','leads','stage-dashboard','my-clients','activity','notices','messages'],
+    team:      ['leads','stage-dashboard','my-leads','my-clients','activity','notices','messages'],
+    tm:        ['tm-panel','notices','messages'],
   };
   const role = curUser?.role;
   const allowed = ALLOWED[role] || [];
@@ -4691,7 +4825,7 @@ function showScreen(id, btn){
   ({
     'admin':loadAdmin,'leads':loadLeads,'my-leads':loadMyLeads,'my-clients':loadMyClients,
     'settings':loadSettings,'tm-panel':loadTmPanel,'branch':loadBranchScreen,'activity':loadActivityScreen,'notices':loadNoticesScreen,
-    'stage-dashboard':loadStageDashboard,'dj-status':loadDjStatus
+    'stage-dashboard':loadStageDashboard,'dj-status':loadDjStatus,'messages':loadMessages
   }[id]||function(){})();
 }
 
@@ -11214,6 +11348,510 @@ function djRenderPostmanage(s){
 // END 대전 업무현황
 // ═══════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════
+// 💌 쪽지(Messages) 시스템 — 전사 1:1 (복수 수신자 지원)
+// 스키마: messages(id, subject, content, sender_id/name/role,
+//   recipient_id/name/role, lead_id, parent_id, thread_root_id,
+//   is_system, is_read, read_at, is_deleted_by_sender, is_deleted_by_recipient, created_at)
+// ═══════════════════════════════════════════════════════════
+const MSG_LS_KEY = 'kbmc_v2_messages';
+let _msgsCache = null;       // 메모리 캐시
+let _msgState = { tab:'inbox', selectedId:null, recipients:[] };
+
+// ── Supabase 헬퍼 ────────────────────────────────────────
+async function _sbFetchMessages(){
+  if(testMode){
+    try{ return JSON.parse(localStorage.getItem(MSG_LS_KEY)||'[]'); }catch(e){ return []; }
+  }
+  try{
+    const rows = await sbGet('messages?select=*&order=created_at.desc&limit=2000');
+    return Array.isArray(rows) ? rows : [];
+  }catch(e){
+    console.warn('_sbFetchMessages error',e);
+    return [];
+  }
+}
+
+async function _sbInsertMessage(row){
+  if(testMode){
+    try{
+      const arr = JSON.parse(localStorage.getItem(MSG_LS_KEY)||'[]');
+      arr.unshift(row);
+      localStorage.setItem(MSG_LS_KEY, JSON.stringify(arr));
+    }catch(e){}
+    return true;
+  }
+  try{
+    const h = {...sbH(), 'Prefer':'return=minimal'};
+    const r = await fetch(SB_URL+'/rest/v1/messages', {method:'POST', headers:h, body:JSON.stringify(row)});
+    if(!r.ok){
+      const t = await r.text().catch(()=>'');
+      console.error('_sbInsertMessage err:', r.status, t);
+      return false;
+    }
+    return true;
+  }catch(e){ console.error('_sbInsertMessage exception',e); return false; }
+}
+
+async function _sbUpdateMessage(id, patch){
+  if(testMode){
+    try{
+      const arr = JSON.parse(localStorage.getItem(MSG_LS_KEY)||'[]');
+      const i = arr.findIndex(m=>m.id===id);
+      if(i>=0){ arr[i] = {...arr[i], ...patch}; localStorage.setItem(MSG_LS_KEY, JSON.stringify(arr)); }
+    }catch(e){}
+    return true;
+  }
+  try{
+    const h = {...sbH(), 'Prefer':'return=minimal'};
+    const r = await fetch(SB_URL+'/rest/v1/messages?id=eq.'+encodeURIComponent(id), {method:'PATCH', headers:h, body:JSON.stringify(patch)});
+    return r.ok;
+  }catch(e){ return false; }
+}
+
+// ── 캐시 갱신 ────────────────────────────────────────
+async function refreshMessagesCache(){
+  _msgsCache = await _sbFetchMessages();
+  msgUpdateBadge();
+  return _msgsCache;
+}
+
+// ── 현재 사용자가 받은 쪽지 ────────────────────────────
+function _myInbox(){
+  if(!_msgsCache || !curUser) return [];
+  const myId = String(curUser.id||curUser.name||'');
+  return _msgsCache.filter(m =>
+    String(m.recipient_id||'') === myId &&
+    !m.is_deleted_by_recipient
+  );
+}
+function _mySent(){
+  if(!_msgsCache || !curUser) return [];
+  const myId = String(curUser.id||curUser.name||'');
+  return _msgsCache.filter(m =>
+    String(m.sender_id||'') === myId &&
+    !m.is_deleted_by_sender
+  );
+}
+function _unreadCount(){
+  return _myInbox().filter(m=>!m.is_read).length;
+}
+
+// ── 헤더 뱃지 갱신 ────────────────────────────────────
+function msgUpdateBadge(){
+  const badge = document.getElementById('msg-badge');
+  if(!badge) return;
+  const cnt = _unreadCount();
+  if(cnt>0){
+    badge.style.display = 'inline-flex';
+    badge.textContent = cnt > 99 ? '99+' : String(cnt);
+  }else{
+    badge.style.display = 'none';
+  }
+}
+
+// ── 화면 진입 (헤더 버튼) ─────────────────────────────
+function openMessagesScreen(){
+  if(typeof showScreen==='function'){
+    const btn = document.querySelector('#main-nav .nb[data-s="messages"]');
+    showScreen('messages', btn||null);
+  }
+}
+
+// ── 메인 로더 (showScreen 라우터에서 호출) ─────────────
+async function loadMessages(){
+  if(!curUser){ showToast('로그인이 필요합니다','error'); return; }
+  const listEl = document.getElementById('msg-list');
+  const detailEl = document.getElementById('msg-detail');
+  if(listEl) listEl.innerHTML = '<div style="padding:40px;text-align:center;color:var(--gray-400);font-size:12px">불러오는 중…</div>';
+  if(detailEl) detailEl.innerHTML = '<div style="text-align:center;color:var(--gray-300);padding:80px 20px;font-size:13px">📬 쪽지를 선택하면 여기에 표시됩니다</div>';
+
+  await refreshMessagesCache();
+  _msgState.selectedId = null;
+  renderMessagesList();
+}
+
+// ── 탭 전환 ────────────────────────────────────────
+function msgSwitchTab(tab){
+  _msgState.tab = tab;
+  _msgState.selectedId = null;
+  // 버튼 스타일
+  const inb = document.getElementById('msg-tab-inbox');
+  const snt = document.getElementById('msg-tab-sent');
+  if(inb && snt){
+    if(tab==='inbox'){
+      inb.style.background='#fff'; inb.style.color='var(--navy)'; inb.style.borderBottom='3px solid var(--navy)';
+      snt.style.background='transparent'; snt.style.color='var(--gray-500)'; snt.style.borderBottom='3px solid transparent';
+    }else{
+      snt.style.background='#fff'; snt.style.color='var(--navy)'; snt.style.borderBottom='3px solid var(--navy)';
+      inb.style.background='transparent'; inb.style.color='var(--gray-500)'; inb.style.borderBottom='3px solid transparent';
+    }
+  }
+  // 안 읽음 필터는 받은쪽지함에서만 의미 있음 — 보낸함이면 자동 전체로
+  if(tab==='sent'){
+    const f = document.getElementById('msg-filter-unread');
+    if(f) f.value = 'all';
+  }
+  renderMessagesList();
+  const detailEl = document.getElementById('msg-detail');
+  if(detailEl) detailEl.innerHTML = '<div style="text-align:center;color:var(--gray-300);padding:80px 20px;font-size:13px">📬 쪽지를 선택하면 여기에 표시됩니다</div>';
+}
+
+// ── 리스트 렌더 ────────────────────────────────────
+function renderMessagesList(){
+  const listEl = document.getElementById('msg-list'); if(!listEl) return;
+  const tab = _msgState.tab || 'inbox';
+  const all = (tab==='inbox') ? _myInbox() : _mySent();
+
+  // 카운트 표시
+  const cInb = document.getElementById('msg-count-inbox');
+  const cSnt = document.getElementById('msg-count-sent');
+  if(cInb){
+    const inb = _myInbox();
+    const u = inb.filter(m=>!m.is_read).length;
+    cInb.textContent = u>0 ? `(${inb.length} · 안읽음 ${u})` : `(${inb.length})`;
+  }
+  if(cSnt){
+    cSnt.textContent = `(${_mySent().length})`;
+  }
+
+  const q = (document.getElementById('msg-search')?.value||'').toLowerCase().trim();
+  const fu = document.getElementById('msg-filter-unread')?.value || 'all';
+
+  let rows = all.slice();
+  if(q){
+    rows = rows.filter(m=>{
+      const target = ((m.subject||'')+' '+(m.content||'')+' '+(m.sender_name||'')+' '+(m.recipient_name||'')).toLowerCase();
+      return target.includes(q);
+    });
+  }
+  if(tab==='inbox'){
+    if(fu==='unread') rows = rows.filter(m=>!m.is_read);
+    else if(fu==='read') rows = rows.filter(m=>m.is_read);
+  }
+
+  if(rows.length===0){
+    listEl.innerHTML = '<div style="padding:60px 20px;text-align:center;color:var(--gray-300);font-size:12px">'+(tab==='inbox'?'받은 쪽지가 없습니다':'보낸 쪽지가 없습니다')+'</div>';
+    return;
+  }
+
+  listEl.innerHTML = rows.map(m=>{
+    const isUnread = (tab==='inbox') && !m.is_read;
+    const otherName = (tab==='inbox') ? (m.sender_name||'-') : (m.recipient_name||'-');
+    const otherRole = (tab==='inbox') ? (m.sender_role||'') : (m.recipient_role||'');
+    const roleLabel = ({admin:'관리자',dbmanager:'DB관리자',branch:'지점장',team:'팀장',tm:'대전TM'})[otherRole] || otherRole;
+    const date = (m.created_at||'').slice(0,16).replace('T',' ');
+    const isSel = _msgState.selectedId === m.id;
+    const sysIcon = m.is_system ? '🔒 ' : '';
+    return `<div onclick="openMessage('${esc(m.id)}')" style="padding:12px 14px;border-bottom:1px solid var(--gray-100);cursor:pointer;${isSel?'background:#eef3f9':isUnread?'background:#fffaf0':'background:#fff'};transition:background .12s" onmouseover="if(!${isSel})this.style.background='#fafbfd'" onmouseout="if(!${isSel})this.style.background='${isUnread?'#fffaf0':'#fff'}'">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <span style="font-size:12px;font-weight:${isUnread?'800':'600'};color:${isUnread?'var(--navy)':'var(--gray-700)'}">${isUnread?'● ':''}${esc(otherName)}${roleLabel?` <span style="font-size:10px;color:var(--gray-400);font-weight:500">[${esc(roleLabel)}]</span>`:''}</span>
+        <span style="font-size:10px;color:var(--gray-400)">${esc(date)}</span>
+      </div>
+      <div style="font-size:13px;font-weight:${isUnread?'700':'500'};color:var(--gray-900);margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(sysIcon)}${esc(m.subject||'(제목 없음)')}</div>
+      <div style="font-size:11px;color:var(--gray-500);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc((m.content||'').replace(/\n/g,' ').slice(0,80))}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── 쪽지 상세 열기 (자동 읽음 처리) ────────────────────
+async function openMessage(id){
+  if(!_msgsCache) return;
+  const m = _msgsCache.find(x=>x.id===id);
+  if(!m){ showToast('쪽지를 찾을 수 없습니다','error'); return; }
+  _msgState.selectedId = id;
+
+  // 받은쪽지함이고 안 읽음이면 읽음 처리
+  if(_msgState.tab==='inbox' && !m.is_read && String(m.recipient_id)===String(curUser?.id||curUser?.name)){
+    m.is_read = true;
+    m.read_at = new Date().toISOString();
+    _sbUpdateMessage(id, {is_read:true, read_at:m.read_at});
+    msgUpdateBadge();
+  }
+
+  renderMessagesList();
+  renderMessageDetail(m);
+}
+
+// ── 쪽지 상세 렌더 ────────────────────────────────────
+function renderMessageDetail(m){
+  const el = document.getElementById('msg-detail'); if(!el) return;
+  const isInbox = _msgState.tab==='inbox';
+  const senderRole = ({admin:'관리자',dbmanager:'DB관리자',branch:'지점장',team:'팀장',tm:'대전TM'})[m.sender_role] || m.sender_role || '';
+  const recipientRole = ({admin:'관리자',dbmanager:'DB관리자',branch:'지점장',team:'팀장',tm:'대전TM'})[m.recipient_role] || m.recipient_role || '';
+  const dateStr = m.created_at ? new Date(m.created_at).toLocaleString('ko-KR') : '-';
+  const readStr = m.read_at ? new Date(m.read_at).toLocaleString('ko-KR') : '';
+  const canReply = isInbox && !m.is_system && String(m.sender_id)!==String(curUser?.id||curUser?.name);
+
+  // 스레드 (같은 thread_root_id 또는 parent_id 체인)
+  const threadRoot = m.thread_root_id || m.id;
+  const thread = (_msgsCache||[]).filter(x => (x.thread_root_id===threadRoot || x.id===threadRoot) && x.id!==m.id)
+    .filter(x=>{
+      const myId = String(curUser?.id||curUser?.name||'');
+      // 본인이 보낸 것 또는 받은 것만 (제3자 쪽지 노출 방지)
+      return String(x.sender_id)===myId || String(x.recipient_id)===myId;
+    })
+    .sort((a,b)=>(a.created_at||'').localeCompare(b.created_at||''));
+
+  el.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px;padding-bottom:14px;border-bottom:2px solid var(--gray-100)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:11px;color:var(--gray-400);margin-bottom:4px">${m.is_system?'🔒 시스템 자동 발송 · 답장 불가':isInbox?'받은 쪽지':'보낸 쪽지'}</div>
+        <div style="font-size:18px;font-weight:800;color:var(--navy);margin-bottom:8px;word-break:break-word">${esc(m.subject||'(제목 없음)')}</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--gray-600)">
+          <div><strong style="color:var(--gray-500)">보낸 사람:</strong> ${esc(m.sender_name||'-')} ${senderRole?`<span style="font-size:10px;color:var(--gray-400)">[${esc(senderRole)}]</span>`:''}</div>
+          <div><strong style="color:var(--gray-500)">받는 사람:</strong> ${esc(m.recipient_name||'-')} ${recipientRole?`<span style="font-size:10px;color:var(--gray-400)">[${esc(recipientRole)}]</span>`:''}</div>
+          <div><strong style="color:var(--gray-500)">발송:</strong> ${esc(dateStr)}</div>
+          ${readStr?`<div><strong style="color:var(--gray-500)">읽음:</strong> ${esc(readStr)}</div>`:isInbox?'':`<div style="color:var(--gray-400)">${m.is_read?'✓ 상대방이 읽음':'⏳ 미열람'}</div>`}
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${canReply?`<button class="btn btn-sm" style="background:var(--navy);color:#fff;border-color:var(--navy)" onclick="openReplyModal('${esc(m.id)}')">↩ 답장</button>`:''}
+        <button class="btn btn-outline btn-sm" onclick="deleteMessage('${esc(m.id)}')" title="삭제 (소프트 삭제 — 상대방에게는 그대로 보입니다)">🗑️ 삭제</button>
+      </div>
+    </div>
+
+    <div style="white-space:pre-wrap;word-break:break-word;font-size:13px;line-height:1.7;color:var(--gray-900);padding:6px 0">${esc(m.content||'').replace(/\n/g,'<br>')}</div>
+
+    ${m.lead_id ? `<div style="margin-top:16px;padding:10px 14px;background:#f0f7ff;border:1px solid #c7ddf2;border-radius:8px;font-size:12px;color:var(--gray-700)">📌 이 쪽지는 <strong style="color:var(--navy);cursor:pointer;text-decoration:underline" onclick="msgOpenLinkedLead('${esc(m.lead_id)}')">관련 리드</strong>와 연결되어 있습니다.</div>` : ''}
+
+    ${thread.length>0 ? `
+      <div style="margin-top:24px;padding-top:14px;border-top:1px solid var(--gray-200)">
+        <div style="font-size:11px;font-weight:700;color:var(--gray-500);margin-bottom:10px">💬 같은 대화 (${thread.length}건)</div>
+        ${thread.map(t=>{
+          const tIsMy = String(t.sender_id)===String(curUser?.id||curUser?.name);
+          const tDate = (t.created_at||'').slice(5,16).replace('T',' ');
+          return `<div onclick="openMessage('${esc(t.id)}')" style="padding:8px 12px;margin-bottom:6px;background:${tIsMy?'#fef9f3':'#fafbfd'};border-left:3px solid ${tIsMy?'var(--warn)':'var(--gray-300)'};border-radius:4px;cursor:pointer;font-size:12px">
+            <div style="font-weight:700;color:var(--gray-700);margin-bottom:2px">${esc(tIsMy?'나 → '+(t.recipient_name||''):(t.sender_name||'')+' → 나')} · <span style="font-weight:500;color:var(--gray-400)">${esc(tDate)}</span></div>
+            <div style="color:var(--gray-600);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.subject||'')}</div>
+          </div>`;
+        }).join('')}
+      </div>` : ''}
+  `;
+}
+
+// 연결 리드 열기
+async function msgOpenLinkedLead(leadId){
+  if(typeof openPanel==='function'){
+    try{ await openPanel(leadId); }catch(e){ showToast('리드를 열 수 없습니다','error'); }
+  }
+}
+
+// ── 쪽지 삭제 (소프트) ──────────────────────────────────
+async function deleteMessage(id){
+  if(!confirm('이 쪽지를 삭제하시겠습니까?\n(상대방 쪽지함에는 그대로 보입니다)')) return;
+  const m = (_msgsCache||[]).find(x=>x.id===id);
+  if(!m){ return; }
+  const myId = String(curUser?.id||curUser?.name||'');
+  const patch = {};
+  if(String(m.sender_id)===myId)   { patch.is_deleted_by_sender = true; m.is_deleted_by_sender = true; }
+  if(String(m.recipient_id)===myId){ patch.is_deleted_by_recipient = true; m.is_deleted_by_recipient = true; }
+  await _sbUpdateMessage(id, patch);
+  _msgState.selectedId = null;
+  msgUpdateBadge();
+  renderMessagesList();
+  const detailEl = document.getElementById('msg-detail');
+  if(detailEl) detailEl.innerHTML = '<div style="text-align:center;color:var(--gray-300);padding:80px 20px;font-size:13px">📬 쪽지를 선택하면 여기에 표시됩니다</div>';
+  showToast('쪽지를 삭제했습니다','success');
+}
+
+// ═══════════════════════════════════════════════════════════
+// 쪽지 작성 모달
+// ═══════════════════════════════════════════════════════════
+function openComposeModal(){
+  if(!curUser){ showToast('로그인이 필요합니다','error'); return; }
+  // 초기화
+  _msgState.recipients = [];
+  document.getElementById('msg-compose-parent-id').value = '';
+  document.getElementById('msg-compose-thread-root').value = '';
+  document.getElementById('msg-compose-subject').value = '';
+  document.getElementById('msg-compose-content').value = '';
+  document.getElementById('msg-compose-recipient-search').value = '';
+  document.getElementById('msg-compose-title').textContent = '✏️ 새 쪽지 작성';
+  msgRenderRecipientList();
+  msgRenderSelectedRecipients();
+  document.getElementById('modal-message-compose').classList.add('active');
+}
+
+function closeComposeModal(){
+  document.getElementById('modal-message-compose').classList.remove('active');
+}
+
+// 답장 모달
+function openReplyModal(originalId){
+  const orig = (_msgsCache||[]).find(x=>x.id===originalId);
+  if(!orig){ showToast('원본 쪽지를 찾을 수 없습니다','error'); return; }
+  if(orig.is_system){ showToast('시스템 자동 쪽지에는 답장할 수 없습니다','error'); return; }
+  openComposeModal();
+  document.getElementById('msg-compose-title').textContent = '↩ 답장 작성';
+  document.getElementById('msg-compose-parent-id').value = orig.id;
+  document.getElementById('msg-compose-thread-root').value = orig.thread_root_id || orig.id;
+  // 받는 사람 = 원본 발신자
+  _msgState.recipients = [{
+    id: orig.sender_id, name: orig.sender_name||'-', role: orig.sender_role||''
+  }];
+  // 제목 RE:
+  const subj = orig.subject || '';
+  document.getElementById('msg-compose-subject').value = subj.startsWith('RE:') ? subj : ('RE: '+subj);
+  msgRenderRecipientList();
+  msgRenderSelectedRecipients();
+}
+
+// 수신자 후보 목록 (accounts 기반)
+function msgGetCandidates(){
+  const accs = (typeof getAccs==='function') ? getAccs() : [];
+  const myId = String(curUser?.id||curUser?.name||'');
+  return accs
+    .filter(a => a && a.id && String(a.id)!==myId)
+    .map(a => ({id:a.id, name:a.name||a.id, role:a.role||'', branch:a.branch||''}));
+}
+
+// 수신자 후보 리스트 렌더 + 검색
+function msgRenderRecipientList(){
+  const el = document.getElementById('msg-compose-recipient-list'); if(!el) return;
+  const q = (document.getElementById('msg-compose-recipient-search')?.value||'').toLowerCase().trim();
+  let candidates = msgGetCandidates();
+  const selectedIds = new Set(_msgState.recipients.map(r=>String(r.id)));
+  candidates = candidates.filter(c => !selectedIds.has(String(c.id))); // 이미 선택된 건 제외
+  if(q){
+    candidates = candidates.filter(c=>{
+      const s = (c.name+' '+c.role+' '+c.branch).toLowerCase();
+      return s.includes(q);
+    });
+  }
+  const roleLabel = {admin:'관리자',dbmanager:'DB관리자',branch:'지점장',team:'팀장',tm:'대전TM'};
+  const roleColor = {admin:'#ef4444',dbmanager:'#0891b2',branch:'#7c3aed',team:'#2563eb',tm:'#059669'};
+  if(candidates.length===0){
+    el.innerHTML = '<div style="padding:30px 20px;text-align:center;color:var(--gray-400);font-size:12px">'+(q?'검색 결과 없음':'선택 가능한 수신자가 없습니다')+'</div>';
+    return;
+  }
+  // 역할별로 그룹핑
+  const byRole = {};
+  candidates.forEach(c=>{
+    const r = c.role||'기타';
+    if(!byRole[r]) byRole[r]=[];
+    byRole[r].push(c);
+  });
+  const order = ['admin','dbmanager','branch','team','tm','기타'];
+  let html = '';
+  order.forEach(r=>{
+    if(!byRole[r]) return;
+    html += `<div style="padding:5px 10px;background:#f1f5f9;font-size:10px;font-weight:700;color:var(--gray-500)">${esc(roleLabel[r]||r)} (${byRole[r].length})</div>`;
+    byRole[r].sort((a,b)=>(a.branch||'').localeCompare(b.branch||'') || a.name.localeCompare(b.name));
+    byRole[r].forEach(c=>{
+      const clr = roleColor[c.role]||'#94a3b8';
+      html += `<div onclick="msgPickRecipient('${esc(c.id)}','${esc(c.name)}','${esc(c.role||'')}')" style="padding:8px 12px;border-bottom:1px solid var(--gray-100);cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-size:12px" onmouseover="this.style.background='#eef3f9'" onmouseout="this.style.background='transparent'">
+        <span><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${clr};margin-right:6px"></span><strong>${esc(c.name)}</strong>${c.branch?` <span style="color:var(--gray-400);font-size:10px">· ${esc(c.branch)}</span>`:''}</span>
+        <span style="font-size:11px;color:var(--gray-400)">+ 추가</span>
+      </div>`;
+    });
+  });
+  el.innerHTML = html;
+}
+
+function msgFilterRecipients(){
+  msgRenderRecipientList();
+}
+
+function msgPickRecipient(id, name, role){
+  const exists = _msgState.recipients.some(r=>String(r.id)===String(id));
+  if(exists) return;
+  _msgState.recipients.push({id, name, role});
+  msgRenderSelectedRecipients();
+  msgRenderRecipientList();
+}
+
+function msgRemoveRecipient(id){
+  _msgState.recipients = _msgState.recipients.filter(r=>String(r.id)!==String(id));
+  msgRenderSelectedRecipients();
+  msgRenderRecipientList();
+}
+
+function msgRenderSelectedRecipients(){
+  const el = document.getElementById('msg-compose-selected'); if(!el) return;
+  const cnt = document.getElementById('msg-compose-recipient-count');
+  if(_msgState.recipients.length===0){
+    el.innerHTML = '';
+    if(cnt) cnt.textContent = '';
+    return;
+  }
+  if(cnt) cnt.textContent = `(${_msgState.recipients.length}명 선택)`;
+  const roleLabel = {admin:'관리자',dbmanager:'DB관리자',branch:'지점장',team:'팀장',tm:'대전TM'};
+  el.innerHTML = _msgState.recipients.map(r=>`
+    <span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:var(--navy);color:#fff;border-radius:12px;font-size:11px;font-weight:600">
+      ${esc(r.name)}${r.role?` <span style="opacity:.7;font-size:9px">[${esc(roleLabel[r.role]||r.role)}]</span>`:''}
+      <span onclick="msgRemoveRecipient('${esc(r.id)}')" style="cursor:pointer;font-weight:700;padding:0 2px;opacity:.8" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.8">×</span>
+    </span>
+  `).join('');
+}
+
+// ── 발송 ──────────────────────────────────────────
+async function sendMessage(){
+  if(!curUser){ showToast('로그인이 필요합니다','error'); return; }
+  const recipients = _msgState.recipients;
+  const subject = (document.getElementById('msg-compose-subject')?.value||'').trim();
+  const content = (document.getElementById('msg-compose-content')?.value||'').trim();
+  const parentId = document.getElementById('msg-compose-parent-id')?.value || '';
+  const threadRoot = document.getElementById('msg-compose-thread-root')?.value || '';
+
+  if(recipients.length===0){ showToast('받는 사람을 1명 이상 선택하세요','error'); return; }
+  if(!subject){ showToast('제목을 입력하세요','error'); return; }
+  if(!content){ showToast('내용을 입력하세요','error'); return; }
+  if(recipients.length > 50){ showToast('수신자는 최대 50명까지 가능합니다','error'); return; }
+
+  const senderId = curUser.id || curUser.name;
+  const senderName = curUser.name || curUser.id;
+  const senderRole = curUser.role || '';
+  const nowIso = new Date().toISOString();
+  const rootId = threadRoot || (parentId || null);
+
+  // 수신자별 1행씩 INSERT
+  const rows = recipients.map(r=>({
+    id: uuid(),
+    subject, content,
+    sender_id: String(senderId),
+    sender_name: senderName,
+    sender_role: senderRole,
+    recipient_id: String(r.id),
+    recipient_name: r.name,
+    recipient_role: r.role||'',
+    lead_id: null,
+    parent_id: parentId || null,
+    thread_root_id: rootId || null,
+    is_system: false,
+    is_read: false,
+    read_at: null,
+    is_deleted_by_sender: false,
+    is_deleted_by_recipient: false,
+    created_at: nowIso
+  }));
+
+  // 스레드 root_id가 null인 경우(새 스레드) → 첫 행 id로 통일
+  if(!rootId){
+    const root = rows[0].id;
+    rows.forEach(r=>{ r.thread_root_id = root; });
+  }
+
+  let okCount = 0;
+  for(const row of rows){
+    const ok = await _sbInsertMessage(row);
+    if(ok){
+      okCount++;
+      // 즉시 캐시에 반영 (realtime이 늦을 수 있음)
+      if(_msgsCache) _msgsCache.unshift(row);
+    }
+  }
+
+  if(okCount===rows.length){
+    showToast(`📨 ${okCount}명에게 쪽지를 보냈습니다`,'success');
+  }else{
+    showToast(`${okCount}/${rows.length}명 발송 — 일부 실패`,'error');
+  }
+  closeComposeModal();
+  renderMessagesList();
+}
+
+
 function loadSbUi(){
   const c=JSON.parse(localStorage.getItem(SB_CFG_KEY)||'null');
   const u=document.getElementById('sb-url'),k=document.getElementById('sb-key');
@@ -14117,8 +14755,54 @@ async function tmNotifyLeaders(){
       }catch(e){}
     }
 
+    // 💌 쪽지 자동 생성 — 같은 내용을 팀장에게 1:1 쪽지로도 전달 (답장 가능한 통로)
+    try{
+      const accs = (typeof getAccs==='function') ? getAccs() : [];
+      const senderId = curUser?.id || curUser?.name || '대전TM';
+      const senderName = curUser?.name || '대전TM';
+      const senderRole = curUser?.role || 'tm';
+      const msgSubject = '📞 [대전TM 알림] '+companyName;
+      const msgContent =
+        '대전TM에서 "'+companyName+'" 확인 결과를 공유드립니다.\n\n'+
+        '[고객사] '+companyName+(phone?' ('+phone+')':'')+'\n'+
+        '[대전 확인내용]\n'+bodyMemo+'\n\n'+
+        '※ 이 쪽지에 답장하시면 대전TM에게 직접 전달됩니다.';
+      const nowIso = new Date().toISOString();
+      const msgRows = [];
+      for(const tn of targets){
+        const acc = accs.find(a=>a && (a.name===tn || a.id===tn));
+        const recipientId = acc?.id || tn;
+        const recipientName = acc?.name || tn;
+        const recipientRole = acc?.role || 'team';
+        const newId = uuid();
+        msgRows.push({
+          id: newId,
+          subject: msgSubject,
+          content: msgContent,
+          sender_id: String(senderId),
+          sender_name: senderName,
+          sender_role: senderRole,
+          recipient_id: String(recipientId),
+          recipient_name: recipientName,
+          recipient_role: recipientRole,
+          lead_id: lid,
+          parent_id: null,
+          thread_root_id: newId, // 각 팀장에게 독립 스레드 (1:1 답장)
+          is_system: false,      // 답장 가능
+          is_read: false, read_at: null,
+          is_deleted_by_sender: false, is_deleted_by_recipient: false,
+          created_at: nowIso
+        });
+      }
+      for(const row of msgRows){
+        await _sbInsertMessage(row);
+        if(_msgsCache) _msgsCache.unshift(row);
+      }
+      msgUpdateBadge();
+    }catch(e){ console.warn('tmNotify → message bridge error',e); }
+
     if(typeof renderAdminNoticeList==='function') renderAdminNoticeList();
-    showToast(targets.length+'명 팀장에게 알림 발송 완료 ('+targets.join('·')+')','success');
+    showToast(targets.length+'명 팀장에게 알림+쪽지 발송 완료 ('+targets.join('·')+')','success');
 
     // 메모 입력창 초기화
     if(memoEl) memoEl.value='';
