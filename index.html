@@ -6240,20 +6240,22 @@ const COL_GROUPS={
 // ── 대전TM 컬럼 정의 (전역 앞배치 — tmV2Render 참조 필요) ──────────────
 const TM_COL_LS = 'kbmc_v2_tm_col_vis';
 const TM_COLS = [
-  {k:'company_name', l:'회사명',   w:160, lock:true},
-  {k:'contact_name', l:'신청자',   w:100},
-  {k:'phone',        l:'연락처',   w:120, lock:true},
-  {k:'consult_type', l:'상담유형', w:140},
-  {k:'region',       l:'소재지',   w:90},
-  {k:'branch_name',  l:'지점장',   w:80},
-  {k:'team_name',    l:'팀장',     w:100},
-  {k:'current_stage',l:'진행단계', w:70},
-  {k:'tm_meeting',   l:'미팅일',   w:80},
-  {k:'assigned_at',  l:'배정일',   w:80},
-  {k:'last_content', l:'진행내용', w:200, lock:true},
-  {k:'action_btn',   l:'액션',     w:60,  lock:true},
+  {k:'company_name', l:'회사명',     w:160, lock:true},
+  {k:'contact_name', l:'신청자',     w:100},
+  {k:'phone',        l:'연락처',     w:120, lock:true},
+  {k:'consult_type', l:'상담유형',   w:140},
+  {k:'region',       l:'소재지',     w:90},
+  {k:'branch_name',  l:'지점장',     w:80},
+  {k:'team_name',    l:'팀장',       w:100},
+  {k:'current_stage',l:'진행단계',   w:70},
+  {k:'tm_meeting',   l:'미팅일',     w:80},
+  {k:'assigned_at',  l:'배정일',     w:80},
+  {k:'recall_at',    l:'회수일',     w:80},
+  {k:'tm_trans_at',  l:'직접이관일', w:90},
+  {k:'last_content', l:'진행내용',   w:200, lock:true},
+  {k:'action_btn',   l:'액션',       w:60,  lock:true},
 ];
-const TM_DEFAULT_COLS = ['company_name','contact_name','phone','consult_type','region','branch_name','team_name','current_stage','tm_meeting','assigned_at','last_content','action_btn'];
+const TM_DEFAULT_COLS = ['company_name','contact_name','phone','consult_type','region','branch_name','team_name','current_stage','tm_meeting','assigned_at','recall_at','tm_trans_at','last_content','action_btn'];
 function getTmVisCols(){
   try{const v=JSON.parse(localStorage.getItem(TM_COL_LS));if(v&&Array.isArray(v))return v;}catch(e){}
   return [...TM_DEFAULT_COLS];
@@ -13947,6 +13949,27 @@ function tmV2Render(){
       current_stage:`<td style="padding:9px 10px">${stageBadgeHtml}</td>`,
       tm_meeting:   `<td style="padding:9px 10px">${meetingDisp}</td>`,
       assigned_at:  `<td style="font-size:11px;color:var(--gray-400);padding:9px 10px">${fmtShort(l.assigned_at||l.created_at)}</td>`,
+      recall_at:    (function(){
+        // 회수일: auto_recall_at이 있고 auto_recalled=true인 건만
+        const isRecalled = (l.auto_recalled===true||l.auto_recalled==='true');
+        if(isRecalled && l.auto_recall_at){
+          return `<td style="font-size:11px;color:var(--warn);font-weight:700;padding:9px 10px" title="자동/수동 회수로 대전TM에 이관된 시점">${fmtShort(l.auto_recall_at)}</td>`;
+        }
+        return `<td style="font-size:11px;color:var(--gray-300);padding:9px 10px">-</td>`;
+      })(),
+      tm_trans_at:  (function(){
+        // 직접이관일: tm_transferred=true이고 회수건이 아닌 건
+        const isTm = (l.tm_transferred===true||l.tm_transferred==='true');
+        const isRecalled = (l.auto_recalled===true||l.auto_recalled==='true');
+        if(!isTm || isRecalled){
+          return `<td style="font-size:11px;color:var(--gray-300);padding:9px 10px">-</td>`;
+        }
+        // 우선순위: tm_transferred_at > assigned_at (레거시 fallback)
+        const ts = l.tm_transferred_at || l.assigned_at;
+        if(!ts) return `<td style="font-size:11px;color:var(--gray-300);padding:9px 10px">-</td>`;
+        const isLegacy = !l.tm_transferred_at; // fallback 사용 시 표시
+        return `<td style="font-size:11px;color:var(--blue);font-weight:700;padding:9px 10px" title="${isLegacy?'레거시 데이터: 정확한 이관일자가 기록되지 않아 배정일을 표시 (이번 패치 이후 이관건부터 정확히 기록됨)':'팀장이 직접 대전TM으로 이관한 시점'}">${fmtShort(ts)}${isLegacy?' <span style=\"font-size:9px;color:var(--gray-300);font-weight:500\">*</span>':''}</td>`;
+      })(),
       last_content: `<td style="font-size:11px;color:var(--gray-600);padding:9px 10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(lastContent.slice(0,50)||'-')}</td>`,
       action_btn:   `<td style="padding:9px 10px" onclick="event.stopPropagation()">${actionBtn}</td>`,
     };
@@ -15371,6 +15394,7 @@ async function saveTmRecord(){
       reminder_memo:rMemo,
       reminder_source:curUser?.name||'',
       tm_transferred:true,
+      tm_transferred_at:new Date().toISOString(),
       collab_branches:JSON.stringify(cb)
     };
     await dbU('leads', lid, rData);
@@ -17806,7 +17830,8 @@ async function confirmDistribute(){
       } else if(_recallType==='daejeon'){
         // 대전TM 이관 = 새로운 배정 → distributed_at 갱신 + 재배정 로그
         const _r=_buildRedistUpdate(id);
-        const u={team_name:'',branch_name:'대전',tm_transferred:true,assigned_at:new Date().toISOString(),distributed_at:_r.distributed_at};
+        const _now=new Date().toISOString();
+        const u={team_name:'',branch_name:'대전',tm_transferred:true,tm_transferred_at:_now,assigned_at:_now,distributed_at:_r.distributed_at};
         if(allLeads){const i=allLeads.findIndex(r=>r.id===id);if(i>=0)allLeads[i]={...allLeads[i],...u};}
         return [
           dbU('leads',id,u),
@@ -17825,7 +17850,8 @@ async function confirmDistribute(){
     closeOv('ov-distribute'); clearSel();
     await Promise.all(ids.flatMap(id=>{
       const _r=_buildRedistUpdate(id);
-      const djData={branch_name:'대전',team_name:'대전센터',tm_transferred:true,assigned_at:new Date().toISOString(),distributed_at:_r.distributed_at};
+      const _now=new Date().toISOString();
+      const djData={branch_name:'대전',team_name:'대전센터',tm_transferred:true,tm_transferred_at:_now,assigned_at:_now,distributed_at:_r.distributed_at};
       if(allLeads){const i=allLeads.findIndex(r=>r.id===id);if(i>=0)allLeads[i]={...allLeads[i],...djData};}
       return [
         dbU('leads',id,djData),
@@ -17844,13 +17870,15 @@ async function confirmDistribute(){
       const acts=(allActivities||[]).filter(a=>a.lead_id===id&&a.type!=='assign').slice(0,3);
       const summary=acts.map(a=>`[${a.author}] ${(a.content||'').slice(0,40)}`).join(' / ')||'진행내용 없음';
       const _r=_buildRedistUpdate(id);
+      const _nowHc=new Date().toISOString();
       const hcUpdate={
         branch_name:'대전',team_name:'대전센터',
         tm_transferred:true,
+        tm_transferred_at:_nowHc,
         tm_happycall:summary,
         happycall_date:hcDateStr,
         happycall_done:false,
-        assigned_at:new Date().toISOString(),
+        assigned_at:_nowHc,
         distributed_at:_r.distributed_at
       };
       await dbU('leads',id,hcUpdate);
@@ -17882,6 +17910,7 @@ async function confirmDistribute(){
         reminder_memo:rMemo,
         reminder_source:rSource,
         tm_transferred:true,
+        tm_transferred_at:new Date().toISOString(),
         collab_branches:JSON.stringify(cb)
       };
       await dbU('leads',id,rData);
@@ -17899,7 +17928,8 @@ async function confirmDistribute(){
     showToast(`${ids.length}건 대전TM 배정 중...`,'success');
     await Promise.all(ids.flatMap(id=>{
       const _r=_buildRedistUpdate(id);
-      const tmData={branch_name:'대전',team_name:'대전센터',tm_transferred:true,assigned_at:new Date().toISOString(),status:'assigned',yj_transferred:false,distributed_at:_r.distributed_at};
+      const _nowTd=new Date().toISOString();
+      const tmData={branch_name:'대전',team_name:'대전센터',tm_transferred:true,tm_transferred_at:_nowTd,assigned_at:_nowTd,status:'assigned',yj_transferred:false,distributed_at:_r.distributed_at};
       if(allLeads){const i=allLeads.findIndex(r=>r.id===id);if(i>=0)allLeads[i]={...allLeads[i],...tmData};}
       return [
         dbU('leads',id,tmData),
