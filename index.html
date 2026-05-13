@@ -2228,9 +2228,10 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
       </div>
     </div>
     <div style="flex-shrink:0;display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-top:1px solid var(--gray-100)">
-      <div style="display:flex;gap:6px">
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn btn-outline btn-sm" id="ldetail-edit-btn" onclick="openLDetailEdit()">✏️ 고객정보 수정</button>
         <button class="btn btn-primary btn-sm" id="ldetail-act-btn" onclick="openLDetailAct()">💬 활동기록</button>
+        <button class="btn btn-outline btn-sm" id="ldetail-tm-revert-btn" style="display:none;color:var(--warn);border-color:var(--warn);font-weight:700" onclick="openTmRevertModal()" title="대전TM으로 이관된 이 DB를 원래 지점·팀장에게 되돌립니다 (관리자 전용)">↩ 이관 원복</button>
       </div>
       <button class="btn btn-outline" onclick="closeM('modal-lead-detail')">닫기</button>
     </div>
@@ -2894,6 +2895,40 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
       <div style="display:flex;justify-content:flex-end;gap:8px">
         <button class="btn btn-outline btn-sm" onclick="closeComposeModal()">취소</button>
         <button class="btn btn-sm" style="background:var(--navy);color:#fff;border-color:var(--navy)" onclick="sendMessage()">📨 보내기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 이관 원복 모달 (관리자 전용) ═══ -->
+<div class="modal-overlay" id="modal-tm-revert">
+  <div class="modal-content" style="max-width:520px">
+    <div class="mh">
+      <div class="mt">↩ 대전TM 이관 원복</div>
+      <button class="mc" onclick="closeM('modal-tm-revert')">✕</button>
+    </div>
+    <div class="mb" style="padding:20px">
+      <div id="tm-revert-summary" style="margin-bottom:14px;padding:12px 14px;background:#fef9f3;border:1px solid #f3d9b8;border-radius:8px;font-size:12px;line-height:1.7;color:var(--gray-700)"></div>
+
+      <div id="tm-revert-target" style="margin-bottom:14px;padding:12px 14px;background:#eef3f9;border:1px solid #c7ddf2;border-radius:8px;font-size:12px;line-height:1.7;color:var(--gray-700)"></div>
+
+      <div style="margin-bottom:14px">
+        <label style="display:block;font-size:12px;font-weight:700;color:var(--gray-500);margin-bottom:6px">원복 사유 <span style="color:var(--err)">*</span></label>
+        <textarea id="tm-revert-reason" rows="3" placeholder="예) 잘못 이관된 건. 원래 담당자가 진행 중인 건으로 확인됨."
+          style="width:100%;padding:10px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px;font-family:inherit;resize:vertical"></textarea>
+      </div>
+
+      <div style="background:#fffaf0;border-left:3px solid var(--warn);padding:10px 12px;border-radius:6px;margin-bottom:14px;font-size:11px;color:var(--gray-700);line-height:1.6">
+        ⚠️ <strong>원복 시 처리 내용</strong><br>
+        · 지점·팀장이 이관 직전 상태로 복원됨<br>
+        · 대전TM 화면에서 사라지고 원래 팀장 화면에 다시 표시됨<br>
+        · 활동기록(통화·미팅)과 진행단계는 그대로 유지됨<br>
+        · 활동로그에 원복 이력이 기록됨
+      </div>
+
+      <div style="display:flex;justify-content:flex-end;gap:8px">
+        <button class="btn btn-outline btn-sm" onclick="closeM('modal-tm-revert')">취소</button>
+        <button class="btn btn-sm" style="background:var(--warn);color:#fff;border-color:var(--warn)" onclick="confirmTmRevert()">↩ 원복 처리</button>
       </div>
     </div>
   </div>
@@ -6782,6 +6817,25 @@ async function openPanel(lead){
   const actBtn  = document.getElementById('ldetail-act-btn');
   if(editBtn) editBtn.style.display = ['team','branch','admin','dbmanager'].includes(curUser?.role)?'':'none';
   if(actBtn)  actBtn.style.display  = ['team','branch','admin','dbmanager'].includes(curUser?.role)?'':'none';
+
+  // 이관 원복 버튼 — 관리자만 + 대전TM에 있는 건 + 원복 가능한 스냅샷 또는 fallback 정보 존재
+  const revertBtn = document.getElementById('ldetail-tm-revert-btn');
+  if(revertBtn){
+    const isAdmin = curUser?.role==='admin';
+    const isInTm = (lead.tm_transferred===true||lead.tm_transferred==='true') ||
+                   lead.branch_name==='대전' || lead.branch_name==='대전TM';
+    let canRevert = false;
+    if(isAdmin && isInTm){
+      // 스냅샷 있으면 무조건 OK
+      if(lead.pre_tm_snapshot){ canRevert = true; }
+      else {
+        // 스냅샷 없는 레거시 건 — 활동로그 'assign'에서 원래 지점 추정 가능한지 체크는 복원시 처리
+        // 일단 버튼은 보여주고 복원 시 fallback 안내
+        canRevert = true;
+      }
+    }
+    revertBtn.style.display = canRevert ? '' : 'none';
+  }
 
   // ── 고객정보 탭 렌더
   _renderLDetailInfo(lead);
@@ -11351,6 +11405,225 @@ function djRenderPostmanage(s){
 // ═══════════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════════
+// ↩ 대전TM 이관 원복 시스템 (관리자 전용)
+// — 본사→대전 이관 시점에 pre_tm_snapshot(JSON)을 저장
+// — 관리자가 원복 시 스냅샷 복원 + 활동로그 + 스냅샷 클리어
+// ═══════════════════════════════════════════════════════════
+
+// 이관 직전 스냅샷 빌드 — 핵심 필드만 직렬화
+function _buildPreTmSnapshot(lead){
+  if(!lead) return null;
+  const keys = ['branch_name','team_name','team_names','current_stage','status',
+                'collab_branches','distributed_at','assigned_at',
+                'auto_recalled','auto_recall_at','auto_recall_reason','registered_by'];
+  const snap = {};
+  keys.forEach(k=>{
+    if(lead[k]!==undefined) snap[k] = lead[k];
+  });
+  snap._snapshot_at = new Date().toISOString();
+  snap._snapshot_by = curUser?.name || '';
+  return JSON.stringify(snap);
+}
+
+// 이관 패치에 스냅샷 자동 첨부 (이미 스냅샷이 있으면 덮어쓰지 않음 — 첫 이관 상태 보존)
+function _attachPreTmSnapshot(lead, patch){
+  if(!lead || !patch) return patch;
+  // 이미 대전TM에 있던 건이거나 스냅샷이 있으면 그대로
+  const wasInTm = (lead.tm_transferred===true||lead.tm_transferred==='true') ||
+                  lead.branch_name==='대전' || lead.branch_name==='대전TM';
+  if(wasInTm) return patch; // 이미 대전 — 새 스냅샷 안 만듦
+  if(lead.pre_tm_snapshot) return patch; // 기존 스냅샷 보존
+  patch.pre_tm_snapshot = _buildPreTmSnapshot(lead);
+  return patch;
+}
+
+// 원복 모달 열기
+function openTmRevertModal(){
+  if(curUser?.role !== 'admin'){
+    showToast('관리자만 가능합니다','error');
+    return;
+  }
+  const lead = window._panelLead;
+  if(!lead){ showToast('리드 정보를 찾을 수 없습니다','error'); return; }
+
+  // 요약 영역
+  const summary = document.getElementById('tm-revert-summary');
+  const target = document.getElementById('tm-revert-target');
+  const reasonInput = document.getElementById('tm-revert-reason');
+  if(reasonInput) reasonInput.value = '';
+
+  const isInTm = (lead.tm_transferred===true||lead.tm_transferred==='true') ||
+                 lead.branch_name==='대전' || lead.branch_name==='대전TM';
+  if(!isInTm){
+    showToast('이 DB는 대전TM에 이관된 상태가 아닙니다','error');
+    return;
+  }
+
+  let snap = null;
+  try{ if(lead.pre_tm_snapshot) snap = JSON.parse(lead.pre_tm_snapshot); }catch(e){}
+
+  // 요약: 현재 상태
+  if(summary){
+    summary.innerHTML = `
+      <strong style="color:var(--gray-700)">📋 현재 상태 (대전TM)</strong><br>
+      회사명: <strong>${esc(lead.company_name||'-')}</strong><br>
+      현재 지점: ${esc(lead.branch_name||'-')} / ${esc(lead.team_name||'-')}<br>
+      진행단계: <strong>${esc(lead.current_stage||'-')}</strong>${lead.auto_recalled?' · <span style="color:var(--warn);font-weight:700">⚠️ 회수건</span>':''}
+    `;
+  }
+
+  // 복귀 대상
+  if(target){
+    if(snap){
+      const stageInfo = snap.current_stage ? ` · 단계 <strong>${esc(snap.current_stage)}</strong>` : '';
+      target.innerHTML = `
+        <strong style="color:var(--navy)">↩ 복귀 대상 (이관 직전 상태)</strong><br>
+        지점: <strong>${esc(snap.branch_name||'-')}</strong> / 팀장: <strong>${esc(snap.team_name||'-')}</strong>${stageInfo}<br>
+        <span style="font-size:10px;color:var(--gray-400)">스냅샷 시각: ${esc((snap._snapshot_at||'').slice(0,16).replace('T',' '))}${snap._snapshot_by?` · ${esc(snap._snapshot_by)}`:''}</span>
+      `;
+    } else {
+      // 스냅샷 없음 — 활동로그 fallback 시도
+      const fallback = _guessOriginalAssignment(lead);
+      if(fallback){
+        target.innerHTML = `
+          <strong style="color:var(--warn)">⚠️ 스냅샷 없음 — 활동기록 기반 추정</strong><br>
+          추정 지점: <strong>${esc(fallback.branch_name||'-')}</strong> / 팀장: <strong>${esc(fallback.team_name||'-')}</strong><br>
+          <span style="font-size:10px;color:var(--gray-400)">레거시 이관건이라 정확한 이관 직전 상태가 없습니다. 활동로그의 가장 최근 본사 배정 기록을 기준으로 복귀합니다. 다를 경우 복원 후 수동 재배정이 필요합니다.</span>
+        `;
+      } else {
+        target.innerHTML = `
+          <strong style="color:var(--err)">❌ 복귀 정보를 찾을 수 없습니다</strong><br>
+          스냅샷도 없고, 활동로그에서 이전 배정 기록도 찾지 못했습니다.<br>
+          <span style="font-size:10px;color:var(--gray-400)">이 경우 원복 시 미배정 상태로 되돌립니다. 이후 관리자가 수동으로 재배정해야 합니다.</span>
+        `;
+      }
+    }
+  }
+
+  document.getElementById('modal-tm-revert').classList.add('active');
+}
+
+// 활동로그 fallback — 가장 최근 본사 배정 기록에서 지점/팀장 추정
+function _guessOriginalAssignment(lead){
+  if(!lead) return null;
+  const acts = (allActivities||[]).filter(a=>a.lead_id===lead.id && a.type==='assign')
+                                   .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  // 가장 최근 → 과거 순으로 훑으며 '대전TM/대전센터'가 아닌 배정 찾기
+  for(const a of acts){
+    const c = String(a.content||'');
+    // 활동로그 패턴 예: "○○ 지점장 / ○○ 팀장 배정", "팀장 회수 후 대전TM 이관", etc.
+    if(c.includes('대전TM') || c.includes('대전센터') || c.includes('대전 ')) continue;
+    // 단순 매칭 — 지점장 이름 추출 시도
+    // BRANCHES 상수와 매칭
+    if(typeof BRANCHES==='undefined' || !Array.isArray(BRANCHES)) break;
+    for(const b of BRANCHES){
+      if(c.includes(b)){
+        return {branch_name:b, team_name:''}; // 팀장 정확히는 추출 어려우므로 지점만
+      }
+    }
+  }
+  return null;
+}
+
+// 원복 처리 확정
+async function confirmTmRevert(){
+  if(curUser?.role !== 'admin'){ showToast('관리자만 가능합니다','error'); return; }
+  const lead = window._panelLead;
+  if(!lead){ showToast('리드 정보를 찾을 수 없습니다','error'); return; }
+
+  const reasonEl = document.getElementById('tm-revert-reason');
+  const reason = (reasonEl?.value||'').trim();
+  if(!reason){
+    showToast('원복 사유를 입력해주세요','error');
+    reasonEl?.focus();
+    return;
+  }
+
+  let snap = null;
+  try{ if(lead.pre_tm_snapshot) snap = JSON.parse(lead.pre_tm_snapshot); }catch(e){}
+
+  // 복원 데이터 구성
+  let restore = {};
+  let source = '';
+  if(snap){
+    // 스냅샷 우선
+    ['branch_name','team_name','team_names','current_stage','status',
+     'collab_branches','distributed_at','assigned_at',
+     'auto_recalled','auto_recall_at','auto_recall_reason','registered_by'].forEach(k=>{
+      if(snap[k]!==undefined) restore[k] = snap[k];
+    });
+    source = '스냅샷';
+  } else {
+    // fallback
+    const guess = _guessOriginalAssignment(lead);
+    if(guess){
+      restore.branch_name = guess.branch_name;
+      restore.team_name = guess.team_name || '';
+      restore.team_names = guess.team_name ? JSON.stringify([guess.team_name]) : '';
+      source = '활동로그 추정';
+    } else {
+      // 미배정 풀로
+      restore.branch_name = '';
+      restore.team_name = '';
+      restore.team_names = '';
+      source = '미배정 풀 복귀';
+    }
+  }
+
+  // 대전TM 관련 플래그 클리어
+  restore.tm_transferred = false;
+  restore.tm_transferred_at = null;
+  restore.tm_hq_transferred = false;
+  restore.pre_tm_snapshot = null; // 스냅샷 클리어 (재이관 시 새로 저장)
+  // 회수 관련은 스냅샷에 따라 복원되었으므로 추가 처리 불필요
+  // collab_branches가 스냅샷에 없었으면 null로 (이관 시 추가된 '대전TM'이 잔류 안 하도록)
+  if(snap && snap.collab_branches===undefined){
+    restore.collab_branches = null;
+  } else if(!snap){
+    restore.collab_branches = null;
+  }
+  // 리마인드 이관 관련 필드도 클리어
+  restore.reminder_date = null;
+  restore.reminder_memo = null;
+  restore.reminder_source = null;
+
+  try{
+    if(typeof dbU!=='function'){ showToast('DB 업데이트 함수를 찾을 수 없습니다','error'); return; }
+    await dbU('leads', lead.id, restore);
+
+    // 캐시 갱신
+    if(allLeads){
+      const i = allLeads.findIndex(l=>l.id===lead.id);
+      if(i>=0) allLeads[i] = {...allLeads[i], ...restore};
+    }
+
+    // 활동로그
+    const logContent = `↩ [대전TM 이관 원복] 복귀 대상: ${restore.branch_name||'(미배정)'}${restore.team_name?' / '+restore.team_name:''} · 사유: ${reason} · 출처: ${source}`;
+    if(typeof logActivity==='function'){
+      try{ await logActivity(lead.id,'assign',logContent,'',''); }catch(e){}
+    }
+
+    closeM('modal-tm-revert');
+    showToast(`✅ 이관 원복 완료 — ${restore.branch_name||'(미배정)'}${restore.team_name?' / '+restore.team_name:''}`,'success');
+
+    // 패널 새로고침
+    const updated = (allLeads||[]).find(l=>l.id===lead.id);
+    if(updated && typeof openPanel==='function') openPanel(updated);
+
+    // 목록 새로고침
+    if(typeof filterLeads==='function') filterLeads();
+    if(typeof updateLeadsSubTabCounts==='function') updateLeadsSubTabCounts();
+  }catch(e){
+    console.error('confirmTmRevert error',e);
+    showToast('원복 처리 중 오류 발생: '+(e.message||e),'error');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// END 대전TM 이관 원복 시스템
+// ═══════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════
 // 💌 쪽지(Messages) 시스템 — 전사 1:1 (복수 수신자 지원)
 // 스키마: messages(id, subject, content, sender_id/name/role,
 //   recipient_id/name/role, lead_id, parent_id, thread_root_id,
@@ -15389,7 +15662,7 @@ async function saveTmRecord(){
     let cb=[];
     try{cb=JSON.parse(lead?.collab_branches||'[]');}catch(e){cb=[];}
     if(!cb.includes('대전TM')) cb.push('대전TM');
-    const rData={
+    let rData={
       reminder_date:rDate,
       reminder_memo:rMemo,
       reminder_source:curUser?.name||'',
@@ -15397,6 +15670,7 @@ async function saveTmRecord(){
       tm_transferred_at:new Date().toISOString(),
       collab_branches:JSON.stringify(cb)
     };
+    if(lead) rData = _attachPreTmSnapshot(lead, rData);
     await dbU('leads', lid, rData);
     await logActivity(lid,'note',`⏰ [리마인드 이관] ${rDate} 재콜 예정${rMemo?' — '+rMemo:''}`,'','');
     if(allLeads){
@@ -17129,7 +17403,9 @@ async function rcRecallOne(id){
   if(!t){showToast('대상 없음','error');return;}
   if(!confirm(`"${t.company_name||''}" 을(를) 회수하고 대전TM으로 이관하시겠습니까?`)) return;
   try{
-    const patch=_rcBuildPatch(t._rcReason?.text);
+    const lead = (allLeads||[]).find(x=>x.id===id);
+    let patch=_rcBuildPatch(t._rcReason?.text);
+    if(lead) patch = _attachPreTmSnapshot(lead, patch);
     await dbU('leads',id,patch);
     await logActivity(id,'assign','회수 → 대전TM 이관 ('+(t._rcReason?.text||')'),'assigned','');
     if(allLeads){const i=allLeads.findIndex(x=>x.id===id);if(i>=0)allLeads[i]={...allLeads[i],...patch};}
@@ -17162,7 +17438,9 @@ async function rcRecallSelected(){
   try{
     for(const id of ids){
       const t=_rcTargets.find(x=>x.id===id);
-      const patch=_rcBuildPatch(t?._rcReason?.text);
+      const lead = (allLeads||[]).find(x=>x.id===id);
+      let patch=_rcBuildPatch(t?._rcReason?.text);
+      if(lead) patch = _attachPreTmSnapshot(lead, patch);
       await dbU('leads',id,patch);
       await logActivity(id,'assign','일괄 회수 → 대전TM 이관 ('+(t?._rcReason?.text||')'),'assigned','');
       if(allLeads){const i=allLeads.findIndex(x=>x.id===id);if(i>=0)allLeads[i]={...allLeads[i],...patch};}
@@ -17831,7 +18109,9 @@ async function confirmDistribute(){
         // 대전TM 이관 = 새로운 배정 → distributed_at 갱신 + 재배정 로그
         const _r=_buildRedistUpdate(id);
         const _now=new Date().toISOString();
-        const u={team_name:'',branch_name:'대전',tm_transferred:true,tm_transferred_at:_now,assigned_at:_now,distributed_at:_r.distributed_at};
+        const _lead = (allLeads||[]).find(r=>r.id===id);
+        let u={team_name:'',branch_name:'대전',tm_transferred:true,tm_transferred_at:_now,assigned_at:_now,distributed_at:_r.distributed_at};
+        if(_lead) u = _attachPreTmSnapshot(_lead, u);
         if(allLeads){const i=allLeads.findIndex(r=>r.id===id);if(i>=0)allLeads[i]={...allLeads[i],...u};}
         return [
           dbU('leads',id,u),
@@ -17851,7 +18131,9 @@ async function confirmDistribute(){
     await Promise.all(ids.flatMap(id=>{
       const _r=_buildRedistUpdate(id);
       const _now=new Date().toISOString();
-      const djData={branch_name:'대전',team_name:'대전센터',tm_transferred:true,tm_transferred_at:_now,assigned_at:_now,distributed_at:_r.distributed_at};
+      const _lead = (allLeads||[]).find(r=>r.id===id);
+      let djData={branch_name:'대전',team_name:'대전센터',tm_transferred:true,tm_transferred_at:_now,assigned_at:_now,distributed_at:_r.distributed_at};
+      if(_lead) djData = _attachPreTmSnapshot(_lead, djData);
       if(allLeads){const i=allLeads.findIndex(r=>r.id===id);if(i>=0)allLeads[i]={...allLeads[i],...djData};}
       return [
         dbU('leads',id,djData),
@@ -17871,7 +18153,8 @@ async function confirmDistribute(){
       const summary=acts.map(a=>`[${a.author}] ${(a.content||'').slice(0,40)}`).join(' / ')||'진행내용 없음';
       const _r=_buildRedistUpdate(id);
       const _nowHc=new Date().toISOString();
-      const hcUpdate={
+      const _lead = (allLeads||[]).find(r=>r.id===id);
+      let hcUpdate={
         branch_name:'대전',team_name:'대전센터',
         tm_transferred:true,
         tm_transferred_at:_nowHc,
@@ -17881,6 +18164,7 @@ async function confirmDistribute(){
         assigned_at:_nowHc,
         distributed_at:_r.distributed_at
       };
+      if(_lead) hcUpdate = _attachPreTmSnapshot(_lead, hcUpdate);
       await dbU('leads',id,hcUpdate);
       if(allLeads){const i=allLeads.findIndex(r=>r.id===id);if(i>=0)allLeads[i]={...allLeads[i],...hcUpdate};}
       await logActivity(id,'assign',`해피콜 이관 — 예정일 ${hcDateStr}`+(note?' ('+note+')':''),'','');
@@ -17905,7 +18189,7 @@ async function confirmDistribute(){
       let cb=[];
       try{cb=JSON.parse(lead.collab_branches||'[]');}catch(e){cb=[];}
       if(!cb.includes('대전TM')) cb.push('대전TM');
-      const rData={
+      let rData={
         reminder_date:rDate,
         reminder_memo:rMemo,
         reminder_source:rSource,
@@ -17913,6 +18197,7 @@ async function confirmDistribute(){
         tm_transferred_at:new Date().toISOString(),
         collab_branches:JSON.stringify(cb)
       };
+      rData = _attachPreTmSnapshot(lead, rData);
       await dbU('leads',id,rData);
       await logActivity(id,'note',`⏰ [리마인드 이관] ${rDate} 재콜 예정${rMemo?' — '+rMemo:''}`,'','');
       if(allLeads){const i=allLeads.findIndex(r=>r.id===id);if(i>=0)allLeads[i]={...allLeads[i],...rData};}
@@ -17929,7 +18214,9 @@ async function confirmDistribute(){
     await Promise.all(ids.flatMap(id=>{
       const _r=_buildRedistUpdate(id);
       const _nowTd=new Date().toISOString();
-      const tmData={branch_name:'대전',team_name:'대전센터',tm_transferred:true,tm_transferred_at:_nowTd,assigned_at:_nowTd,status:'assigned',yj_transferred:false,distributed_at:_r.distributed_at};
+      const _lead = (allLeads||[]).find(r=>r.id===id);
+      let tmData={branch_name:'대전',team_name:'대전센터',tm_transferred:true,tm_transferred_at:_nowTd,assigned_at:_nowTd,status:'assigned',yj_transferred:false,distributed_at:_r.distributed_at};
+      if(_lead) tmData = _attachPreTmSnapshot(_lead, tmData);
       if(allLeads){const i=allLeads.findIndex(r=>r.id===id);if(i>=0)allLeads[i]={...allLeads[i],...tmData};}
       return [
         dbU('leads',id,tmData),
