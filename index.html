@@ -11809,7 +11809,8 @@ async function rvLoadData(){
   const container = document.getElementById('revert-body');
   if(container) container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--gray-400);font-size:13px">📡 불러오는 중...</div>';
 
-  // 조건: 현재 대전TM에 있고 (tm_transferred=true 또는 branch_name='대전'/'대전TM')
+  // 조건: 현재 대전TM에 있는 모든 건 (활동로그 분석은 행 렌더 시 수행)
+  // 본사 배정 이력 유무는 _rvGetOriginInfo가 판별 — 여기서는 제외하지 않음
   const all = (allLeads||[]).filter(l=>{
     if(!l) return false;
     const st = String(l.status||'');
@@ -11817,10 +11818,6 @@ async function rvLoadData(){
     const isInTm = (l.tm_transferred===true||l.tm_transferred==='true') ||
                    l.branch_name==='대전' || l.branch_name==='대전TM';
     if(!isInTm) return false;
-    // 대전TM이 직접 등록한 신규 건(유형 B)은 제외 — 본사 이관 이력 없음
-    if(l.registered_by==='대전TM' && !(l.auto_recalled===true||l.auto_recalled==='true')){
-      return false;
-    }
     return true;
   });
 
@@ -11923,8 +11920,22 @@ function rvRender(){
   const cntEl = document.getElementById('rmt-revert-cnt');
   if(cntEl) cntEl.textContent = rows.length>0 ? `(${rows.length})` : '';
 
+  // 진단 정보 — 전체 대전TM 건수 대비 현재 필터 통과 건수 + 자동복원 가능 여부
+  const totalRvData = (_rvData||[]).length;
+  let autoOkCnt = 0, manualCnt = 0;
+  rows.forEach(l=>{
+    const o = _rvGetOriginInfo(l);
+    if(o.hasOrigin) autoOkCnt++; else manualCnt++;
+  });
+  const diagInfo = `<div style="font-size:11px;color:var(--gray-400);padding:6px 12px;margin-bottom:6px;background:#fafbfd;border:1px solid var(--gray-100);border-radius:6px">
+    📊 전체 대전TM <strong style="color:var(--gray-700)">${totalRvData}건</strong> ·
+    필터 통과 <strong style="color:var(--navy)">${rows.length}건</strong>
+    ${totalRvData>rows.length?`<span style="color:var(--gray-400)"> (${totalRvData-rows.length}건 필터 제외)</span>`:''}
+    ${rows.length>0?` · 자동복원 가능 <strong style="color:var(--ok)">${autoOkCnt}건</strong>${manualCnt>0?` · 수동재배정 필요 <strong style="color:var(--warn)">${manualCnt}건</strong>`:''}`:''}
+  </div>`;
+
   if(rows.length===0){
-    container.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--gray-300);font-size:13px">📂 조건에 맞는 대전 이관 건이 없습니다</div>';
+    container.innerHTML = diagInfo + '<div style="text-align:center;padding:60px 20px;color:var(--gray-300);font-size:13px">📂 조건에 맞는 대전 이관 건이 없습니다<br><span style="font-size:11px">기간 필터를 「전체 기간」으로 바꿔보세요</span></div>';
     return;
   }
 
@@ -11943,7 +11954,7 @@ function rvRender(){
   });
   const dayKeys = Object.keys(groups).sort().reverse();
 
-  let html = '';
+  let html = diagInfo;
   dayKeys.forEach(day=>{
     const list = groups[day];
     const dayLabel = day || '(일자 미상)';
