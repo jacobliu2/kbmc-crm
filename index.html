@@ -1317,8 +1317,8 @@ tbody tr.selected td{background:var(--blue-50)!important}
               <option value="all">전체 기간</option>
               <option value="today">오늘</option>
               <option value="7">최근 7일</option>
-              <option value="30" selected>최근 30일</option>
-              <option value="90">최근 90일</option>
+              <option value="30">최근 30일</option>
+              <option value="90" selected>최근 90일</option>
               <option value="180">최근 180일</option>
             </select>
             <select id="rv-branch" onchange="rvRender()" style="padding:6px 10px;border:1px solid var(--gray-200);border-radius:5px;font-size:12px;font-family:inherit">
@@ -2885,7 +2885,8 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
   <div class="page-header">
     <div class="page-title">💌 쪽지함</div>
     <div style="display:flex;gap:8px;align-items:center">
-      <button class="btn btn-sm" style="background:var(--navy);color:#fff;border-color:var(--navy)" onclick="openComposeModal()" title="새 쪽지 보내기">✏️ 새 쪽지</button>
+      <button class="btn btn-sm" style="background:var(--navy);color:#fff;border-color:var(--navy)" onclick="openComposeModal()" title="1:1 쪽지 보내기">✏️ 새 쪽지</button>
+      <button id="msg-new-announcement-btn" class="btn btn-sm" style="display:none;background:#f59e0b;color:#fff;border-color:#f59e0b" onclick="openAnnouncementModal()" title="관리자 전용: 전체/역할별/지점별 공지">📢 새 공지</button>
       <button class="btn btn-outline btn-sm" onclick="loadMessages()" title="Supabase에서 다시 불러오기">🔄 새로고침</button>
     </div>
   </div>
@@ -2893,8 +2894,10 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
   <div style="background:#fff;border:1px solid var(--gray-200);border-radius:10px;overflow:hidden">
     <!-- 탭 -->
     <div style="display:flex;border-bottom:1px solid var(--gray-200);background:#fafbfd">
-      <button id="msg-tab-inbox" class="msg-tab" onclick="msgSwitchTab('inbox')" style="flex:1;padding:12px 16px;border:none;background:#fff;color:var(--navy);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;border-bottom:3px solid var(--navy)">📥 받은쪽지함 <span id="msg-count-inbox" style="font-size:11px;color:var(--gray-400);margin-left:4px"></span></button>
-      <button id="msg-tab-sent" class="msg-tab" onclick="msgSwitchTab('sent')" style="flex:1;padding:12px 16px;border:none;background:transparent;color:var(--gray-500);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;border-bottom:3px solid transparent">📤 보낸쪽지함 <span id="msg-count-sent" style="font-size:11px;color:var(--gray-400);margin-left:4px"></span></button>
+      <button id="msg-tab-inbox" class="msg-tab" onclick="msgSwitchTab('inbox')" style="flex:1;padding:12px 12px;border:none;background:#fff;color:var(--navy);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;border-bottom:3px solid var(--navy)">📥 받은쪽지 <span id="msg-count-inbox" style="font-size:11px;color:var(--gray-400);margin-left:4px"></span></button>
+      <button id="msg-tab-sent" class="msg-tab" onclick="msgSwitchTab('sent')" style="flex:1;padding:12px 12px;border:none;background:transparent;color:var(--gray-500);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;border-bottom:3px solid transparent">📤 보낸쪽지 <span id="msg-count-sent" style="font-size:11px;color:var(--gray-400);margin-left:4px"></span></button>
+      <button id="msg-tab-noticebox" class="msg-tab" onclick="msgSwitchTab('noticebox')" style="flex:1;padding:12px 12px;border:none;background:transparent;color:var(--gray-500);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;border-bottom:3px solid transparent">📢 공지함 <span id="msg-count-noticebox" style="font-size:11px;color:var(--gray-400);margin-left:4px"></span></button>
+      <button id="msg-tab-sentnotice" class="msg-tab" onclick="msgSwitchTab('sentnotice')" style="display:none;flex:1;padding:12px 12px;border:none;background:transparent;color:var(--gray-500);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;border-bottom:3px solid transparent">📤 보낸공지 <span id="msg-count-sentnotice" style="font-size:11px;color:var(--gray-400);margin-left:4px"></span></button>
     </div>
 
     <!-- 검색 -->
@@ -2912,13 +2915,13 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
     <div id="msg-layout" style="display:grid;grid-template-columns:380px 1fr;min-height:520px">
       <div id="msg-list" style="border-right:1px solid var(--gray-200);max-height:620px;overflow-y:auto"></div>
       <div id="msg-detail" style="padding:20px;overflow-y:auto;max-height:620px">
-        <div style="text-align:center;color:var(--gray-300);padding:80px 20px;font-size:13px">📬 쪽지를 선택하면 여기에 표시됩니다</div>
+        <div style="text-align:center;color:var(--gray-300);padding:80px 20px;font-size:13px">📬 항목을 선택하면 여기에 표시됩니다</div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- ═══ 쪽지 작성 모달 ═══ -->
+<!-- ═══ 쪽지 작성 모달 (1:1) ═══ -->
 <div class="modal-overlay" id="modal-message-compose">
   <div class="modal-content" style="max-width:640px">
     <div class="mh">
@@ -2952,6 +2955,103 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
       <div style="display:flex;justify-content:flex-end;gap:8px">
         <button class="btn btn-outline btn-sm" onclick="closeComposeModal()">취소</button>
         <button class="btn btn-sm" style="background:var(--navy);color:#fff;border-color:var(--navy)" onclick="sendMessage()">📨 보내기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 새 공지 작성 모달 (관리자 전용) ═══ -->
+<div class="modal-overlay" id="modal-announcement-compose">
+  <div class="modal-content" style="max-width:680px">
+    <div class="mh">
+      <div class="mt">📢 새 공지 작성 <span style="font-size:11px;font-weight:500;color:var(--gray-400);margin-left:6px">관리자 전용</span></div>
+      <button class="mc" onclick="closeAnnouncementModal()">✕</button>
+    </div>
+    <div class="mb" style="padding:20px">
+
+      <!-- 대상 선택 -->
+      <div style="margin-bottom:14px">
+        <label style="display:block;font-size:12px;font-weight:700;color:var(--gray-500);margin-bottom:6px">발송 대상 <span style="color:var(--err)">*</span></label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+          <label style="display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border:1.5px solid var(--gray-200);border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">
+            <input type="radio" name="ann-target-type" value="all" checked onchange="annOnTargetTypeChange()">전체
+          </label>
+          <label style="display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border:1.5px solid var(--gray-200);border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">
+            <input type="radio" name="ann-target-type" value="role" onchange="annOnTargetTypeChange()">역할별
+          </label>
+          <label style="display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border:1.5px solid var(--gray-200);border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">
+            <input type="radio" name="ann-target-type" value="branch" onchange="annOnTargetTypeChange()">지점별
+          </label>
+          <label style="display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border:1.5px solid var(--gray-200);border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">
+            <input type="radio" name="ann-target-type" value="custom" onchange="annOnTargetTypeChange()">직접 지정
+          </label>
+        </div>
+
+        <!-- 역할별 옵션 -->
+        <div id="ann-opt-role" style="display:none;padding:10px 12px;background:#fafbfd;border:1px solid var(--gray-200);border-radius:6px;margin-top:6px">
+          <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:12px">
+            <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" class="ann-role-chk" value="dbmanager">DB관리자</label>
+            <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" class="ann-role-chk" value="branch">지점장</label>
+            <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" class="ann-role-chk" value="team">팀장</label>
+            <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" class="ann-role-chk" value="tm">대전TM</label>
+          </div>
+        </div>
+
+        <!-- 지점별 옵션 -->
+        <div id="ann-opt-branch" style="display:none;padding:10px 12px;background:#fafbfd;border:1px solid var(--gray-200);border-radius:6px;margin-top:6px">
+          <div id="ann-branch-checkboxes" style="display:flex;gap:12px;flex-wrap:wrap;font-size:12px"></div>
+        </div>
+
+        <!-- 직접 지정 옵션 -->
+        <div id="ann-opt-custom" style="display:none;padding:10px 12px;background:#fafbfd;border:1px solid var(--gray-200);border-radius:6px;margin-top:6px">
+          <input type="text" id="ann-custom-search" oninput="annFilterCustom()" placeholder="🔍 이름·역할·지점으로 검색"
+            style="width:100%;padding:7px 10px;border:1px solid var(--gray-200);border-radius:5px;font-size:12px;font-family:inherit;margin-bottom:6px">
+          <div id="ann-custom-selected" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px"></div>
+          <div id="ann-custom-list" style="max-height:160px;overflow-y:auto;border:1px solid var(--gray-200);border-radius:5px;background:#fff"></div>
+        </div>
+
+        <!-- 예상 수신자 미리보기 -->
+        <div id="ann-target-preview" style="margin-top:8px;padding:8px 10px;background:#eef3f9;border-left:3px solid var(--navy);border-radius:4px;font-size:11px;color:var(--gray-600)"></div>
+      </div>
+
+      <div style="margin-bottom:14px">
+        <label style="display:block;font-size:12px;font-weight:700;color:var(--gray-500);margin-bottom:6px">제목 <span style="color:var(--err)">*</span></label>
+        <input type="text" id="ann-subject" placeholder="공지 제목"
+          style="width:100%;padding:8px 11px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px;font-family:inherit">
+      </div>
+
+      <div style="margin-bottom:14px">
+        <label style="display:block;font-size:12px;font-weight:700;color:var(--gray-500);margin-bottom:6px">내용 <span style="color:var(--err)">*</span></label>
+        <textarea id="ann-content" rows="8" placeholder="공지 내용"
+          style="width:100%;padding:10px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px;font-family:inherit;resize:vertical"></textarea>
+      </div>
+
+      <div style="background:#fffaf0;border-left:3px solid var(--warn);padding:10px 12px;border-radius:6px;margin-bottom:14px;font-size:11px;color:var(--gray-700);line-height:1.6">
+        💡 <strong>공지 동작</strong><br>
+        · 수신자는 공지함에서 받을 수 있고, 답장 시 <strong>관리자에게만 1:1 쪽지</strong>로 전달됩니다<br>
+        · 미열람 현황은 보낸공지 탭에서 확인 가능합니다
+      </div>
+
+      <div style="display:flex;justify-content:flex-end;gap:8px">
+        <button class="btn btn-outline btn-sm" onclick="closeAnnouncementModal()">취소</button>
+        <button class="btn btn-sm" style="background:#f59e0b;color:#fff;border-color:#f59e0b" onclick="sendAnnouncement()">📢 공지 발송</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 공지 미열람자 확인 모달 ═══ -->
+<div class="modal-overlay" id="modal-announcement-unread">
+  <div class="modal-content" style="max-width:520px">
+    <div class="mh">
+      <div class="mt">👀 공지 미열람 현황</div>
+      <button class="mc" onclick="closeM('modal-announcement-unread')">✕</button>
+    </div>
+    <div class="mb" style="padding:20px">
+      <div id="ann-unread-body"></div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
+        <button class="btn btn-outline btn-sm" onclick="closeM('modal-announcement-unread')">닫기</button>
+        <button id="ann-unread-remind-btn" class="btn btn-sm" style="background:#f59e0b;color:#fff;border-color:#f59e0b;display:none" onclick="annRemindUnread()">📩 미열람자에게 1:1 쪽지로 재발송</button>
       </div>
     </div>
   </div>
@@ -4123,6 +4223,10 @@ function subscribeRealtime(){
       { event:'*', schema:'public', table:'messages' },
       (payload) => handleRealtimeChange('messages', payload)
     )
+    .on('postgres_changes',
+      { event:'*', schema:'public', table:'announcements' },
+      (payload) => handleRealtimeChange('announcements', payload)
+    )
     .subscribe((status) => {
       const st = document.getElementById('sb-status');
       if(status === 'SUBSCRIBED'){
@@ -4299,6 +4403,46 @@ function handleRealtimeChange(table, payload){
       if(_msgState.selectedId){
         const cur = _msgsCache.find(m=>m.id===_msgState.selectedId);
         if(cur) renderMessageDetail(cur);
+      }
+    }
+  } else if(table === 'announcements'){
+    // 공지 Realtime 변경 → 캐시 동기화 + 배지 갱신
+    const eventType = payload.eventType || payload.type;
+    const newRow = payload.new || payload.record;
+    const oldRow = payload.old || payload.old_record;
+    if(!_annsCache) _annsCache = [];
+
+    if(eventType === 'INSERT' && newRow){
+      if(!_annsCache.find(a=>a.id===newRow.id)){
+        _annsCache.unshift(newRow);
+        // 내가 수신자면 토스트 알림
+        try{
+          const myId = String(curUser?.id||curUser?.name||'');
+          let snap = [];
+          try{ snap = typeof newRow.recipients_snapshot==='string' ? JSON.parse(newRow.recipients_snapshot||'[]') : (newRow.recipients_snapshot||[]); }catch(e){}
+          if(Array.isArray(snap) && snap.some(r=>String(r?.id)===myId) && String(newRow.sender_id)!==myId){
+            if(typeof showToast==='function'){
+              showToast('📢 새 공지 — '+(newRow.sender_name||'')+': '+(newRow.subject||'').slice(0,30),'info');
+            }
+          }
+        }catch(e){}
+      }
+    } else if(eventType === 'UPDATE' && newRow){
+      const i = _annsCache.findIndex(a=>a.id===newRow.id);
+      if(i>=0) _annsCache[i] = {..._annsCache[i], ...newRow};
+      else _annsCache.unshift(newRow);
+    } else if(eventType === 'DELETE' && oldRow){
+      const i = _annsCache.findIndex(a=>a.id===oldRow.id);
+      if(i>=0) _annsCache.splice(i,1);
+    }
+
+    msgUpdateBadge();
+    const scr = document.getElementById('screen-messages');
+    if(scr && scr.classList.contains('active')){
+      renderMessagesList();
+      if(_annState.selectedAnnId){
+        const cur = _annsCache.find(a=>a.id===_annState.selectedAnnId);
+        if(cur) renderAnnouncementDetail(cur);
       }
     }
   }
@@ -4882,12 +5026,14 @@ function startApp(){
   if(curUser?.role==='team')  // 5분마다 미기록 상태 갱신
   loadSbUi();
 
-  // 쪽지 캐시 초기 로드 + 헤더 배지 갱신 + 1분 주기 폴링
+  // 쪽지·공지 캐시 초기 로드 + 헤더 배지 갱신 + 1분 주기 폴링
   setTimeout(()=>{
     refreshMessagesCache().catch(e=>console.warn('msg init load error',e));
+    refreshAnnouncementsCache().catch(e=>console.warn('ann init load error',e));
   }, 2000);
   setInterval(()=>{
     refreshMessagesCache().catch(()=>{});
+    refreshAnnouncementsCache().catch(()=>{});
   }, 60000);
 }
 
@@ -11516,7 +11662,7 @@ async function openTmRevertModal(){
     }
   }
 
-  document.getElementById('modal-tm-revert').classList.add('active');
+  document.getElementById('modal-tm-revert').classList.add('open');
 }
 
 // 활동로그 기반 — 이관 직전 본사 배정의 지점·팀장 정확히 추출
@@ -11869,7 +12015,7 @@ function rvRender(){
   const container = document.getElementById('revert-body');
   if(!container) return;
 
-  const period = document.getElementById('rv-period')?.value || '30';
+  const period = document.getElementById('rv-period')?.value || '90';
   const branch = document.getElementById('rv-branch')?.value || '';
   const type   = document.getElementById('rv-type')?.value || '';
   const q      = (document.getElementById('rv-search')?.value||'').toLowerCase().trim();
@@ -12042,7 +12188,7 @@ function rvCheckGroup(day, checked){
 // 전체 체크 (현재 필터된 항목 기준)
 function rvCheckAll(checked){
   // 현재 표시 중인 rows 다시 계산
-  const period = document.getElementById('rv-period')?.value || '30';
+  const period = document.getElementById('rv-period')?.value || '90';
   const branch = document.getElementById('rv-branch')?.value || '';
   const type   = document.getElementById('rv-type')?.value || '';
   const q      = (document.getElementById('rv-search')?.value||'').toLowerCase().trim();
@@ -12194,7 +12340,7 @@ function rvExportExcel(){
   if(typeof XLSX==='undefined'){ showToast('엑셀 모듈을 불러올 수 없습니다','error'); return; }
 
   // 현재 화면에 표시 중인 데이터 재계산 (rvRender 필터 로직 복제)
-  const period = document.getElementById('rv-period')?.value || '30';
+  const period = document.getElementById('rv-period')?.value || '90';
   const branch = document.getElementById('rv-branch')?.value || '';
   const type   = document.getElementById('rv-type')?.value || '';
   const q      = (document.getElementById('rv-search')?.value||'').toLowerCase().trim();
@@ -12347,14 +12493,16 @@ function _unreadCount(){
   return _myInbox().filter(m=>!m.is_read).length;
 }
 
-// ── 헤더 뱃지 갱신 ────────────────────────────────────
+// ── 헤더 뱃지 갱신 (1:1 안읽음 + 공지 안읽음 합계) ──
 function msgUpdateBadge(){
   const badge = document.getElementById('msg-badge');
   if(!badge) return;
-  const cnt = _unreadCount();
-  if(cnt>0){
+  const msgCnt = _unreadCount();
+  const annCnt = (typeof _unreadAnnouncementsCount==='function') ? _unreadAnnouncementsCount() : 0;
+  const total = msgCnt + annCnt;
+  if(total>0){
     badge.style.display = 'inline-flex';
-    badge.textContent = cnt > 99 ? '99+' : String(cnt);
+    badge.textContent = total > 99 ? '99+' : String(total);
   }else{
     badge.style.display = 'none';
   }
@@ -12371,59 +12519,103 @@ function openMessagesScreen(){
 // ── 메인 로더 (showScreen 라우터에서 호출) ─────────────
 async function loadMessages(){
   if(!curUser){ showToast('로그인이 필요합니다','error'); return; }
+
+  // 관리자 전용 UI 노출
+  const isAdmin = curUser?.role === 'admin';
+  const newAnnBtn = document.getElementById('msg-new-announcement-btn');
+  if(newAnnBtn) newAnnBtn.style.display = isAdmin ? '' : 'none';
+  const sentAnnTab = document.getElementById('msg-tab-sentnotice');
+  if(sentAnnTab) sentAnnTab.style.display = isAdmin ? '' : 'none';
+
   const listEl = document.getElementById('msg-list');
   const detailEl = document.getElementById('msg-detail');
   if(listEl) listEl.innerHTML = '<div style="padding:40px;text-align:center;color:var(--gray-400);font-size:12px">불러오는 중…</div>';
-  if(detailEl) detailEl.innerHTML = '<div style="text-align:center;color:var(--gray-300);padding:80px 20px;font-size:13px">📬 쪽지를 선택하면 여기에 표시됩니다</div>';
+  if(detailEl) detailEl.innerHTML = '<div style="text-align:center;color:var(--gray-300);padding:80px 20px;font-size:13px">📬 항목을 선택하면 여기에 표시됩니다</div>';
 
-  await refreshMessagesCache();
+  // 메시지·공지 동시 fetch
+  await Promise.all([
+    refreshMessagesCache(),
+    refreshAnnouncementsCache()
+  ]);
   _msgState.selectedId = null;
+  _annState.selectedAnnId = null;
   renderMessagesList();
 }
 
-// ── 탭 전환 ────────────────────────────────────────
+// ── 탭 전환 (4탭) ────────────────────────────────────
 function msgSwitchTab(tab){
+  // 관리자 외에는 sentnotice 접근 불가
+  if(tab==='sentnotice' && curUser?.role!=='admin'){
+    showToast('관리자만 이용 가능합니다','error');
+    return;
+  }
   _msgState.tab = tab;
   _msgState.selectedId = null;
-  // 버튼 스타일
-  const inb = document.getElementById('msg-tab-inbox');
-  const snt = document.getElementById('msg-tab-sent');
-  if(inb && snt){
-    if(tab==='inbox'){
-      inb.style.background='#fff'; inb.style.color='var(--navy)'; inb.style.borderBottom='3px solid var(--navy)';
-      snt.style.background='transparent'; snt.style.color='var(--gray-500)'; snt.style.borderBottom='3px solid transparent';
-    }else{
-      snt.style.background='#fff'; snt.style.color='var(--navy)'; snt.style.borderBottom='3px solid var(--navy)';
-      inb.style.background='transparent'; inb.style.color='var(--gray-500)'; inb.style.borderBottom='3px solid transparent';
+  _annState.selectedAnnId = null;
+
+  // 4개 탭 스타일 일괄 갱신
+  const tabs = ['inbox','sent','noticebox','sentnotice'];
+  tabs.forEach(t=>{
+    const el = document.getElementById('msg-tab-'+t);
+    if(!el) return;
+    if(t===tab){
+      el.style.background='#fff';
+      el.style.color='var(--navy)';
+      el.style.fontWeight='800';
+      el.style.borderBottom='3px solid var(--navy)';
+    } else {
+      el.style.background='transparent';
+      el.style.color='var(--gray-500)';
+      el.style.fontWeight='700';
+      el.style.borderBottom='3px solid transparent';
     }
-  }
-  // 안 읽음 필터는 받은쪽지함에서만 의미 있음 — 보낸함이면 자동 전체로
-  if(tab==='sent'){
+  });
+
+  // 안 읽음 필터는 받은쪽지·공지함에서만 의미
+  if(tab==='sent' || tab==='sentnotice'){
     const f = document.getElementById('msg-filter-unread');
     if(f) f.value = 'all';
   }
   renderMessagesList();
   const detailEl = document.getElementById('msg-detail');
-  if(detailEl) detailEl.innerHTML = '<div style="text-align:center;color:var(--gray-300);padding:80px 20px;font-size:13px">📬 쪽지를 선택하면 여기에 표시됩니다</div>';
+  if(detailEl) detailEl.innerHTML = '<div style="text-align:center;color:var(--gray-300);padding:80px 20px;font-size:13px">📬 항목을 선택하면 여기에 표시됩니다</div>';
 }
 
 // ── 리스트 렌더 ────────────────────────────────────
 function renderMessagesList(){
   const listEl = document.getElementById('msg-list'); if(!listEl) return;
   const tab = _msgState.tab || 'inbox';
-  const all = (tab==='inbox') ? _myInbox() : _mySent();
 
-  // 카운트 표시
+  // 4탭 데이터 결정
+  let all = [];
+  let isAnnounce = false;
+  if(tab==='inbox')         { all = _myInbox(); }
+  else if(tab==='sent')     { all = _mySent(); }
+  else if(tab==='noticebox'){ all = _myAnnouncements(); isAnnounce = true; }
+  else if(tab==='sentnotice'){ all = _mySentAnnouncements(); isAnnounce = true; }
+
+  // 카운트 4탭 모두 갱신
   const cInb = document.getElementById('msg-count-inbox');
   const cSnt = document.getElementById('msg-count-sent');
+  const cNB  = document.getElementById('msg-count-noticebox');
+  const cSN  = document.getElementById('msg-count-sentnotice');
   if(cInb){
     const inb = _myInbox();
     const u = inb.filter(m=>!m.is_read).length;
     cInb.textContent = u>0 ? `(${inb.length} · 안읽음 ${u})` : `(${inb.length})`;
   }
-  if(cSnt){
-    cSnt.textContent = `(${_mySent().length})`;
+  if(cSnt){ cSnt.textContent = `(${_mySent().length})`; }
+  if(cNB){
+    const myAnns = _myAnnouncements();
+    const myId = String(curUser?.id||curUser?.name||'');
+    const u = myAnns.filter(a=>{
+      let rb = {};
+      try{ rb = typeof a.read_by==='string' ? JSON.parse(a.read_by||'{}') : (a.read_by||{}); }catch(e){}
+      return !rb[myId];
+    }).length;
+    cNB.textContent = u>0 ? `(${myAnns.length} · 안읽음 ${u})` : `(${myAnns.length})`;
   }
+  if(cSN){ cSN.textContent = `(${_mySentAnnouncements().length})`; }
 
   const q = (document.getElementById('msg-search')?.value||'').toLowerCase().trim();
   const fu = document.getElementById('msg-filter-unread')?.value || 'all';
@@ -12435,33 +12627,99 @@ function renderMessagesList(){
       return target.includes(q);
     });
   }
+  // 안읽음 필터 — inbox(1:1)과 noticebox(공지)에서만 의미
   if(tab==='inbox'){
     if(fu==='unread') rows = rows.filter(m=>!m.is_read);
     else if(fu==='read') rows = rows.filter(m=>m.is_read);
+  } else if(tab==='noticebox'){
+    const myId = String(curUser?.id||curUser?.name||'');
+    rows = rows.filter(a=>{
+      let rb = {};
+      try{ rb = typeof a.read_by==='string' ? JSON.parse(a.read_by||'{}') : (a.read_by||{}); }catch(e){}
+      const read = !!rb[myId];
+      if(fu==='unread') return !read;
+      if(fu==='read') return read;
+      return true;
+    });
   }
 
   if(rows.length===0){
-    listEl.innerHTML = '<div style="padding:60px 20px;text-align:center;color:var(--gray-300);font-size:12px">'+(tab==='inbox'?'받은 쪽지가 없습니다':'보낸 쪽지가 없습니다')+'</div>';
+    const emptyMsg = ({
+      inbox:'받은 쪽지가 없습니다',
+      sent:'보낸 쪽지가 없습니다',
+      noticebox:'받은 공지가 없습니다',
+      sentnotice:'보낸 공지가 없습니다'
+    })[tab] || '항목이 없습니다';
+    listEl.innerHTML = '<div style="padding:60px 20px;text-align:center;color:var(--gray-300);font-size:12px">'+emptyMsg+'</div>';
     return;
   }
 
-  listEl.innerHTML = rows.map(m=>{
-    const isUnread = (tab==='inbox') && !m.is_read;
-    const otherName = (tab==='inbox') ? (m.sender_name||'-') : (m.recipient_name||'-');
-    const otherRole = (tab==='inbox') ? (m.sender_role||'') : (m.recipient_role||'');
-    const roleLabel = ({admin:'관리자',dbmanager:'DB관리자',branch:'지점장',team:'팀장',tm:'대전TM'})[otherRole] || otherRole;
-    const date = (m.created_at||'').slice(0,16).replace('T',' ');
-    const isSel = _msgState.selectedId === m.id;
-    const sysIcon = m.is_system ? '🔒 ' : '';
-    return `<div onclick="openMessage('${esc(m.id)}')" style="padding:12px 14px;border-bottom:1px solid var(--gray-100);cursor:pointer;${isSel?'background:#eef3f9':isUnread?'background:#fffaf0':'background:#fff'};transition:background .12s" onmouseover="if(!${isSel})this.style.background='#fafbfd'" onmouseout="if(!${isSel})this.style.background='${isUnread?'#fffaf0':'#fff'}'">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-        <span style="font-size:12px;font-weight:${isUnread?'800':'600'};color:${isUnread?'var(--navy)':'var(--gray-700)'}">${isUnread?'● ':''}${esc(otherName)}${roleLabel?` <span style="font-size:10px;color:var(--gray-400);font-weight:500">[${esc(roleLabel)}]</span>`:''}</span>
-        <span style="font-size:10px;color:var(--gray-400)">${esc(date)}</span>
-      </div>
-      <div style="font-size:13px;font-weight:${isUnread?'700':'500'};color:var(--gray-900);margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(sysIcon)}${esc(m.subject||'(제목 없음)')}</div>
-      <div style="font-size:11px;color:var(--gray-500);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc((m.content||'').replace(/\n/g,' ').slice(0,80))}</div>
+  // 렌더 분기
+  if(isAnnounce){
+    // 공지 리스트 렌더
+    listEl.innerHTML = rows.map(a => _annRowHtml(a, tab)).join('');
+  } else {
+    // 1:1 쪽지 리스트 렌더
+    listEl.innerHTML = rows.map(m=>{
+      const isUnread = (tab==='inbox') && !m.is_read;
+      const otherName = (tab==='inbox') ? (m.sender_name||'-') : (m.recipient_name||'-');
+      const otherRole = (tab==='inbox') ? (m.sender_role||'') : (m.recipient_role||'');
+      const roleLabel = ({admin:'관리자',dbmanager:'DB관리자',branch:'지점장',team:'팀장',tm:'대전TM'})[otherRole] || otherRole;
+      const date = (m.created_at||'').slice(0,16).replace('T',' ');
+      const isSel = _msgState.selectedId === m.id;
+      // 공지 답장임을 표시
+      const isAnnReply = !!m.announcement_id;
+      const replyIcon = isAnnReply ? '📢↩ ' : '';
+      return `<div onclick="openMessage('${esc(m.id)}')" style="padding:12px 14px;border-bottom:1px solid var(--gray-100);cursor:pointer;${isSel?'background:#eef3f9':isUnread?'background:#fffaf0':'background:#fff'};transition:background .12s" onmouseover="if(!${isSel})this.style.background='#fafbfd'" onmouseout="if(!${isSel})this.style.background='${isUnread?'#fffaf0':'#fff'}'">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="font-size:12px;font-weight:${isUnread?'800':'600'};color:${isUnread?'var(--navy)':'var(--gray-700)'}">${isUnread?'● ':''}${esc(otherName)}${roleLabel?` <span style="font-size:10px;color:var(--gray-400);font-weight:500">[${esc(roleLabel)}]</span>`:''}</span>
+          <span style="font-size:10px;color:var(--gray-400)">${esc(date)}</span>
+        </div>
+        <div style="font-size:13px;font-weight:${isUnread?'700':'500'};color:var(--gray-900);margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${replyIcon}${esc(m.subject||'(제목 없음)')}</div>
+        <div style="font-size:11px;color:var(--gray-500);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc((m.content||'').replace(/\n/g,' ').slice(0,80))}</div>
+      </div>`;
+    }).join('');
+  }
+}
+
+// 공지 행 HTML
+function _annRowHtml(a, tab){
+  const date = (a.created_at||'').slice(0,16).replace('T',' ');
+  const isSel = _annState.selectedAnnId === a.id;
+  let readBy = {};
+  try{ readBy = typeof a.read_by==='string' ? JSON.parse(a.read_by||'{}') : (a.read_by||{}); }catch(e){}
+  let snap = [];
+  try{ snap = typeof a.recipients_snapshot==='string' ? JSON.parse(a.recipients_snapshot||'[]') : (a.recipients_snapshot||[]); }catch(e){}
+
+  const myId = String(curUser?.id||curUser?.name||'');
+  let badge = '';
+  if(tab==='noticebox'){
+    const isUnread = !readBy[myId];
+    const unreadDot = isUnread ? '● ' : '';
+    badge = `<span style="font-size:12px;font-weight:${isUnread?'800':'600'};color:${isUnread?'#f59e0b':'var(--gray-700)'}">${unreadDot}📢 ${esc(a.sender_name||'-')}</span>`;
+    const bgColor = isSel ? '#eef3f9' : (isUnread ? '#fffaf0' : '#fff');
+    return `<div onclick="openAnnouncement('${esc(a.id)}')" style="padding:12px 14px;border-bottom:1px solid var(--gray-100);cursor:pointer;background:${bgColor};transition:background .12s" onmouseover="if(!${isSel})this.style.background='#fafbfd'" onmouseout="if(!${isSel})this.style.background='${bgColor}'">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">${badge}<span style="font-size:10px;color:var(--gray-400)">${esc(date)}</span></div>
+      <div style="font-size:13px;font-weight:${isUnread?'700':'500'};color:var(--gray-900);margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.subject||'(제목 없음)')}</div>
+      <div style="font-size:11px;color:var(--gray-500);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc((a.content||'').replace(/\n/g,' ').slice(0,80))}</div>
     </div>`;
-  }).join('');
+  } else {
+    // sentnotice
+    const totalCnt = Array.isArray(snap) ? snap.length : 0;
+    const readCnt = Object.keys(readBy||{}).length;
+    const unreadCnt = totalCnt - readCnt;
+    const readRate = totalCnt>0 ? Math.round(readCnt/totalCnt*100) : 0;
+    const targetLabel = ({all:'전체', role:'역할별', branch:'지점별', custom:'직접 지정'})[a.target_type] || '';
+    badge = `<span style="font-size:12px;font-weight:600;color:var(--gray-700)">📢 ${esc(targetLabel)} <span style="font-size:10px;color:var(--gray-400);font-weight:500">${esc(a.target_value||'')}</span></span>`;
+    const bgColor = isSel ? '#eef3f9' : '#fff';
+    return `<div onclick="openAnnouncement('${esc(a.id)}')" style="padding:12px 14px;border-bottom:1px solid var(--gray-100);cursor:pointer;background:${bgColor};transition:background .12s" onmouseover="if(!${isSel})this.style.background='#fafbfd'" onmouseout="if(!${isSel})this.style.background='${bgColor}'">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">${badge}<span style="font-size:10px;color:var(--gray-400)">${esc(date)}</span></div>
+      <div style="font-size:13px;font-weight:600;color:var(--gray-900);margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.subject||'(제목 없음)')}</div>
+      <div style="font-size:11px;color:var(--gray-500);display:flex;justify-content:space-between;align-items:center">
+        <span>👀 <strong style="color:var(--ok)">${readCnt}</strong>/${totalCnt}명 읽음 (${readRate}%)${unreadCnt>0?` · <span style="color:var(--warn)">미열람 ${unreadCnt}</span>`:''}</span>
+      </div>
+    </div>`;
+  }
 }
 
 // ── 쪽지 상세 열기 (자동 읽음 처리) ────────────────────
@@ -12483,7 +12741,7 @@ async function openMessage(id){
   renderMessageDetail(m);
 }
 
-// ── 쪽지 상세 렌더 ────────────────────────────────────
+// ── 쪽지 상세 렌더 (1:1) ────────────────────────────
 function renderMessageDetail(m){
   const el = document.getElementById('msg-detail'); if(!el) return;
   const isInbox = _msgState.tab==='inbox';
@@ -12491,14 +12749,18 @@ function renderMessageDetail(m){
   const recipientRole = ({admin:'관리자',dbmanager:'DB관리자',branch:'지점장',team:'팀장',tm:'대전TM'})[m.recipient_role] || m.recipient_role || '';
   const dateStr = m.created_at ? new Date(m.created_at).toLocaleString('ko-KR') : '-';
   const readStr = m.read_at ? new Date(m.read_at).toLocaleString('ko-KR') : '';
-  const canReply = isInbox && !m.is_system && String(m.sender_id)!==String(curUser?.id||curUser?.name);
+  const canReply = isInbox && String(m.sender_id)!==String(curUser?.id||curUser?.name);
 
-  // 스레드 (같은 thread_root_id 또는 parent_id 체인)
+  // 공지 답장인 경우 라벨
+  const isAnnReply = !!m.announcement_id;
+  let headerLabel = isInbox ? '받은 쪽지' : '보낸 쪽지';
+  if(isAnnReply) headerLabel += ' · 📢 공지 답장';
+
+  // 스레드
   const threadRoot = m.thread_root_id || m.id;
   const thread = (_msgsCache||[]).filter(x => (x.thread_root_id===threadRoot || x.id===threadRoot) && x.id!==m.id)
     .filter(x=>{
       const myId = String(curUser?.id||curUser?.name||'');
-      // 본인이 보낸 것 또는 받은 것만 (제3자 쪽지 노출 방지)
       return String(x.sender_id)===myId || String(x.recipient_id)===myId;
     })
     .sort((a,b)=>(a.created_at||'').localeCompare(b.created_at||''));
@@ -12506,7 +12768,7 @@ function renderMessageDetail(m){
   el.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px;padding-bottom:14px;border-bottom:2px solid var(--gray-100)">
       <div style="flex:1;min-width:0">
-        <div style="font-size:11px;color:var(--gray-400);margin-bottom:4px">${m.is_system?'🔒 시스템 자동 발송 · 답장 불가':isInbox?'받은 쪽지':'보낸 쪽지'}</div>
+        <div style="font-size:11px;color:var(--gray-400);margin-bottom:4px">${esc(headerLabel)}</div>
         <div style="font-size:18px;font-weight:800;color:var(--navy);margin-bottom:8px;word-break:break-word">${esc(m.subject||'(제목 없음)')}</div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--gray-600)">
           <div><strong style="color:var(--gray-500)">보낸 사람:</strong> ${esc(m.sender_name||'-')} ${senderRole?`<span style="font-size:10px;color:var(--gray-400)">[${esc(senderRole)}]</span>`:''}</div>
@@ -12520,6 +12782,8 @@ function renderMessageDetail(m){
         <button class="btn btn-outline btn-sm" onclick="deleteMessage('${esc(m.id)}')" title="삭제 (소프트 삭제 — 상대방에게는 그대로 보입니다)">🗑️ 삭제</button>
       </div>
     </div>
+
+    ${isAnnReply ? `<div style="margin-bottom:14px;padding:8px 12px;background:#fff7ed;border-left:3px solid #f59e0b;border-radius:4px;font-size:11px;color:var(--gray-600)">📢 이 쪽지는 공지 "${esc((_annsCache||[]).find(a=>a.id===m.announcement_id)?.subject||'')}"에 대한 답장입니다</div>` : ''}
 
     <div style="white-space:pre-wrap;word-break:break-word;font-size:13px;line-height:1.7;color:var(--gray-900);padding:6px 0">${esc(m.content||'').replace(/\n/g,'<br>')}</div>
 
@@ -12538,6 +12802,220 @@ function renderMessageDetail(m){
         }).join('')}
       </div>` : ''}
   `;
+}
+
+// ── 공지 상세 열기 (자동 읽음 처리) ──────────────
+async function openAnnouncement(id){
+  if(!_annsCache) return;
+  const a = _annsCache.find(x=>x.id===id);
+  if(!a){ showToast('공지를 찾을 수 없습니다','error'); return; }
+  _annState.selectedAnnId = id;
+
+  // 받은 공지(noticebox)이고 안 읽음이면 읽음 처리
+  if(_msgState.tab==='noticebox'){
+    await _markAnnouncementRead(id);
+  }
+
+  renderMessagesList();
+  renderAnnouncementDetail(a);
+}
+
+// ── 공지 상세 렌더 ──────────────
+function renderAnnouncementDetail(a){
+  const el = document.getElementById('msg-detail'); if(!el) return;
+  const isSent = (_msgState.tab==='sentnotice');
+  const dateStr = a.created_at ? new Date(a.created_at).toLocaleString('ko-KR') : '-';
+
+  let readBy = {};
+  try{ readBy = typeof a.read_by==='string' ? JSON.parse(a.read_by||'{}') : (a.read_by||{}); }catch(e){}
+  let snap = [];
+  try{ snap = typeof a.recipients_snapshot==='string' ? JSON.parse(a.recipients_snapshot||'[]') : (a.recipients_snapshot||[]); }catch(e){}
+  const totalCnt = Array.isArray(snap) ? snap.length : 0;
+  const readCnt = Object.keys(readBy||{}).length;
+  const unreadCnt = totalCnt - readCnt;
+  const readRate = totalCnt>0 ? Math.round(readCnt/totalCnt*100) : 0;
+
+  const targetLabel = ({all:'전체', role:'역할별', branch:'지점별', custom:'직접 지정'})[a.target_type] || '';
+
+  // 본인이 받은 공지이고, 발신자가 본인이 아닌 경우 답장 가능
+  const myId = String(curUser?.id||curUser?.name||'');
+  const canReply = !isSent && String(a.sender_id)!==myId;
+
+  el.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px;padding-bottom:14px;border-bottom:2px solid var(--gray-100)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:11px;color:#f59e0b;margin-bottom:4px;font-weight:700">📢 ${esc(isSent?'보낸 공지':'받은 공지')} · ${esc(targetLabel)}${a.target_value?` (${esc(a.target_value)})`:''}</div>
+        <div style="font-size:18px;font-weight:800;color:var(--navy);margin-bottom:8px;word-break:break-word">${esc(a.subject||'(제목 없음)')}</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--gray-600)">
+          <div><strong style="color:var(--gray-500)">보낸 사람:</strong> ${esc(a.sender_name||'-')}</div>
+          <div><strong style="color:var(--gray-500)">발송:</strong> ${esc(dateStr)}</div>
+          <div><strong style="color:var(--gray-500)">총 수신자:</strong> ${totalCnt}명</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${canReply?`<button class="btn btn-sm" style="background:var(--navy);color:#fff;border-color:var(--navy)" onclick="openAnnouncementReply('${esc(a.id)}')" title="발송 관리자에게만 1:1 쪽지로 답장됩니다">↩ 관리자에게 답장</button>`:''}
+        ${isSent?`<button class="btn btn-sm" style="background:#f59e0b;color:#fff;border-color:#f59e0b" onclick="openAnnouncementUnreadModal('${esc(a.id)}')" title="안 읽은 사람 보기">👀 미열람 확인 (${unreadCnt}명)</button>`:''}
+        ${isSent?`<button class="btn btn-outline btn-sm" onclick="deleteAnnouncement('${esc(a.id)}')" title="이 공지를 보낸쪽지함에서 삭제 (수신자에겐 그대로)">🗑️ 삭제</button>`:''}
+      </div>
+    </div>
+
+    ${isSent ? `
+      <div style="margin-bottom:14px;padding:12px 14px;background:#fef9f3;border:1px solid #f3d9b8;border-radius:8px;font-size:12px">
+        <div style="margin-bottom:6px;font-weight:700;color:var(--gray-700)">📊 읽음 현황</div>
+        <div style="background:#fff;border-radius:4px;height:10px;overflow:hidden;margin-bottom:6px">
+          <div style="width:${readRate}%;height:100%;background:linear-gradient(90deg,var(--ok),#34d399)"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--gray-600)">
+          <span>읽음 <strong style="color:var(--ok)">${readCnt}</strong>명 / 미열람 <strong style="color:var(--warn)">${unreadCnt}</strong>명</span>
+          <span>${readRate}% 읽음</span>
+        </div>
+      </div>
+    ` : ''}
+
+    <div style="white-space:pre-wrap;word-break:break-word;font-size:13px;line-height:1.7;color:var(--gray-900);padding:6px 0">${esc(a.content||'').replace(/\n/g,'<br>')}</div>
+  `;
+}
+
+// 공지 답장 → 1:1 쪽지 작성 모달 (발송 관리자에게만)
+function openAnnouncementReply(annId){
+  const a = (_annsCache||[]).find(x=>x.id===annId);
+  if(!a){ showToast('원본 공지를 찾을 수 없습니다','error'); return; }
+  // 일반 작성 모달 열기 (수신자=발송 관리자 자동)
+  openComposeModal();
+  document.getElementById('msg-compose-title').textContent = '↩ 공지 답장 (관리자에게)';
+  // parent_id는 사용 안 함 — 공지답장은 announcement_id로 추적
+  document.getElementById('msg-compose-parent-id').value = '';
+  document.getElementById('msg-compose-thread-root').value = '';
+  // 공지 ID를 hidden 필드에 저장 (sendMessage에서 사용) — 임시 변수 활용
+  window._composeAnnouncementId = annId;
+  // 수신자 자동 세팅
+  _msgState.recipients = [{
+    id: a.sender_id, name: a.sender_name||'-', role: 'admin'
+  }];
+  const subj = a.subject || '';
+  document.getElementById('msg-compose-subject').value = subj.startsWith('RE:') ? subj : ('RE: '+subj);
+  document.getElementById('msg-compose-content').value = '';
+  msgRenderRecipientList();
+  msgRenderSelectedRecipients();
+}
+
+// 미열람자 확인 모달
+function openAnnouncementUnreadModal(annId){
+  const a = (_annsCache||[]).find(x=>x.id===annId);
+  if(!a){ showToast('공지를 찾을 수 없습니다','error'); return; }
+
+  let readBy = {};
+  try{ readBy = typeof a.read_by==='string' ? JSON.parse(a.read_by||'{}') : (a.read_by||{}); }catch(e){}
+  let snap = [];
+  try{ snap = typeof a.recipients_snapshot==='string' ? JSON.parse(a.recipients_snapshot||'[]') : (a.recipients_snapshot||[]); }catch(e){}
+
+  const unread = snap.filter(r => !readBy[String(r.id)]);
+  const read = snap.filter(r => !!readBy[String(r.id)]);
+
+  const body = document.getElementById('ann-unread-body');
+  const remindBtn = document.getElementById('ann-unread-remind-btn');
+  const roleLabel = {admin:'관리자',dbmanager:'DB관리자',branch:'지점장',team:'팀장',tm:'대전TM'};
+
+  if(body){
+    body.innerHTML = `
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <div style="flex:1;padding:10px;background:rgba(245,158,11,.08);border:1px solid #f3d9b8;border-radius:6px;text-align:center">
+          <div style="font-size:11px;color:var(--gray-500);margin-bottom:3px">미열람</div>
+          <div style="font-size:22px;font-weight:800;color:var(--warn)">${unread.length}<span style="font-size:11px;color:var(--gray-500);font-weight:500;margin-left:2px">명</span></div>
+        </div>
+        <div style="flex:1;padding:10px;background:rgba(16,185,129,.08);border:1px solid #b4ebd0;border-radius:6px;text-align:center">
+          <div style="font-size:11px;color:var(--gray-500);margin-bottom:3px">읽음</div>
+          <div style="font-size:22px;font-weight:800;color:var(--ok)">${read.length}<span style="font-size:11px;color:var(--gray-500);font-weight:500;margin-left:2px">명</span></div>
+        </div>
+      </div>
+
+      ${unread.length>0 ? `
+        <div style="margin-bottom:12px">
+          <div style="font-size:12px;font-weight:700;color:var(--warn);margin-bottom:6px">⚠️ 미열람자 (${unread.length}명)</div>
+          <div style="max-height:200px;overflow-y:auto;border:1px solid var(--gray-200);border-radius:6px">
+            ${unread.map(r=>`<div style="padding:6px 10px;border-bottom:1px solid var(--gray-100);font-size:11.5px;display:flex;justify-content:space-between">
+              <span><strong>${esc(r.name||'-')}</strong> <span style="color:var(--gray-400);font-size:10px">[${esc(roleLabel[r.role]||r.role||'')}${r.branch?' · '+esc(r.branch):''}]</span></span>
+            </div>`).join('')}
+          </div>
+        </div>
+      ` : '<div style="text-align:center;padding:20px;color:var(--ok);font-size:13px;font-weight:700">✅ 모두 읽었습니다!</div>'}
+
+      ${read.length>0 ? `
+        <details style="margin-top:8px">
+          <summary style="cursor:pointer;font-size:11px;color:var(--gray-500);padding:4px 0">읽은 사람 목록 보기 (${read.length}명)</summary>
+          <div style="max-height:160px;overflow-y:auto;border:1px solid var(--gray-200);border-radius:6px;margin-top:6px">
+            ${read.map(r=>{
+              const readAt = readBy[String(r.id)] ? new Date(readBy[String(r.id)]).toLocaleString('ko-KR') : '-';
+              return `<div style="padding:6px 10px;border-bottom:1px solid var(--gray-100);font-size:11px;display:flex;justify-content:space-between">
+                <span><strong>${esc(r.name||'-')}</strong> <span style="color:var(--gray-400);font-size:10px">[${esc(roleLabel[r.role]||r.role||'')}]</span></span>
+                <span style="color:var(--gray-400);font-size:10px">${esc(readAt)}</span>
+              </div>`;
+            }).join('')}
+          </div>
+        </details>
+      ` : ''}
+    `;
+  }
+  if(remindBtn) remindBtn.style.display = unread.length>0 ? '' : 'none';
+  window._annUnreadTargetId = annId;
+  document.getElementById('modal-announcement-unread').classList.add('open');
+}
+
+// 미열람자에게 1:1 쪽지로 재발송
+async function annRemindUnread(){
+  const annId = window._annUnreadTargetId;
+  if(!annId){ showToast('대상 공지를 찾을 수 없습니다','error'); return; }
+  const a = (_annsCache||[]).find(x=>x.id===annId);
+  if(!a){ return; }
+
+  let readBy = {};
+  try{ readBy = typeof a.read_by==='string' ? JSON.parse(a.read_by||'{}') : (a.read_by||{}); }catch(e){}
+  let snap = [];
+  try{ snap = typeof a.recipients_snapshot==='string' ? JSON.parse(a.recipients_snapshot||'[]') : (a.recipients_snapshot||[]); }catch(e){}
+  const unread = snap.filter(r => !readBy[String(r.id)]);
+  if(unread.length===0){ showToast('미열람자가 없습니다','success'); return; }
+
+  if(!confirm(`미열람자 ${unread.length}명에게 1:1 쪽지로 재발송하시겠습니까?`)) return;
+
+  const senderId = curUser.id || curUser.name;
+  const senderName = curUser.name || curUser.id;
+  const subject = '📢 [재발송] ' + (a.subject||'(제목 없음)');
+  const content = `※ 아래는 공지 미열람에 따른 재발송입니다.\n\n${a.content||''}`;
+  const nowIso = new Date().toISOString();
+
+  let ok=0, fail=0;
+  for(const r of unread){
+    const row = {
+      id: uuid(), subject, content,
+      sender_id: String(senderId), sender_name: senderName, sender_role: 'admin',
+      recipient_id: String(r.id), recipient_name: r.name||'-', recipient_role: r.role||'',
+      lead_id: null, parent_id: null, thread_root_id: null,
+      announcement_id: annId,
+      is_read: false, read_at: null,
+      is_deleted_by_sender: false, is_deleted_by_recipient: false,
+      created_at: nowIso
+    };
+    const success = await _sbInsertMessage(row);
+    if(success){ ok++; if(_msgsCache) _msgsCache.unshift(row); } else fail++;
+  }
+  showToast(`📨 ${ok}명에게 재발송${fail>0?` (실패 ${fail})`:''}`, fail>0?'error':'success');
+  closeM('modal-announcement-unread');
+  msgUpdateBadge();
+  renderMessagesList();
+}
+
+// 공지 삭제 (보낸쪽 소프트 삭제)
+async function deleteAnnouncement(id){
+  if(!confirm('이 공지를 보낸공지 목록에서 삭제하시겠습니까?\n(수신자 공지함에는 그대로 보입니다)')) return;
+  const a = (_annsCache||[]).find(x=>x.id===id);
+  if(!a) return;
+  a.is_deleted_by_sender = true;
+  await _sbUpdateAnnouncement(id, {is_deleted_by_sender:true});
+  _annState.selectedAnnId = null;
+  renderMessagesList();
+  const detailEl = document.getElementById('msg-detail');
+  if(detailEl) detailEl.innerHTML = '<div style="text-align:center;color:var(--gray-300);padding:80px 20px;font-size:13px">📬 항목을 선택하면 여기에 표시됩니다</div>';
+  showToast('공지를 삭제했습니다','success');
 }
 
 // 연결 리드 열기
@@ -12580,18 +13058,17 @@ function openComposeModal(){
   document.getElementById('msg-compose-title').textContent = '✏️ 새 쪽지 작성';
   msgRenderRecipientList();
   msgRenderSelectedRecipients();
-  document.getElementById('modal-message-compose').classList.add('active');
+  document.getElementById('modal-message-compose').classList.add('open');
 }
 
 function closeComposeModal(){
-  document.getElementById('modal-message-compose').classList.remove('active');
+  document.getElementById('modal-message-compose').classList.remove('open');
 }
 
 // 답장 모달
 function openReplyModal(originalId){
   const orig = (_msgsCache||[]).find(x=>x.id===originalId);
   if(!orig){ showToast('원본 쪽지를 찾을 수 없습니다','error'); return; }
-  if(orig.is_system){ showToast('시스템 자동 쪽지에는 답장할 수 없습니다','error'); return; }
   openComposeModal();
   document.getElementById('msg-compose-title').textContent = '↩ 답장 작성';
   document.getElementById('msg-compose-parent-id').value = orig.id;
@@ -12716,6 +13193,9 @@ async function sendMessage(){
   const rootId = threadRoot || (parentId || null);
 
   // 수신자별 1행씩 INSERT
+  // 공지 답장인지 확인 (openAnnouncementReply에서 설정한 값)
+  const announcementId = window._composeAnnouncementId || null;
+
   const rows = recipients.map(r=>({
     id: uuid(),
     subject, content,
@@ -12728,7 +13208,7 @@ async function sendMessage(){
     lead_id: null,
     parent_id: parentId || null,
     thread_root_id: rootId || null,
-    is_system: false,
+    announcement_id: announcementId,
     is_read: false,
     read_at: null,
     is_deleted_by_sender: false,
@@ -12752,6 +13232,8 @@ async function sendMessage(){
     }
   }
 
+  // 공지 답장 플래그 클리어
+  window._composeAnnouncementId = null;
   if(okCount===rows.length){
     showToast(`📨 ${okCount}명에게 쪽지를 보냈습니다`,'success');
   }else{
@@ -12759,6 +13241,331 @@ async function sendMessage(){
   }
   closeComposeModal();
   renderMessagesList();
+}
+
+// ═══════════════════════════════════════════════════════════
+// 📢 announcements 시스템 — 관리자 전용 그룹 공지
+// 스키마: announcements(id, subject, content, sender_id/name,
+//   target_type, target_value, recipients_snapshot(jsonb),
+//   read_by(jsonb), is_deleted_by_sender, created_at)
+// ═══════════════════════════════════════════════════════════
+const ANN_LS_KEY = 'kbmc_v2_announcements';
+let _annsCache = null;
+let _annState = { selectedAnnId:null, customRecipients:[] };
+
+// ── Supabase 헬퍼 ────────────────────────────────────────
+async function _sbFetchAnnouncements(){
+  if(testMode){
+    try{ return JSON.parse(localStorage.getItem(ANN_LS_KEY)||'[]'); }catch(e){ return []; }
+  }
+  try{
+    const rows = await sbGet('announcements?select=*&order=created_at.desc&limit=1000');
+    return Array.isArray(rows) ? rows : [];
+  }catch(e){ console.warn('_sbFetchAnnouncements error',e); return []; }
+}
+
+async function _sbInsertAnnouncement(row){
+  if(testMode){
+    try{
+      const arr = JSON.parse(localStorage.getItem(ANN_LS_KEY)||'[]');
+      arr.unshift(row);
+      localStorage.setItem(ANN_LS_KEY, JSON.stringify(arr));
+    }catch(e){}
+    return true;
+  }
+  try{
+    const h = {...sbH(), 'Prefer':'return=minimal'};
+    const r = await fetch(SB_URL+'/rest/v1/announcements', {method:'POST', headers:h, body:JSON.stringify(row)});
+    if(!r.ok){ const t = await r.text().catch(()=>''); console.error('_sbInsertAnnouncement err:',r.status,t); return false; }
+    return true;
+  }catch(e){ console.error('_sbInsertAnnouncement exception',e); return false; }
+}
+
+async function _sbUpdateAnnouncement(id, patch){
+  if(testMode){
+    try{
+      const arr = JSON.parse(localStorage.getItem(ANN_LS_KEY)||'[]');
+      const i = arr.findIndex(a=>a.id===id);
+      if(i>=0){ arr[i] = {...arr[i], ...patch}; localStorage.setItem(ANN_LS_KEY, JSON.stringify(arr)); }
+    }catch(e){}
+    return true;
+  }
+  try{
+    const h = {...sbH(), 'Prefer':'return=minimal'};
+    const r = await fetch(SB_URL+'/rest/v1/announcements?id=eq.'+encodeURIComponent(id), {method:'PATCH', headers:h, body:JSON.stringify(patch)});
+    return r.ok;
+  }catch(e){ return false; }
+}
+
+// ── 캐시 갱신 ────────────────────────────────────────
+async function refreshAnnouncementsCache(){
+  _annsCache = await _sbFetchAnnouncements();
+  msgUpdateBadge();
+  return _annsCache;
+}
+
+// ── 내가 받는 공지 (recipients_snapshot에 내가 포함된 것) ──
+function _myAnnouncements(){
+  if(!_annsCache || !curUser) return [];
+  const myId = String(curUser.id||curUser.name||'');
+  return _annsCache.filter(a => {
+    if(!a) return false;
+    let snap = null;
+    try{
+      snap = typeof a.recipients_snapshot==='string'
+        ? JSON.parse(a.recipients_snapshot||'[]')
+        : (a.recipients_snapshot||[]);
+    }catch(e){ snap = []; }
+    if(!Array.isArray(snap)) return false;
+    return snap.some(r => String(r?.id)===myId);
+  });
+}
+// ── 내가 보낸 공지 (관리자) ──
+function _mySentAnnouncements(){
+  if(!_annsCache || !curUser) return [];
+  const myId = String(curUser.id||curUser.name||'');
+  return _annsCache.filter(a =>
+    String(a.sender_id||'') === myId &&
+    !a.is_deleted_by_sender
+  );
+}
+// ── 내가 안 읽은 공지 수 ──
+function _unreadAnnouncementsCount(){
+  if(!curUser) return 0;
+  const myId = String(curUser.id||curUser.name||'');
+  return _myAnnouncements().filter(a => {
+    let readBy = null;
+    try{ readBy = typeof a.read_by==='string' ? JSON.parse(a.read_by||'{}') : (a.read_by||{}); }catch(e){ readBy={}; }
+    return !readBy || !readBy[myId];
+  }).length;
+}
+
+// announcement.read_by에 내 읽음 기록 추가
+async function _markAnnouncementRead(annId){
+  if(!annId || !curUser) return;
+  const ann = (_annsCache||[]).find(a=>a.id===annId);
+  if(!ann) return;
+  let readBy = {};
+  try{ readBy = typeof ann.read_by==='string' ? JSON.parse(ann.read_by||'{}') : (ann.read_by||{}); }catch(e){ readBy = {}; }
+  const myId = String(curUser.id||curUser.name||'');
+  if(readBy[myId]) return; // 이미 읽음
+  readBy[myId] = new Date().toISOString();
+  // 캐시 갱신
+  ann.read_by = readBy;
+  // DB 갱신
+  await _sbUpdateAnnouncement(annId, {read_by: readBy});
+  msgUpdateBadge();
+}
+
+// ── 공지 작성 모달 열기 (관리자만) ──
+function openAnnouncementModal(){
+  if(curUser?.role !== 'admin'){
+    showToast('관리자만 공지를 발송할 수 있습니다','error');
+    return;
+  }
+  // 초기화
+  _annState.customRecipients = [];
+  // 라디오 기본값 'all'
+  const radioAll = document.querySelector('input[name="ann-target-type"][value="all"]');
+  if(radioAll) radioAll.checked = true;
+  // 옵션 박스 모두 숨김
+  ['ann-opt-role','ann-opt-branch','ann-opt-custom'].forEach(id=>{
+    const el = document.getElementById(id); if(el) el.style.display='none';
+  });
+  // 역할 체크박스 해제
+  document.querySelectorAll('.ann-role-chk').forEach(c=>{ c.checked = false; });
+  // 지점 체크박스 빌드 + 해제
+  annBuildBranchCheckboxes();
+  // 직접 지정 초기화
+  document.getElementById('ann-custom-search').value = '';
+  document.getElementById('ann-custom-selected').innerHTML = '';
+  annRenderCustomList();
+  // 제목/내용
+  document.getElementById('ann-subject').value = '';
+  document.getElementById('ann-content').value = '';
+  // 미리보기 갱신
+  annUpdateTargetPreview();
+  // 라디오 onchange 핸들러 설정 (역할 체크박스, 지점 체크박스에서 변경 시 미리보기 갱신)
+  document.querySelectorAll('.ann-role-chk').forEach(c=>{
+    c.onchange = annUpdateTargetPreview;
+  });
+  document.getElementById('modal-announcement-compose').classList.add('open');
+}
+
+function closeAnnouncementModal(){
+  document.getElementById('modal-announcement-compose').classList.remove('open');
+}
+
+// 대상 유형 변경 시 옵션 박스 표시 토글
+function annOnTargetTypeChange(){
+  const v = document.querySelector('input[name="ann-target-type"]:checked')?.value || 'all';
+  document.getElementById('ann-opt-role').style.display   = (v==='role')   ? '' : 'none';
+  document.getElementById('ann-opt-branch').style.display = (v==='branch') ? '' : 'none';
+  document.getElementById('ann-opt-custom').style.display = (v==='custom') ? '' : 'none';
+  annUpdateTargetPreview();
+}
+
+// 지점 체크박스 빌드
+function annBuildBranchCheckboxes(){
+  const el = document.getElementById('ann-branch-checkboxes');
+  if(!el) return;
+  const branches = (typeof BRANCHES!=='undefined' && Array.isArray(BRANCHES)) ? BRANCHES : ['신상국','정명구','정혜윤','최종길'];
+  // 대전TM도 지점 형태로
+  const all = [...branches,'대전'];
+  el.innerHTML = all.map(b=>{
+    return `<label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" class="ann-branch-chk" value="${esc(b)}" onchange="annUpdateTargetPreview()">${esc(b)}</label>`;
+  }).join('');
+}
+
+// 직접 지정 - 사용자 후보 렌더
+function annRenderCustomList(){
+  const el = document.getElementById('ann-custom-list'); if(!el) return;
+  const q = (document.getElementById('ann-custom-search')?.value||'').toLowerCase().trim();
+  const accs = (typeof getAccs==='function') ? getAccs() : [];
+  const myId = String(curUser?.id||curUser?.name||'');
+  const selected = new Set(_annState.customRecipients.map(r=>String(r.id)));
+  let candidates = accs.filter(a => a && a.id && String(a.id)!==myId && !selected.has(String(a.id)));
+  if(q){
+    candidates = candidates.filter(c => {
+      const s = ((c.name||'')+' '+(c.role||'')+' '+(c.branch||'')).toLowerCase();
+      return s.includes(q);
+    });
+  }
+  const roleLabel = {admin:'관리자',dbmanager:'DB관리자',branch:'지점장',team:'팀장',tm:'대전TM'};
+  if(candidates.length===0){
+    el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--gray-400);font-size:11px">'+(q?'검색 결과 없음':'사용자 없음')+'</div>';
+    return;
+  }
+  el.innerHTML = candidates.slice(0,80).map(c=>{
+    return `<div onclick="annPickCustom('${esc(c.id)}','${esc(c.name||c.id)}','${esc(c.role||'')}','${esc(c.branch||'')}')" style="padding:6px 10px;border-bottom:1px solid var(--gray-100);cursor:pointer;font-size:11.5px;display:flex;justify-content:space-between" onmouseover="this.style.background='#eef3f9'" onmouseout="this.style.background='transparent'">
+      <span><strong>${esc(c.name||c.id)}</strong> <span style="color:var(--gray-400);font-size:10px">[${esc(roleLabel[c.role]||c.role||'')}${c.branch?' · '+esc(c.branch):''}]</span></span>
+      <span style="font-size:10px;color:var(--gray-400)">+추가</span>
+    </div>`;
+  }).join('');
+}
+
+function annFilterCustom(){ annRenderCustomList(); }
+
+function annPickCustom(id, name, role, branch){
+  if(_annState.customRecipients.some(r=>String(r.id)===String(id))) return;
+  _annState.customRecipients.push({id, name, role, branch});
+  annRenderSelectedCustom();
+  annRenderCustomList();
+  annUpdateTargetPreview();
+}
+
+function annRemoveCustom(id){
+  _annState.customRecipients = _annState.customRecipients.filter(r=>String(r.id)!==String(id));
+  annRenderSelectedCustom();
+  annRenderCustomList();
+  annUpdateTargetPreview();
+}
+
+function annRenderSelectedCustom(){
+  const el = document.getElementById('ann-custom-selected'); if(!el) return;
+  if(_annState.customRecipients.length===0){ el.innerHTML=''; return; }
+  el.innerHTML = _annState.customRecipients.map(r=>{
+    return `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;background:#f59e0b;color:#fff;border-radius:10px;font-size:10px;font-weight:600">
+      ${esc(r.name)}
+      <span onclick="annRemoveCustom('${esc(r.id)}')" style="cursor:pointer;font-weight:700;padding:0 2px">×</span>
+    </span>`;
+  }).join('');
+}
+
+// 발송 대상 명단 계산 (target_type/target_value 기반)
+function annResolveRecipients(){
+  const t = document.querySelector('input[name="ann-target-type"]:checked')?.value || 'all';
+  const accs = (typeof getAccs==='function') ? getAccs() : [];
+  const myId = String(curUser?.id||curUser?.name||'');
+
+  // admin은 본인 제외
+  const filtered = accs.filter(a => a && a.id && String(a.id)!==myId);
+
+  if(t==='all'){
+    return { type:'all', value:'', list: filtered };
+  }
+  if(t==='role'){
+    const roles = [...document.querySelectorAll('.ann-role-chk:checked')].map(c=>c.value);
+    if(roles.length===0) return { type:'role', value:'', list:[] };
+    return { type:'role', value:roles.join(','), list: filtered.filter(a => roles.includes(a.role)) };
+  }
+  if(t==='branch'){
+    const branches = [...document.querySelectorAll('.ann-branch-chk:checked')].map(c=>c.value);
+    if(branches.length===0) return { type:'branch', value:'', list:[] };
+    return { type:'branch', value:branches.join(','), list: filtered.filter(a => branches.includes(a.branch)) };
+  }
+  if(t==='custom'){
+    return { type:'custom', value: JSON.stringify(_annState.customRecipients.map(r=>r.id)), list: _annState.customRecipients };
+  }
+  return { type:'all', value:'', list:[] };
+}
+
+// 예상 수신자 수 미리보기
+function annUpdateTargetPreview(){
+  const el = document.getElementById('ann-target-preview'); if(!el) return;
+  const resolved = annResolveRecipients();
+  if(resolved.list.length===0){
+    el.innerHTML = '<span style="color:var(--err)">⚠️ 수신자 0명 — 대상을 선택해주세요</span>';
+    el.style.background = '#fff5f5';
+    el.style.borderLeftColor = 'var(--err)';
+    return;
+  }
+  const typeLabel = {all:'전체', role:'역할별', branch:'지점별', custom:'직접 지정'}[resolved.type] || '';
+  // 역할별 분포 표시
+  const byRole = {};
+  resolved.list.forEach(r=>{ const k=r.role||'기타'; byRole[k]=(byRole[k]||0)+1; });
+  const roleLabel = {admin:'관리자',dbmanager:'DB관리자',branch:'지점장',team:'팀장',tm:'대전TM',기타:'기타'};
+  const dist = Object.entries(byRole).map(([k,v])=>`${roleLabel[k]||k} ${v}`).join(' · ');
+  el.innerHTML = `📨 ${typeLabel} · 수신자 <strong style="color:var(--navy)">${resolved.list.length}명</strong> <span style="color:var(--gray-400);font-size:10px">(${dist})</span>`;
+  el.style.background = '#eef3f9';
+  el.style.borderLeftColor = 'var(--navy)';
+}
+
+// 공지 발송
+async function sendAnnouncement(){
+  if(curUser?.role !== 'admin'){ showToast('관리자만 가능합니다','error'); return; }
+  const subject = (document.getElementById('ann-subject')?.value||'').trim();
+  const content = (document.getElementById('ann-content')?.value||'').trim();
+  if(!subject){ showToast('제목을 입력하세요','error'); return; }
+  if(!content){ showToast('내용을 입력하세요','error'); return; }
+
+  const resolved = annResolveRecipients();
+  if(resolved.list.length===0){
+    showToast('수신자가 없습니다 — 대상을 선택해주세요','error');
+    return;
+  }
+  if(!confirm(`공지를 발송합니다.\n\n제목: ${subject}\n대상: ${resolved.list.length}명\n\n진행하시겠습니까?`)) return;
+
+  const senderId = curUser.id || curUser.name;
+  const senderName = curUser.name || curUser.id;
+  // recipients_snapshot — 발송 시점 명단 보존
+  const snap = resolved.list.map(r => ({
+    id: r.id, name: r.name||r.id, role: r.role||'', branch: r.branch||''
+  }));
+
+  const row = {
+    id: uuid(),
+    subject, content,
+    sender_id: String(senderId),
+    sender_name: senderName,
+    target_type: resolved.type,
+    target_value: resolved.value,
+    recipients_snapshot: snap,
+    read_by: {},
+    is_deleted_by_sender: false,
+    created_at: new Date().toISOString()
+  };
+
+  const ok = await _sbInsertAnnouncement(row);
+  if(ok){
+    if(_annsCache) _annsCache.unshift(row);
+    showToast(`📢 ${resolved.list.length}명에게 공지를 발송했습니다`,'success');
+    closeAnnouncementModal();
+    msgUpdateBadge();
+    renderMessagesList();
+  } else {
+    showToast('공지 발송 실패 — 다시 시도해주세요','error');
+  }
 }
 
 
@@ -15719,7 +16526,6 @@ async function tmNotifyLeaders(){
           lead_id: lid,
           parent_id: null,
           thread_root_id: newId, // 각 팀장에게 독립 스레드 (1:1 답장)
-          is_system: false,      // 답장 가능
           is_read: false, read_at: null,
           is_deleted_by_sender: false, is_deleted_by_recipient: false,
           created_at: nowIso
