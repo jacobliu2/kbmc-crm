@@ -2923,12 +2923,12 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
 
 <!-- ═══ 쪽지 작성 모달 (1:1) ═══ -->
 <div class="modal-overlay" id="modal-message-compose">
-  <div class="modal-content" style="max-width:640px">
+  <div class="modal" style="width:640px;max-height:90vh;overflow-y:auto">
     <div class="mh">
       <div class="mt" id="msg-compose-title">✏️ 새 쪽지 작성</div>
       <button class="mc" onclick="closeComposeModal()">✕</button>
     </div>
-    <div class="mb" style="padding:20px">
+    <div style="padding:0">
       <input type="hidden" id="msg-compose-parent-id">
       <input type="hidden" id="msg-compose-thread-root">
 
@@ -2962,12 +2962,12 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
 
 <!-- ═══ 새 공지 작성 모달 (관리자 전용) ═══ -->
 <div class="modal-overlay" id="modal-announcement-compose">
-  <div class="modal-content" style="max-width:680px">
+  <div class="modal" style="width:680px;max-height:90vh;overflow-y:auto">
     <div class="mh">
       <div class="mt">📢 새 공지 작성 <span style="font-size:11px;font-weight:500;color:var(--gray-400);margin-left:6px">관리자 전용</span></div>
       <button class="mc" onclick="closeAnnouncementModal()">✕</button>
     </div>
-    <div class="mb" style="padding:20px">
+    <div style="padding:0">
 
       <!-- 대상 선택 -->
       <div style="margin-bottom:14px">
@@ -3042,12 +3042,12 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
 
 <!-- ═══ 공지 미열람자 확인 모달 ═══ -->
 <div class="modal-overlay" id="modal-announcement-unread">
-  <div class="modal-content" style="max-width:520px">
+  <div class="modal" style="width:520px;max-height:90vh;overflow-y:auto">
     <div class="mh">
       <div class="mt">👀 공지 미열람 현황</div>
       <button class="mc" onclick="closeM('modal-announcement-unread')">✕</button>
     </div>
-    <div class="mb" style="padding:20px">
+    <div style="padding:0">
       <div id="ann-unread-body"></div>
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
         <button class="btn btn-outline btn-sm" onclick="closeM('modal-announcement-unread')">닫기</button>
@@ -3059,12 +3059,12 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
 
 <!-- ═══ 이관 원복 모달 (관리자 전용) ═══ -->
 <div class="modal-overlay" id="modal-tm-revert">
-  <div class="modal-content" style="max-width:520px">
+  <div class="modal" style="width:520px;max-height:90vh;overflow-y:auto">
     <div class="mh">
       <div class="mt">↩ 대전TM 이관 원복</div>
       <button class="mc" onclick="closeM('modal-tm-revert')">✕</button>
     </div>
-    <div class="mb" style="padding:20px">
+    <div style="padding:0">
       <div id="tm-revert-summary" style="margin-bottom:14px;padding:12px 14px;background:#fef9f3;border:1px solid #f3d9b8;border-radius:8px;font-size:12px;line-height:1.7;color:var(--gray-700)"></div>
 
       <div id="tm-revert-target" style="margin-bottom:14px;padding:12px 14px;background:#eef3f9;border:1px solid #c7ddf2;border-radius:8px;font-size:12px;line-height:1.7;color:var(--gray-700)"></div>
