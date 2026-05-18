@@ -553,6 +553,63 @@ body.dark-mode td,body.dark-mode th{border-color:#1f2e42 !important}
 body.dark-mode .section-title{color:var(--gray-800)}
 body.dark-mode .card h3,body.dark-mode .card h4{color:var(--gray-900)}
 
+/* ── 신규 영역 다크모드 보정 ── */
+/* 쪽지함 / 공지함 */
+body.dark-mode #msg-list,body.dark-mode #msg-detail{background:#111d2e !important;color:var(--gray-800)}
+body.dark-mode .msg-tab{color:var(--gray-500) !important}
+body.dark-mode #msg-list > div[onclick],body.dark-mode #msg-list details > div{background:#111d2e !important;border-color:#1f2e42 !important;color:var(--gray-800)}
+body.dark-mode #msg-list > div[onclick]:hover{background:#1a2535 !important}
+
+/* 통일 로딩 박스 */
+body.dark-mode .kbmc-loading-box{background:linear-gradient(180deg,#0c1e35 0%,#111d2e 100%);color:var(--gray-600)}
+body.dark-mode .kbmc-spinner{border-color:#263650;border-top-color:var(--blue)}
+
+/* 빈 상태 박스 */
+body.dark-mode .kbmc-empty-state{color:var(--gray-600)}
+body.dark-mode .kbmc-empty-state .es-title{color:var(--gray-700)}
+body.dark-mode .kbmc-empty-state .es-sub{color:var(--gray-500)}
+body.dark-mode .kbmc-empty-state .es-action{background:#1f3a5f;color:#eef5ff}
+
+/* 빠른 검색 팔레트 */
+body.dark-mode #qp-overlay > div{background:#111d2e !important;border:1px solid #1f2e42;color:var(--gray-900)}
+body.dark-mode #qp-results{background:#111d2e}
+body.dark-mode #qp-results > div[data-qp-idx]{background:#111d2e !important;color:var(--gray-800);border-color:#1f2e42 !important}
+body.dark-mode #qp-results > div[data-qp-idx]:hover{background:#1a2535 !important}
+body.dark-mode #qp-input{background:transparent !important;color:var(--gray-900) !important}
+
+/* 공지 작성 모달 옵션 박스 */
+body.dark-mode #ann-opt-role,body.dark-mode #ann-opt-branch,body.dark-mode #ann-opt-custom{background:#1a2535 !important;border-color:#263650 !important}
+body.dark-mode #ann-target-preview{background:#0c1e35 !important;color:var(--gray-700)}
+body.dark-mode #ann-custom-list,body.dark-mode #ann-custom-list > div{background:#111d2e !important;border-color:#263650 !important;color:var(--gray-800)}
+body.dark-mode #ann-custom-list > div:hover{background:#1a2535 !important}
+
+/* 일괄 작업 취소 배너 */
+body.dark-mode #bulk-undo-banner{background:#0c1e35;border:1px solid #1f2e42}
+
+/* 단축키 도움말 */
+body.dark-mode #shortcut-help-overlay > div{background:#111d2e !important;color:var(--gray-900)}
+body.dark-mode #shortcut-help-overlay kbd{background:#1a2535 !important;border-color:#263650 !important;color:var(--gray-700) !important}
+
+/* 회수 메뉴 미니탭 / 대전이관 원복 */
+body.dark-mode #recall-section-recall,body.dark-mode #recall-section-revert{background:transparent;color:var(--gray-800)}
+body.dark-mode #rmt-recall,body.dark-mode #rmt-revert{color:var(--gray-500)}
+body.dark-mode #revert-body details{background:#111d2e !important;border-color:#1f2e42 !important}
+body.dark-mode #revert-body summary{background:#0c1e35 !important;color:var(--gray-700) !important}
+body.dark-mode #revert-body table thead{background:#0f2444 !important}
+body.dark-mode #revert-body table tr{border-color:#1f2e42 !important}
+
+/* 휴지통 색상 행 (다크모드에서 대비 조정) */
+body.dark-mode #trash-inline-tbody tr[style*="background:rgba(239,68,68"]{background:rgba(239,68,68,.12) !important}
+body.dark-mode #trash-inline-tbody tr[style*="background:rgba(245,158,11"]{background:rgba(245,158,11,.10) !important}
+
+/* 알림 패널 섹션 헤더 (이미 흰색 배경 사용) */
+body.dark-mode #notif-panel{background:#111d2e !important;color:var(--gray-800)}
+body.dark-mode #notif-panel > div{background:#111d2e !important;border-color:#1f2e42 !important;color:var(--gray-800)}
+body.dark-mode #notif-panel > div[style*="background:#fafbfd"]{background:#0c1e35 !important;color:var(--gray-600)}
+body.dark-mode #notif-panel > div[style*="background:#f1f5f9"]{background:#0a1828 !important;color:var(--gray-500)}
+body.dark-mode #notif-panel > div[style*="background:#fffaf0"]{background:rgba(245,158,11,.10) !important;color:var(--gray-800)}
+body.dark-mode #notif-panel > div[style*="background:#fff7ed"]{background:rgba(245,158,11,.08) !important;color:var(--gray-800)}
+
 /* ══ Status selector ══ */
 .status-select{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
 .status-opt{
@@ -605,6 +662,22 @@ body.dark-mode .card h3,body.dark-mode .card h4{color:var(--gray-900)}
 /* ══ Misc ══ */
 .loading{text-align:center;padding:48px;color:var(--gray-400);font-size:13px}
 .empty{text-align:center;padding:60px 20px;color:var(--gray-400);font-size:13px}
+
+/* ── 통일 로딩 인디케이터 ── */
+.kbmc-spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--gray-200);border-top-color:var(--blue);border-radius:50%;animation:kbmc-spin 0.8s linear infinite;vertical-align:middle;margin-right:6px}
+.kbmc-spinner-lg{width:24px;height:24px;border-width:3px;margin-right:8px}
+@keyframes kbmc-spin{to{transform:rotate(360deg)}}
+
+.kbmc-loading-box{display:flex;align-items:center;justify-content:center;gap:10px;padding:40px 20px;color:var(--gray-500);font-size:13px;font-weight:500;background:linear-gradient(180deg,#fafbfd 0%,#fff 100%);border-radius:8px}
+.kbmc-loading-inline{display:inline-flex;align-items:center;gap:6px;color:var(--gray-400);font-size:12px}
+
+/* ── 통일 빈상태 박스 (액션 유도) ── */
+.kbmc-empty-state{text-align:center;padding:50px 20px;color:var(--gray-500)}
+.kbmc-empty-state .es-icon{font-size:42px;opacity:0.5;margin-bottom:8px}
+.kbmc-empty-state .es-title{font-size:14px;font-weight:700;color:var(--gray-600);margin-bottom:4px}
+.kbmc-empty-state .es-sub{font-size:12px;color:var(--gray-400);margin-bottom:14px;line-height:1.6}
+.kbmc-empty-state .es-action{display:inline-block;padding:7px 16px;background:var(--navy);color:#fff;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:none}
+.kbmc-empty-state .es-action:hover{opacity:0.9}
 .section-title{
   font-size:12px;font-weight:600;color:var(--gray-500);
   text-transform:uppercase;letter-spacing:.5px;
@@ -982,10 +1055,18 @@ tbody tr.selected td{background:var(--blue-50)!important}
     <div id="screen-admin" class="screen">
       <div class="page-header">
         <div class="page-title">대시보드</div>
-        <div style="display:flex;gap:8px">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <select id="admin-period" onchange="onAdminPeriodChange()"
+            style="padding:7px 11px;background:#fff;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-weight:600;font-family:inherit;color:var(--gray-900);cursor:pointer"
+            title="대시보드 표시 기간">
+            <option value="all" selected>📊 전체</option>
+            <option value="month">📅 이번 달</option>
+            <option value="year">🗓️ 올해</option>
+          </select>
           <button class="btn btn-outline btn-sm" onclick="openAutoDist()">⚡ 일괄 배정</button>
           <button class="btn btn-outline btn-sm" onclick="openDbCleanup()">🧹 DB 정리</button>
           <button class="btn btn-outline btn-sm" onclick="openExport()">📥 내보내기</button>
+          <button class="btn btn-outline btn-sm" onclick="downloadFullBackup()" title="전체 데이터를 JSON 파일로 백업" style="color:var(--ok);border-color:var(--ok)">📦 백업</button>
         </div>
       </div>
       <div class="stat-grid" id="admin-stat-grid" style="grid-template-columns:repeat(5,1fr)">
@@ -1395,6 +1476,7 @@ tbody tr.selected td{background:var(--blue-50)!important}
                 <th style="width:90px">팀장</th>
                 <th style="width:70px">단계</th>
                 <th style="width:80px">삭제일</th>
+                <th style="width:90px;color:var(--warn)" title="삭제 후 30일이 지나면 영구 삭제 대상이 됩니다">⏰ 만료 잔여</th>
                 <th style="width:80px">삭제자</th>
                 <th style="width:100px">액션</th>
               </tr></thead>
@@ -5035,6 +5117,9 @@ function startApp(){
     refreshMessagesCache().catch(()=>{});
     refreshAnnouncementsCache().catch(()=>{});
   }, 60000);
+
+  // 최근 5분 이내 일괄 작업이 있으면 취소 배너 복원
+  if(typeof _updateBulkUndoBanner==='function') _updateBulkUndoBanner();
 }
 
 // ── 초기 데이터 삽입 ──────────────────────────────────────
@@ -5060,6 +5145,15 @@ function showScreen(id, btn){
   if(btn)btn?.classList.add('active');
   else{const b=document.querySelector(`.nb[data-s="${id}"]`);if(b)b.classList.add('active');}
   closePanel();
+
+  // admin 화면 진입 시 저장된 기간 복원
+  if(id==='admin'){
+    try{
+      const saved = localStorage.getItem('kbmc_admin_period');
+      const sel = document.getElementById('admin-period');
+      if(sel && saved && ['all','month','year'].includes(saved)) sel.value = saved;
+    }catch(e){}
+  }
   ({
     'admin':loadAdmin,'leads':loadLeads,'my-leads':loadMyLeads,'my-clients':loadMyClients,
     'settings':loadSettings,'tm-panel':loadTmPanel,'branch':loadBranchScreen,'activity':loadActivityScreen,'notices':loadNoticesScreen,
@@ -5472,15 +5566,111 @@ function updateNBadge(){
 function toggleNotif(){
   const p=document.getElementById('notif-panel');
   if(p.style.display==='block'){p.style.display='none';return;}
-  const arr=getNs(); arr.forEach(n=>n.read=true); localStorage.setItem(NK,JSON.stringify(arr)); updateNBadge();
-  if(!arr.length){p.innerHTML='<div style="padding:24px;text-align:center;color:var(--gray-400);font-size:13px">알림 없음</div>';}
-  else p.innerHTML=arr.slice(0,20).map(n=>`<div onclick="notifGo('${n.ref}')" style="padding:11px 14px;border-bottom:1px solid var(--gray-100);cursor:pointer" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
-    <div style="font-size:12px;font-weight:700;color:var(--gray-900)">${esc(n.title)}</div>
-    <div style="font-size:11px;color:var(--gray-500);margin-top:1px">${esc(n.body)}</div>
-    <div style="font-size:10px;color:var(--gray-400);margin-top:2px">${fmtD(n.at)}</div>
-  </div>`).join('');
+
+  // ─── 통합 알림 수집 ───
+  // 1) 기존 알림 (활동·계약·팀장 요청 등)
+  const baseAlerts = getNs() || [];
+  baseAlerts.forEach(n=>n.read=true);
+  localStorage.setItem(NK, JSON.stringify(baseAlerts));
+  updateNBadge();
+
+  // 2) 안 읽은 쪽지(messages)
+  const unreadMsgs = (typeof _myInbox==='function')
+    ? _myInbox().filter(m=>!m.is_read).slice(0,5)
+    : [];
+
+  // 3) 안 읽은 공지(announcements)
+  const unreadAnns = (typeof _myAnnouncements==='function')
+    ? _myAnnouncements().filter(a=>{
+        let rb = {};
+        try{ rb = typeof a.read_by==='string' ? JSON.parse(a.read_by||'{}') : (a.read_by||{}); }catch(e){}
+        return !rb[String(curUser?.id||curUser?.name||'')];
+      }).slice(0,5)
+    : [];
+
+  // ─── HTML 빌드 ───
+  let html = '';
+
+  // 헤더 통계
+  const totalUnread = unreadMsgs.length + unreadAnns.length + baseAlerts.filter(n=>!n.read).length;
+  html += `<div style="padding:10px 14px;background:#fafbfd;border-bottom:1px solid var(--gray-200);font-size:11px;font-weight:700;color:var(--gray-600)">
+    🔔 알림 센터 ${totalUnread>0?`<span style="color:var(--err);margin-left:4px">· ${totalUnread}건</span>`:''}
+  </div>`;
+
+  // 섹션 A: 쪽지
+  if(unreadMsgs.length>0){
+    html += `<div style="padding:6px 14px;background:#f1f5f9;font-size:10px;font-weight:700;color:var(--gray-500)">💌 안 읽은 쪽지 (${unreadMsgs.length})</div>`;
+    unreadMsgs.forEach(m=>{
+      const date = (m.created_at||'').slice(5,16).replace('T',' ');
+      const safeId = String(m.id||'').replace(/'/g,"\\'");
+      html += `<div onclick="notifGoMsg('${safeId}')" style="padding:10px 14px;border-bottom:1px solid var(--gray-100);cursor:pointer;background:#fffaf0" onmouseover="this.style.background='#fef3c7'" onmouseout="this.style.background='#fffaf0'">
+        <div style="font-size:12px;font-weight:700;color:var(--gray-900)">● ${esc(m.sender_name||'-')} <span style="font-size:10px;font-weight:500;color:var(--gray-400)">[쪽지]</span></div>
+        <div style="font-size:11px;color:var(--gray-600);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.subject||'(제목 없음)')}</div>
+        <div style="font-size:10px;color:var(--gray-400);margin-top:2px">${esc(date)}</div>
+      </div>`;
+    });
+  }
+
+  // 섹션 B: 공지
+  if(unreadAnns.length>0){
+    html += `<div style="padding:6px 14px;background:#f1f5f9;font-size:10px;font-weight:700;color:var(--gray-500)">📢 안 읽은 공지 (${unreadAnns.length})</div>`;
+    unreadAnns.forEach(a=>{
+      const date = (a.created_at||'').slice(5,16).replace('T',' ');
+      const safeId = String(a.id||'').replace(/'/g,"\\'");
+      html += `<div onclick="notifGoAnn('${safeId}')" style="padding:10px 14px;border-bottom:1px solid var(--gray-100);cursor:pointer;background:#fff7ed" onmouseover="this.style.background='#fed7aa'" onmouseout="this.style.background='#fff7ed'">
+        <div style="font-size:12px;font-weight:700;color:#f59e0b">● ${esc(a.sender_name||'-')} <span style="font-size:10px;font-weight:500;color:var(--gray-400)">[공지]</span></div>
+        <div style="font-size:11px;color:var(--gray-600);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.subject||'(제목 없음)')}</div>
+        <div style="font-size:10px;color:var(--gray-400);margin-top:2px">${esc(date)}</div>
+      </div>`;
+    });
+  }
+
+  // 섹션 C: 기존 알림 (활동·계약·팀장 요청)
+  if(baseAlerts.length>0){
+    html += `<div style="padding:6px 14px;background:#f1f5f9;font-size:10px;font-weight:700;color:var(--gray-500)">🔔 기타 알림</div>`;
+    baseAlerts.slice(0,15).forEach(n=>{
+      const safeRef = String(n.ref||'').replace(/'/g,"\\'");
+      html += `<div onclick="notifGo('${safeRef}')" style="padding:10px 14px;border-bottom:1px solid var(--gray-100);cursor:pointer" onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
+        <div style="font-size:12px;font-weight:700;color:var(--gray-900)">${esc(n.title)}</div>
+        <div style="font-size:11px;color:var(--gray-500);margin-top:1px">${esc(n.body)}</div>
+        <div style="font-size:10px;color:var(--gray-400);margin-top:2px">${fmtD(n.at)}</div>
+      </div>`;
+    });
+  }
+
+  // 빈 상태
+  if(unreadMsgs.length===0 && unreadAnns.length===0 && baseAlerts.length===0){
+    html += '<div style="padding:40px;text-align:center;color:var(--gray-400);font-size:13px">📭 알림이 없습니다</div>';
+  }
+
+  p.innerHTML = html;
   p.style.display='block';
 }
+
+// 통합 알림 - 쪽지 클릭 시 쪽지함으로 이동 + 해당 쪽지 자동 열림
+async function notifGoMsg(msgId){
+  document.getElementById('notif-panel').style.display='none';
+  if(typeof openMessagesScreen==='function') openMessagesScreen();
+  setTimeout(async ()=>{
+    if(typeof msgSwitchTab==='function') msgSwitchTab('inbox');
+    setTimeout(()=>{
+      if(typeof openMessage==='function') openMessage(msgId);
+    }, 300);
+  }, 200);
+}
+
+// 통합 알림 - 공지 클릭 시 쪽지함 > 공지함으로 이동 + 해당 공지 자동 열림
+async function notifGoAnn(annId){
+  document.getElementById('notif-panel').style.display='none';
+  if(typeof openMessagesScreen==='function') openMessagesScreen();
+  setTimeout(async ()=>{
+    if(typeof msgSwitchTab==='function') msgSwitchTab('noticebox');
+    setTimeout(()=>{
+      if(typeof openAnnouncement==='function') openAnnouncement(annId);
+    }, 300);
+  }, 200);
+}
+
 async function notifGo(ref){
   document.getElementById('notif-panel').style.display='none';
   if(!ref) return;
@@ -5524,6 +5714,40 @@ async function notifGo(ref){
         setTimeout(()=>renderLeaderReqs(), 300);
       }
       break;
+    case 'trash':
+      // 휴지통 만료 임박 → DB관리 휴지통 탭으로 이동
+      showScreen('leads', document.querySelector('.nb[data-s="leads"]'));
+      setTimeout(()=>{
+        if(typeof switchLeadsSubTab==='function'){
+          const trashBtn = document.getElementById('leads-subtab-trash');
+          switchLeadsSubTab('trash', trashBtn);
+        }
+      }, 400);
+      break;
+    case 'recall_backlog':
+      // 회수 대상 누적 → DB관리 회수대상 탭으로 이동
+      showScreen('leads', document.querySelector('.nb[data-s="leads"]'));
+      setTimeout(()=>{
+        if(typeof switchLeadsSubTab==='function'){
+          const recallBtn = document.getElementById('leads-subtab-recall');
+          switchLeadsSubTab('recall', recallBtn);
+        }
+      }, 400);
+      break;
+    case 'backup':
+      // 백업 권장 → 백업 다운로드 직접 실행 옵션
+      if(confirm('전체 데이터를 백업 파일로 다운로드하시겠습니까?')){
+        downloadFullBackup();
+      }
+      break;
+    case 'stale_leads':
+      // 활동 미기록 누적 → 내 리드 화면으로 이동
+      if(curUser?.role==='team'){
+        showScreen('my-leads', document.querySelector('.nb[data-s="my-leads"]'));
+      } else {
+        showScreen('leads', document.querySelector('.nb[data-s="leads"]'));
+      }
+      break;
     default:
       // 기존 방식: lead ID
       if(ref && ref.length>10){
@@ -5540,6 +5764,12 @@ function checkAlerts(){
     const pendingReqs=getLeaderReqs().filter(r=>r.status==='pending').length;
     const badge=document.getElementById('leader-req-badge');
     if(badge){badge.textContent=pendingReqs;badge.style.display=pendingReqs?'inline':'none';}
+    // 휴지통 30일 만료 임박 알림 체크
+    _checkTrashExpiryAlerts();
+    // 회수 대상 누적 알림 체크
+    _checkRecallBacklogAlert();
+    // 주간 백업 권장 알림 체크
+    _checkBackupReminder();
   }
   if(curUser.role==='team'){
     const today=todayKst();
@@ -5548,13 +5778,532 @@ function checkAlerts(){
       if(diff<=a.remind_days&&diff>=0)
         addN('na',`📅 액션 알림`,`${a.lead_name} — ${a.action_type} (${fmtD(a.due_date)})`,'na:'+a.lead_id);
     });
+    // 활동 누락 감지 (7일+ 미기록 리드)
+    _checkStaleLeadsForTeam();
   }
 }
 
+// ── 활동 누락 감지 (팀장 전용) ──────────────────
+// 내가 담당한 리드 중 7일 이상 활동기록이 없는 건 알림
+// 회수 직전 단계에서 미리 챙기게 함
+const _STALE_LEADS_KEY = 'kbmc_stale_leads_alerts';
+const STALE_DAYS_THRESHOLD = 7; // 7영업일+
+
+function _checkStaleLeadsForTeam(){
+  if(curUser?.role !== 'team') return;
+  if(!Array.isArray(allLeads) || !Array.isArray(allActivities)) return;
+
+  const today = todayKst();
+  let sentToday = {};
+  try{ sentToday = JSON.parse(localStorage.getItem(_STALE_LEADS_KEY)||'{}'); }catch(e){}
+  if(sentToday._date !== today){
+    sentToday = { _date: today };
+  }
+
+  // 내 담당 리드 (소프트 삭제·드랍 제외)
+  const myLeads = allLeads.filter(l=>{
+    if(!l) return false;
+    if(['deleted','drop'].includes(l.status)) return false;
+    if(['드랍','보류','계약'].includes(l.current_stage)) return false;
+    // team_name 또는 team_names(JSON 배열)에 내 이름 포함
+    if(l.team_name === curUser.name) return true;
+    try{
+      const tns = JSON.parse(l.team_names||'[]');
+      if(Array.isArray(tns) && tns.includes(curUser.name)) return true;
+    }catch(e){}
+    return false;
+  });
+
+  // 실접촉 활동 화이트리스트
+  const REAL_TYPES = new Set(['call','meeting','online','proposal','contract','email']);
+
+  // 각 리드의 마지막 실접촉 활동 시각
+  const lastActMap = new Map();
+  allActivities.forEach(a=>{
+    if(!a || !a.lead_id || !REAL_TYPES.has(a.type)) return;
+    const ms = new Date(a.created_at).getTime();
+    if(isNaN(ms)) return;
+    const prev = lastActMap.get(a.lead_id);
+    if(!prev || ms > prev) lastActMap.set(a.lead_id, ms);
+  });
+
+  const nowMs = Date.now();
+  const DAY = 86400000;
+  let staleCount = 0;
+  const staleSample = [];
+
+  myLeads.forEach(l=>{
+    const lastMs = lastActMap.get(l.id);
+    // 활동 한 번도 없으면 assigned_at 기준
+    const refMs = lastMs || new Date(l.assigned_at||l.distributed_at||l.created_at||0).getTime();
+    if(!refMs) return;
+    const elapsedDays = Math.floor((nowMs - refMs)/DAY);
+    if(elapsedDays >= STALE_DAYS_THRESHOLD){
+      staleCount++;
+      if(staleSample.length < 3){
+        staleSample.push(`${l.company_name||'(이름없음)'} (${elapsedDays}일)`);
+      }
+    }
+  });
+
+  // 임계치별 알림 (5건/10건/20건, 각 임계치당 1일 1회)
+  let level = null;
+  if(staleCount >= 20 && !sentToday.lvl20){
+    level = {key:'lvl20', title:'🚨 활동 미기록 20건 이상', body:`${staleCount}건이 7일+ 미기록 — 회수 위험`};
+  } else if(staleCount >= 10 && !sentToday.lvl10){
+    level = {key:'lvl10', title:'⚠️ 활동 미기록 10건 이상', body:`${staleCount}건이 7일+ 미기록 (${staleSample.join(', ')}${staleCount>3?' 외':''})`};
+  } else if(staleCount >= 5 && !sentToday.lvl5){
+    level = {key:'lvl5', title:'📋 활동 미기록 누적', body:`${staleCount}건이 7일+ 미기록 — 활동 등록 권장`};
+  }
+
+  if(level){
+    addN('stale_leads', level.title, level.body, 'stale_leads');
+    sentToday[level.key] = true;
+    try{ localStorage.setItem(_STALE_LEADS_KEY, JSON.stringify(sentToday)); }catch(e){}
+  }
+}
+
+// ── 휴지통 30일 만료 임박 알림 (관리자 전용) ──────────────────
+// deleted_at 기준 23일 경과 시 7일 전 알림, 29일 경과 시 1일 전 알림
+// 중복 알림 방지: localStorage에 발송된 알림 ID 기록
+const _TRASH_ALERT_KEY = 'kbmc_trash_alerts_sent';
+function _checkTrashExpiryAlerts(){
+  if(curUser?.role !== 'admin') return;
+  if(!Array.isArray(allLeads)) return;
+
+  const sentSet = new Set();
+  try{ JSON.parse(localStorage.getItem(_TRASH_ALERT_KEY)||'[]').forEach(k=>sentSet.add(k)); }catch(e){}
+
+  const now = Date.now();
+  const DAY = 86400000;
+  const newAlerts = [];
+
+  allLeads.filter(l=>l && l.status==='deleted' && l.deleted_at).forEach(l=>{
+    const deletedMs = new Date(l.deleted_at).getTime();
+    if(isNaN(deletedMs)) return;
+    const elapsedDays = Math.floor((now - deletedMs) / DAY);
+    const remainDays = 30 - elapsedDays;
+
+    // 7일 전 알림 (23일 ≤ elapsed < 24일)
+    if(elapsedDays >= 23 && elapsedDays < 24){
+      const key = `trash7:${l.id}`;
+      if(!sentSet.has(key)){
+        addN('trash_expiry',
+          `🗑️ 휴지통 만료 7일 전`,
+          `${l.company_name||'(이름없음)'} - ${remainDays}일 후 영구 삭제됩니다`,
+          'trash:'+l.id);
+        sentSet.add(key);
+        newAlerts.push(key);
+      }
+    }
+    // 1일 전 알림 (29일 ≤ elapsed < 30일)
+    else if(elapsedDays >= 29 && elapsedDays < 30){
+      const key = `trash1:${l.id}`;
+      if(!sentSet.has(key)){
+        addN('trash_expiry',
+          `🚨 휴지통 만료 1일 전`,
+          `${l.company_name||'(이름없음)'} - 내일 영구 삭제됩니다`,
+          'trash:'+l.id);
+        sentSet.add(key);
+        newAlerts.push(key);
+      }
+    }
+  });
+
+  if(newAlerts.length > 0){
+    try{ localStorage.setItem(_TRASH_ALERT_KEY, JSON.stringify([...sentSet].slice(-500))); }catch(e){}
+  }
+}
+
+// ── 회수 대상 누적 알림 (관리자 전용) ──────────────────
+// 회수 대상이 10건/30건/50건 임계치 넘으면 알림 (각 임계치당 1일 1회)
+// 매일 첫 로그인 시 회수 대상 요약 토스트 추가 표시
+const _RECALL_BACKLOG_KEY = 'kbmc_recall_backlog_alerts';
+const _DAILY_RECALL_TOAST_KEY = 'kbmc_recall_daily_toast';
+
+function _getRecallTargetCount(){
+  // _rcTargets 캐시가 있으면 사용, 없으면 빈 배열
+  if(typeof _rcTargets !== 'undefined' && Array.isArray(_rcTargets)){
+    return _rcTargets.length;
+  }
+  // _rcTargets가 아직 계산 안 됐으면 회수 화면 진입 전이므로 추정 불가
+  return -1;
+}
+
+function _checkRecallBacklogAlert(){
+  if(curUser?.role !== 'admin') return;
+  const cnt = _getRecallTargetCount();
+  if(cnt < 0) return; // 아직 계산 전
+
+  const today = todayKst();
+  let sentToday = {};
+  try{ sentToday = JSON.parse(localStorage.getItem(_RECALL_BACKLOG_KEY)||'{}'); }catch(e){}
+  if(sentToday._date !== today){
+    sentToday = { _date: today };
+  }
+
+  let level = null;
+  if(cnt >= 50 && !sentToday.lvl50){
+    level = { key:'lvl50', title:'🚨 회수 대상 50건 초과 누적', body:`현재 ${cnt}건 — 시급한 처리가 필요합니다` };
+  } else if(cnt >= 30 && !sentToday.lvl30){
+    level = { key:'lvl30', title:'⚠️ 회수 대상 30건 초과 누적', body:`현재 ${cnt}건 — 회수 메뉴 확인 권장` };
+  } else if(cnt >= 10 && !sentToday.lvl10){
+    level = { key:'lvl10', title:'📋 회수 대상 누적', body:`현재 ${cnt}건 — 처리 검토 필요` };
+  }
+  if(level){
+    addN('recall_backlog', level.title, level.body, 'recall_backlog');
+    sentToday[level.key] = true;
+    try{ localStorage.setItem(_RECALL_BACKLOG_KEY, JSON.stringify(sentToday)); }catch(e){}
+  }
+}
+
+// 매일 첫 로그인 시 회수 대상 요약 토스트 (관리자)
+function _showDailyRecallToast(){
+  if(curUser?.role !== 'admin') return;
+  const today = todayKst();
+  try{
+    const last = localStorage.getItem(_DAILY_RECALL_TOAST_KEY);
+    if(last === today) return; // 오늘 이미 표시
+  }catch(e){}
+
+  // _rcTargets가 계산될 때까지 대기 (회수 메뉴 진입 시 자동 계산됨)
+  // 여기서는 직접 계산 시도
+  const cnt = _getRecallTargetCount();
+  if(cnt > 0){
+    setTimeout(()=>{
+      if(typeof showToast==='function'){
+        showToast(`📋 오늘의 회수 대상: ${cnt}건 — 회수 메뉴에서 확인하세요`, 'info');
+      }
+    }, 3000);
+  }
+  try{ localStorage.setItem(_DAILY_RECALL_TOAST_KEY, today); }catch(e){}
+}
+
+// ── 주간 백업 권장 알림 (관리자 전용, 매주 월요일 1회) ──────────────────
+const _BACKUP_REMIND_KEY = 'kbmc_backup_remind';
+function _checkBackupReminder(){
+  if(curUser?.role !== 'admin') return;
+  const now = new Date();
+  const day = now.getDay(); // 0=일, 1=월
+  if(day !== 1) return; // 월요일만
+
+  // KST 기준 이번 주 월요일 ISO 날짜 (yyyy-mm-dd)
+  const monKey = todayKst();
+  try{
+    if(localStorage.getItem(_BACKUP_REMIND_KEY) === monKey) return; // 이번주 알림 이미 발송
+  }catch(e){}
+
+  addN('backup',
+    '📦 주간 백업 권장',
+    '이번주 데이터 백업을 권장합니다. 설정 → 백업에서 다운로드 가능합니다.',
+    'backup');
+
+  try{ localStorage.setItem(_BACKUP_REMIND_KEY, monKey); }catch(e){}
+}
+
+// 전체 데이터 백업 다운로드 (관리자 전용)
+async function downloadFullBackup(){
+  if(curUser?.role !== 'admin'){ showToast('관리자만 가능합니다','error'); return; }
+  showToast('📦 백업 생성 중... (10-30초 소요)','info');
+  try{
+    // 주요 테이블 모두 fetch
+    const tables = ['leads','accounts','activities','next_actions','notices','messages','announcements'];
+    const backup = {
+      _meta: {
+        exported_at: new Date().toISOString(),
+        exporter: curUser?.name || '',
+        version: 'kbmc_backup_v1'
+      }
+    };
+    for(const t of tables){
+      try{
+        const rows = await dbQ(t).catch(()=>[]);
+        backup[t] = Array.isArray(rows) ? rows : [];
+      }catch(e){
+        backup[t] = [];
+      }
+    }
+    // JSON 다운로드
+    const blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const ts = todayKst().replace(/-/g,'');
+    a.href = url;
+    a.download = `kbmc_backup_${ts}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    const totalRows = tables.reduce((s,t)=>s+(backup[t]?.length||0), 0);
+    showToast(`✅ 백업 완료 — 총 ${totalRows.toLocaleString()}건`, 'success');
+  }catch(e){
+    console.error('downloadFullBackup error',e);
+    showToast('백업 실패: '+(e.message||e),'error');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// 🎨 통일 로딩/빈상태 헬퍼
+// ═══════════════════════════════════════════════════════════
+// kbmcLoading(message) → 로딩 박스 HTML 반환 (innerHTML로 사용)
+function kbmcLoading(message){
+  const msg = message || '불러오는 중...';
+  return `<div class="kbmc-loading-box"><span class="kbmc-spinner"></span><span>${esc(msg)}</span></div>`;
+}
+
+// kbmcLoadingInline(message) → 인라인 작은 로딩 (테이블 셀, 작은 영역용)
+function kbmcLoadingInline(message){
+  const msg = message || '불러오는 중...';
+  return `<span class="kbmc-loading-inline"><span class="kbmc-spinner"></span>${esc(msg)}</span>`;
+}
+
+// kbmcLoadingRow(colspan, message) → 테이블 행으로 사용
+function kbmcLoadingRow(colspan, message){
+  const msg = message || '불러오는 중...';
+  return `<tr><td colspan="${colspan||10}" style="text-align:center;padding:40px;color:var(--gray-400);font-size:13px"><span class="kbmc-spinner"></span><span style="vertical-align:middle">${esc(msg)}</span></td></tr>`;
+}
+
+// kbmcEmpty(opts) → 빈상태 박스 HTML 반환
+// opts: { icon, title, sub, actionLabel, actionFn (문자열 함수명 또는 onclick) }
+function kbmcEmpty(opts){
+  const o = opts || {};
+  const icon = o.icon || '📭';
+  const title = o.title || '데이터가 없습니다';
+  const sub = o.sub || '';
+  let actionHtml = '';
+  if(o.actionLabel && o.actionFn){
+    const onClick = o.actionFn.includes('(') ? o.actionFn : (o.actionFn + '()');
+    actionHtml = `<button class="es-action" onclick="${esc(onClick)}">${esc(o.actionLabel)}</button>`;
+  }
+  return `<div class="kbmc-empty-state">
+    <div class="es-icon">${icon}</div>
+    <div class="es-title">${esc(title)}</div>
+    ${sub ? `<div class="es-sub">${esc(sub)}</div>` : ''}
+    ${actionHtml}
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// 🛡️ 일괄 작업 안전장치 (10건 이상 시 추가 확인 + 5분 취소)
+// ═══════════════════════════════════════════════════════════
+const BULK_THRESHOLD = 10;       // 이 이상이면 추가 확인 모달
+const BULK_UNDO_TTL_MS = 5*60*1000; // 5분
+const _BULK_LAST_KEY = 'kbmc_bulk_last_op';
+
+// 큰 일괄 작업 사전 확인 (10건 이상이면 모달, 그 미만이면 즉시 true)
+// returns: true=진행, false=취소
+async function confirmBulkOp(actionLabel, count, detailHtml){
+  if(count < BULK_THRESHOLD) return true;
+  return new Promise(resolve=>{
+    const ov = document.createElement('div');
+    ov.className = 'modal-overlay open';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9500;display:flex;align-items:center;justify-content:center';
+    ov.innerHTML = `
+      <div style="background:#fff;border-radius:12px;width:520px;max-width:95vw;max-height:90vh;overflow-y:auto;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+          <div style="width:42px;height:42px;border-radius:50%;background:#fef3c7;display:flex;align-items:center;justify-content:center;font-size:22px">⚠️</div>
+          <div>
+            <div style="font-size:15px;font-weight:800;color:var(--gray-900)">대량 일괄 작업 확인</div>
+            <div style="font-size:11px;color:var(--gray-500);margin-top:2px">${BULK_THRESHOLD}건 이상은 신중한 확인이 필요합니다</div>
+          </div>
+        </div>
+        <div style="padding:12px 14px;background:#fef3c7;border:1px solid #fbbf24;border-radius:8px;margin-bottom:14px;font-size:13px;line-height:1.6">
+          <strong style="color:#d97706">${esc(actionLabel)} ${count}건</strong>을(를) 처리하려고 합니다.<br>
+          ${detailHtml||''}
+        </div>
+        <div style="padding:10px 12px;background:#eff6ff;border-left:3px solid #3b82f6;border-radius:6px;margin-bottom:14px;font-size:11.5px;color:var(--gray-700);line-height:1.6">
+          💡 작업 후 <strong>5분 이내에 "마지막 일괄 작업 취소"</strong> 버튼으로 되돌릴 수 있습니다.<br>
+          (활동로그에도 백업 기록이 남습니다)
+        </div>
+        <div style="margin-bottom:14px">
+          <label style="font-size:12px;color:var(--gray-600);display:block;margin-bottom:4px">아래에 <strong style="color:var(--err)">"확인"</strong>이라고 입력하세요 <span style="color:var(--err)">*</span></label>
+          <input type="text" id="bulk-confirm-input" placeholder="확인" autocomplete="off"
+            style="width:100%;padding:9px 12px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:14px;font-family:inherit">
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px">
+          <button id="bulk-cancel-btn" class="btn btn-outline">취소</button>
+          <button id="bulk-confirm-btn" class="btn" style="background:var(--err);color:#fff;border-color:var(--err)" disabled>처리 진행</button>
+        </div>
+      </div>`;
+    document.body.appendChild(ov);
+    const input = ov.querySelector('#bulk-confirm-input');
+    const okBtn = ov.querySelector('#bulk-confirm-btn');
+    const noBtn = ov.querySelector('#bulk-cancel-btn');
+    input?.focus();
+    input?.addEventListener('input', ()=>{
+      if(input.value.trim()==='확인'){
+        okBtn.disabled = false;
+        okBtn.style.opacity = '1';
+      } else {
+        okBtn.disabled = true;
+        okBtn.style.opacity = '0.5';
+      }
+    });
+    const close = (result)=>{
+      try{ ov.remove(); }catch(e){}
+      resolve(result);
+    };
+    okBtn.onclick = ()=>{ if(!okBtn.disabled) close(true); };
+    noBtn.onclick = ()=>close(false);
+    ov.onclick = (e)=>{ if(e.target===ov) close(false); };
+  });
+}
+
+// 일괄 작업 결과 기록 (취소 가능 상태로 5분간 보존)
+// payload: { actionLabel, items:[{id, prev:{필드들}, next:{필드들}}], dbTable:'leads' }
+function recordBulkOp(payload){
+  if(!payload || !Array.isArray(payload.items) || payload.items.length===0) return;
+  const record = {
+    actionLabel: payload.actionLabel || '일괄 작업',
+    dbTable: payload.dbTable || 'leads',
+    items: payload.items,
+    actor: curUser?.name || '',
+    ts: Date.now()
+  };
+  try{ localStorage.setItem(_BULK_LAST_KEY, JSON.stringify(record)); }catch(e){}
+  _updateBulkUndoBanner();
+}
+
+// 마지막 일괄 작업이 5분 이내면 취소 배너 표시
+function _updateBulkUndoBanner(){
+  let rec = null;
+  try{ rec = JSON.parse(localStorage.getItem(_BULK_LAST_KEY)||'null'); }catch(e){}
+  let banner = document.getElementById('bulk-undo-banner');
+  const valid = rec && (Date.now() - rec.ts) < BULK_UNDO_TTL_MS;
+
+  if(!valid){
+    if(banner) banner.remove();
+    try{ if(rec) localStorage.removeItem(_BULK_LAST_KEY); }catch(e){}
+    return;
+  }
+
+  // 권한 체크: 본인이 한 작업만 본인이 취소
+  if(rec.actor && rec.actor !== curUser?.name){
+    if(banner) banner.remove();
+    return;
+  }
+
+  const remainSec = Math.ceil((BULK_UNDO_TTL_MS - (Date.now() - rec.ts))/1000);
+  const mm = Math.floor(remainSec/60);
+  const ss = String(remainSec%60).padStart(2,'0');
+
+  if(!banner){
+    banner = document.createElement('div');
+    banner.id = 'bulk-undo-banner';
+    banner.style.cssText = 'position:fixed;bottom:24px;right:24px;background:#1e293b;color:#fff;padding:14px 18px;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.3);font-size:13px;display:flex;align-items:center;gap:12px;z-index:9000;max-width:380px';
+    document.body.appendChild(banner);
+  }
+  banner.innerHTML = `
+    <div style="flex:1">
+      <div style="font-weight:700;margin-bottom:2px">📋 ${esc(rec.actionLabel)} (${rec.items.length}건)</div>
+      <div style="font-size:11px;color:#94a3b8">⏰ ${mm}:${ss} 후 자동 만료</div>
+    </div>
+    <button onclick="undoBulkOp()" style="background:var(--warn);color:#fff;border:none;padding:7px 14px;border-radius:6px;cursor:pointer;font-weight:700;font-size:12px;font-family:inherit">↩ 취소</button>
+    <button onclick="document.getElementById('bulk-undo-banner')?.remove()" style="background:transparent;color:#94a3b8;border:none;cursor:pointer;font-size:18px;padding:0 4px">✕</button>
+  `;
+}
+
+// 일괄 작업 취소 — items의 prev 값으로 복원
+async function undoBulkOp(){
+  let rec = null;
+  try{ rec = JSON.parse(localStorage.getItem(_BULK_LAST_KEY)||'null'); }catch(e){}
+  if(!rec){ showToast('취소할 작업이 없습니다','error'); return; }
+  if((Date.now() - rec.ts) >= BULK_UNDO_TTL_MS){
+    showToast('취소 가능 시간이 만료되었습니다','error');
+    try{ localStorage.removeItem(_BULK_LAST_KEY); }catch(e){}
+    _updateBulkUndoBanner();
+    return;
+  }
+  if(rec.actor && rec.actor !== curUser?.name){
+    showToast('본인이 수행한 작업만 취소할 수 있습니다','error');
+    return;
+  }
+  if(!confirm(`"${rec.actionLabel}" ${rec.items.length}건을(를) 되돌리시겠습니까?`)) return;
+
+  let ok=0, fail=0;
+  for(const item of rec.items){
+    try{
+      await dbU(rec.dbTable||'leads', item.id, item.prev);
+      if(typeof allLeads!=='undefined' && Array.isArray(allLeads)){
+        const i = allLeads.findIndex(l=>l.id===item.id);
+        if(i>=0) allLeads[i] = {...allLeads[i], ...item.prev};
+      }
+      if(typeof logActivity==='function'){
+        try{ await logActivity(item.id,'assign',`↩ [일괄 작업 취소] ${rec.actionLabel} 취소 (작업자: ${rec.actor||'-'})`,'',''); }catch(e){}
+      }
+      ok++;
+    }catch(e){
+      console.error('undoBulkOp item error',item.id,e);
+      fail++;
+    }
+  }
+  try{ localStorage.removeItem(_BULK_LAST_KEY); }catch(e){}
+  _updateBulkUndoBanner();
+  showToast(`↩ 복원 완료 — 성공 ${ok}건${fail>0?`, 실패 ${fail}건`:''}`, fail>0?'error':'success');
+  // 화면 새로고침
+  if(typeof filterLeads==='function') filterLeads();
+  if(typeof updateLeadsSubTabCounts==='function') updateLeadsSubTabCounts();
+}
+
+// 배너 1초마다 업데이트 (남은 시간 카운트다운)
+setInterval(()=>{
+  if(document.getElementById('bulk-undo-banner')) _updateBulkUndoBanner();
+}, 1000);
+
 // ── 관리자 전체현황 ───────────────────────────────────────
+// ── 관리자 대시보드 기간 필터 헬퍼 ──────────────────
+// 리드 등록일자(created_at 또는 distributed_at) 기준으로 기간 필터링
+// period: 'all' | 'month' | 'year'
+function _filterLeadsByPeriod(leads, period){
+  if(!Array.isArray(leads)) return [];
+  if(!period || period==='all') return leads;
+  const now = new Date();
+  let startMs;
+  if(period==='month'){
+    startMs = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+  } else if(period==='year'){
+    startMs = new Date(now.getFullYear(), 0, 1).getTime();
+  } else {
+    return leads;
+  }
+  return leads.filter(l => {
+    const ts = l.distributed_at || l.created_at || l.assigned_at;
+    if(!ts) return false;
+    return new Date(ts).getTime() >= startMs;
+  });
+}
+
+// 대시보드 기간 변경 핸들러
+function onAdminPeriodChange(){
+  // localStorage에 선택 저장 (재로그인 시 유지)
+  try{
+    const v = document.getElementById('admin-period')?.value || 'all';
+    localStorage.setItem('kbmc_admin_period', v);
+  }catch(e){}
+  loadAdmin();
+}
+
 async function loadAdmin(){
-  const leads=await dbQ('leads');
-  const all=leads.filter(l=>l.status!=='deleted');
+  const leadsRaw=await dbQ('leads');
+  const allBase=leadsRaw.filter(l=>l.status!=='deleted');
+
+  // ─── 기간 필터 적용 ───
+  const period = document.getElementById('admin-period')?.value || 'all';
+  const all = _filterLeadsByPeriod(allBase, period);
+
+  // 헤더에 기간 표시 (이번달/올해 선택 시)
+  const titleEl = document.querySelector('#screen-admin .page-title');
+  if(titleEl){
+    if(period==='month'){
+      const d = new Date();
+      titleEl.innerHTML = `대시보드 <span style="font-size:13px;font-weight:500;color:var(--blue);margin-left:8px">📅 ${d.getMonth()+1}월</span>`;
+    } else if(period==='year'){
+      const d = new Date();
+      titleEl.innerHTML = `대시보드 <span style="font-size:13px;font-weight:500;color:var(--blue);margin-left:8px">🗓️ ${d.getFullYear()}년</span>`;
+    } else {
+      titleEl.textContent = '대시보드';
+    }
+  }
 
   // activities 먼저 로드 (배정현황 30h+미기록 계산에 필요)
   if(!testMode && !allActivities?.length){
@@ -12081,7 +12830,7 @@ function rvRender(){
   </div>`;
 
   if(rows.length===0){
-    container.innerHTML = diagInfo + '<div style="text-align:center;padding:60px 20px;color:var(--gray-300);font-size:13px">📂 조건에 맞는 대전 이관 건이 없습니다<br><span style="font-size:11px">기간 필터를 「전체 기간」으로 바꿔보세요</span></div>';
+    container.innerHTML = diagInfo + kbmcEmpty({icon:'📂', title:'조건에 맞는 대전 이관 건이 없습니다', sub:'기간 필터를 「전체 기간」으로 바꿔보세요'});
     return;
   }
 
@@ -12254,10 +13003,24 @@ async function rvRevertSelected(){
   if(reason===null) return;
   if(!String(reason).trim()){ showToast('사유를 입력해주세요','error'); return; }
 
-  if(!confirm(`정말 ${ids.length}건을 일괄 원복하시겠습니까?\n\n사유: ${reason}`)) return;
+  // ── 안전장치: 10건 이상이면 강화된 확인 모달 ──
+  const proceed = await confirmBulkOp(
+    '대전이관 원복',
+    ids.length,
+    `사유: ${esc(reason)}<br>원복 시 활동로그 기반으로 원래 지점·팀장에게 복귀합니다.`
+  );
+  if(!proceed) return;
+
+  // 10건 미만이면 기본 확인
+  if(ids.length < BULK_THRESHOLD){
+    if(!confirm(`정말 ${ids.length}건을 일괄 원복하시겠습니까?\n\n사유: ${reason}`)) return;
+  }
 
   // 활동로그 보장 — 누락된 lead가 있을 수 있으므로 한 번 더 fetch
   await _ensureActivitiesLoadedBulk(ids);
+
+  // 백업용: 각 lead의 이전 상태 저장
+  const undoItems = [];
 
   let okCnt = 0, failCnt = 0;
   const summary = []; // 결과 요약용
@@ -12307,6 +13070,23 @@ async function rvRevertSelected(){
     restore.reminder_source = null;
 
     try{
+      // 백업용: 이전 상태 저장 (취소 시 복원 가능하도록)
+      const prevSnapshot = {
+        branch_name: lead.branch_name,
+        team_name: lead.team_name,
+        team_names: lead.team_names,
+        status: lead.status,
+        tm_transferred: lead.tm_transferred,
+        tm_transferred_at: lead.tm_transferred_at,
+        tm_hq_transferred: lead.tm_hq_transferred,
+        auto_recalled: lead.auto_recalled,
+        auto_recall_at: lead.auto_recall_at,
+        auto_recall_reason: lead.auto_recall_reason,
+        collab_branches: lead.collab_branches,
+        assigned_at: lead.assigned_at
+      };
+      undoItems.push({ id, prev: prevSnapshot });
+
       await dbU('leads', id, restore);
       if(allLeads){
         const i = allLeads.findIndex(l=>l.id===id);
@@ -12323,6 +13103,15 @@ async function rvRevertSelected(){
       failCnt++;
       summary.push(`✗ ${lead.company_name||'(이름없음)'} — 실패`);
     }
+  }
+
+  // 5분간 취소 가능한 상태로 백업
+  if(undoItems.length > 0){
+    recordBulkOp({
+      actionLabel: '대전이관 일괄원복',
+      items: undoItems,
+      dbTable: 'leads'
+    });
   }
 
   _rvSelected.clear();
@@ -12644,13 +13433,13 @@ function renderMessagesList(){
   }
 
   if(rows.length===0){
-    const emptyMsg = ({
-      inbox:'받은 쪽지가 없습니다',
-      sent:'보낸 쪽지가 없습니다',
-      noticebox:'받은 공지가 없습니다',
-      sentnotice:'보낸 공지가 없습니다'
-    })[tab] || '항목이 없습니다';
-    listEl.innerHTML = '<div style="padding:60px 20px;text-align:center;color:var(--gray-300);font-size:12px">'+emptyMsg+'</div>';
+    const emptyData = ({
+      inbox:    {icon:'📭', title:'받은 쪽지가 없습니다', sub:'동료가 보낸 쪽지가 여기에 표시됩니다'},
+      sent:     {icon:'📤', title:'보낸 쪽지가 없습니다', sub:'첫 쪽지를 보내보세요', actionLabel:'✏️ 새 쪽지', actionFn:'openComposeModal'},
+      noticebox:{icon:'📢', title:'받은 공지가 없습니다', sub:'관리자가 보낸 공지가 여기에 표시됩니다'},
+      sentnotice:{icon:'📤', title:'보낸 공지가 없습니다', sub:'전체/역할별/지점별 공지를 발송할 수 있습니다', actionLabel:'📢 새 공지', actionFn:'openAnnouncementModal'}
+    })[tab] || {icon:'📂', title:'항목이 없습니다'};
+    listEl.innerHTML = kbmcEmpty(emptyData);
     return;
   }
 
@@ -18553,7 +19342,7 @@ async function rcRender(){
   if(cntEl) cntEl.textContent=cnt?'('+cnt+')':'';
 
   if(!cnt){
-    container.innerHTML='<div style="text-align:center;padding:40px;color:var(--gray-400)">✅ 회수대상 DB가 없습니다</div>';
+    container.innerHTML=kbmcEmpty({icon:'✅', title:'회수대상이 없습니다', sub:'모든 DB가 정상적으로 관리되고 있습니다'});
     return;
   }
 
@@ -18679,7 +19468,12 @@ async function rcRender(){
     }
   }
 
-  container.innerHTML=html||'<div style="text-align:center;padding:40px;color:var(--gray-400)">✅ 회수대상 DB가 없습니다</div>';
+  container.innerHTML = html || kbmcEmpty({icon:'✅', title:'회수대상이 없습니다', sub:'모든 DB가 정상적으로 관리되고 있습니다'});
+
+  // 매일 첫 로그인 시 회수 대상 누적 토스트 (관리자만, 회수 메뉴 첫 진입 시)
+  if(curUser?.role==='admin' && typeof _showDailyRecallToast==='function'){
+    _showDailyRecallToast();
+  }
 }
 
 function rcSaveOpenState(key,isOpen){
@@ -18876,15 +19670,53 @@ async function rcRecallSelected(){
     return t ? (t.company_name || '(이름 없음)') : '(알 수 없음)';
   });
   const preview = names.slice(0, 5).join(', ') + (names.length > 5 ? ` 외 ${names.length-5}건` : '');
-  if(!confirm(`${ids.length}건을 회수하고 대전TM으로 이관하시겠습니까?\n\n대상: ${preview}`)) return;
+
+  // 🛡️ 3차 검증: 10건 이상이면 강화 모달
+  const proceed = await confirmBulkOp(
+    '일괄 회수 → 대전TM 이관',
+    ids.length,
+    `대상: ${esc(preview)}<br>회수 후 대전TM으로 이관됩니다.`
+  );
+  if(!proceed) return;
+  if(ids.length < BULK_THRESHOLD){
+    if(!confirm(`${ids.length}건을 회수하고 대전TM으로 이관하시겠습니까?\n\n대상: ${preview}`)) return;
+  }
+
+  const undoItems = [];
 
   try{
     for(const id of ids){
       const t=_rcTargets.find(x=>x.id===id);
       const lead = (allLeads||[]).find(x=>x.id===id);
+      // 백업
+      if(lead){
+        undoItems.push({
+          id,
+          prev: {
+            branch_name: lead.branch_name,
+            team_name: lead.team_name,
+            team_names: lead.team_names,
+            status: lead.status,
+            tm_transferred: lead.tm_transferred,
+            tm_transferred_at: lead.tm_transferred_at,
+            auto_recalled: lead.auto_recalled,
+            auto_recall_at: lead.auto_recall_at,
+            auto_recall_reason: lead.auto_recall_reason,
+            collab_branches: lead.collab_branches,
+            assigned_at: lead.assigned_at
+          }
+        });
+      }
       let patch=_rcBuildPatch(t?._rcReason?.text);      await dbU('leads',id,patch);
       await logActivity(id,'assign','일괄 회수 → 대전TM 이관 ('+(t?._rcReason?.text||')'),'assigned','');
       if(allLeads){const i=allLeads.findIndex(x=>x.id===id);if(i>=0)allLeads[i]={...allLeads[i],...patch};}
+    }
+    if(undoItems.length > 0){
+      recordBulkOp({
+        actionLabel: '일괄 회수 → 대전TM 이관',
+        items: undoItems,
+        dbTable: 'leads'
+      });
     }
     _rcSelected.clear();
     showToast(ids.length+'건 회수 완료 → 대전TM 이관','success');
@@ -19089,19 +19921,68 @@ async function renderTrashInline(){
   }
   const sub=document.getElementById('trash-inline-sub');
   _trashCount=trash.length;
-  if(sub) sub.textContent=trash.length+'건';
+
+  // ── 임박 순 정렬: deleted_at이 오래된 순(만료 임박 우선)
+  trash.sort((a,b)=>{
+    const ta = new Date(a.deleted_at||a.updated_at||0).getTime();
+    const tb = new Date(b.deleted_at||b.updated_at||0).getTime();
+    return ta - tb; // 오래된 것 먼저(=만료 임박)
+  });
+
+  // 만료 임박 통계 (관리자에게 보여줄 요약)
+  let cnt7=0, cnt1=0, cntExpired=0;
+  const now = Date.now();
+  const DAY = 86400000;
+  trash.forEach(l=>{
+    if(!l.deleted_at) return;
+    const elapsed = Math.floor((now - new Date(l.deleted_at).getTime()) / DAY);
+    if(elapsed >= 30) cntExpired++;
+    else if(elapsed >= 29) cnt1++;
+    else if(elapsed >= 23) cnt7++;
+  });
+
+  if(sub){
+    let subHtml = trash.length+'건';
+    if(cntExpired>0) subHtml += ` <span style="color:var(--err);font-weight:700;margin-left:6px">· 🚨 ${cntExpired}건 만료</span>`;
+    if(cnt1>0)      subHtml += ` <span style="color:var(--err);font-weight:600;margin-left:4px">· 🔴 ${cnt1}건 D-1</span>`;
+    if(cnt7>0)      subHtml += ` <span style="color:var(--warn);font-weight:600;margin-left:4px">· 🟧 ${cnt7}건 D-7 이내</span>`;
+    sub.innerHTML = subHtml;
+  }
+
   updateLeadsSubTabCounts();
-  if(!trash.length){tbody.innerHTML='<tr><td colspan="8" class="empty" style="padding:30px">휴지통이 비어 있습니다</td></tr>';return;}
+  if(!trash.length){tbody.innerHTML='<tr><td colspan="10" style="padding:0"><div class="kbmc-empty-state" style="padding:40px 20px"><div class="es-icon">🗑️</div><div class="es-title">휴지통이 비어 있습니다</div><div class="es-sub">삭제된 DB가 여기에 30일간 보관됩니다</div></div></td></tr>';return;}
   // 선택 상태 초기화
   _trashSel = new Set();
   _trashData = trash;
   _trashLastSelIdx = -1;
   _updateTrashSelUI();
 
-  tbody.innerHTML=trash.map((l,idx)=>`<tr id="trash-row-${l.id}"
-    style="border-bottom:1px solid var(--gray-100)"
+  tbody.innerHTML=trash.map((l,idx)=>{
+    // 잔여 일수 계산
+    let remainCell = '<td style="font-size:11px;color:var(--gray-400);padding:8px 10px">-</td>';
+    let rowBg = '';
+    if(l.deleted_at){
+      const elapsed = Math.floor((now - new Date(l.deleted_at).getTime()) / DAY);
+      const remain = 30 - elapsed;
+      if(elapsed >= 30){
+        remainCell = '<td style="font-size:11px;padding:8px 10px;color:var(--err);font-weight:800">🚨 만료 (영구삭제 대상)</td>';
+        rowBg = 'background:rgba(239,68,68,.06)';
+      } else if(remain <= 1){
+        remainCell = `<td style="font-size:11px;padding:8px 10px;color:var(--err);font-weight:800">🔴 D-${remain} (내일 삭제)</td>`;
+        rowBg = 'background:rgba(239,68,68,.04)';
+      } else if(remain <= 7){
+        remainCell = `<td style="font-size:11px;padding:8px 10px;color:var(--warn);font-weight:700">🟧 D-${remain}</td>`;
+        rowBg = 'background:rgba(245,158,11,.04)';
+      } else if(remain <= 14){
+        remainCell = `<td style="font-size:11px;padding:8px 10px;color:var(--gray-600)">D-${remain}</td>`;
+      } else {
+        remainCell = `<td style="font-size:11px;padding:8px 10px;color:var(--gray-400)">D-${remain}</td>`;
+      }
+    }
+    return `<tr id="trash-row-${l.id}"
+    style="border-bottom:1px solid var(--gray-100);${rowBg}"
     onmouseover="if(!_trashSel.has('${l.id}'))this.style.background='var(--gray-50)'"
-    onmouseout="if(!_trashSel.has('${l.id}'))this.style.background=''">
+    onmouseout="if(!_trashSel.has('${l.id}'))this.style.background='${rowBg.replace(/^background:/,'')||''}'">
     <td style="padding:8px 10px" onclick="event.stopPropagation()">
       <input type="checkbox" id="trash-chk-${l.id}"
         onchange="trashToggleOne('${l.id}',this.checked,${idx},event)"
@@ -19114,12 +19995,14 @@ async function renderTrashInline(){
     <td style="font-size:12px;padding:8px 10px">${esc(l.team_name||'-')}</td>
     <td style="font-size:11px;padding:8px 10px">${esc(l.current_stage||l.status||'-')}</td>
     <td style="font-size:11px;color:var(--gray-400);padding:8px 10px">${fmtD(l.deleted_at)}</td>
+    ${remainCell}
     <td style="font-size:11px;padding:8px 10px">${esc(l.deleted_by||'-')}</td>
     <td style="padding:8px 10px" onclick="event.stopPropagation()"><div style="display:flex;gap:4px">
       <button class="btn btn-outline btn-xs" onclick="restoreFromTrashInline('${l.id}')">복구</button>
       <button class="btn btn-danger btn-xs" onclick="permDeleteInline('${l.id}')">영구삭제</button>
     </div></td>
-  </tr>`).join('');
+  </tr>`;
+  }).join('');
 }
 
 // ── 휴지통 선택 상태 ──────────────────────────────────────────────────
@@ -21995,14 +22878,333 @@ function manualSearch(q){
   });
 }
 
-// ESC 키로 닫기
+// ESC 키로 닫기 (매뉴얼 + 열린 모달 일괄)
 document.addEventListener('keydown', e=>{
-  if(e.key==='Escape' && document.getElementById('manual-panel')?.style.transform==='translateX(0px)'){
+  if(e.key !== 'Escape') return;
+
+  // 1) 매뉴얼 패널이 열려있으면 우선 닫기
+  if(document.getElementById('manual-panel')?.style.transform==='translateX(0px)'){
     closeManual();
+    return;
+  }
+
+  // 2) 열린 .modal-overlay 중 가장 마지막(최상위) 모달 1개 닫기
+  const openModals = document.querySelectorAll('.modal-overlay.open');
+  if(openModals.length > 0){
+    const lastModal = openModals[openModals.length - 1];
+    if(lastModal && lastModal.id){
+      // 입력 중인 필드가 있으면 우선 blur (한국어 IME 조합 방지)
+      const active = document.activeElement;
+      if(active && ['INPUT','TEXTAREA','SELECT'].includes(active.tagName)){
+        active.blur();
+      }
+      lastModal.classList.remove('open');
+      e.preventDefault();
+      return;
+    }
+  }
+
+  // 3) 그 외 ov-bg 오버레이(드롭다운 등) 닫기
+  const openOv = document.querySelector('.ov-bg.open');
+  if(openOv){
+    openOv.classList.remove('open');
+    e.preventDefault();
+    return;
+  }
+
+  // 4) 우측 리드 상세 패널이 열려있으면 닫기
+  const panel = document.getElementById('lead-panel');
+  if(panel && panel.classList.contains('open') && typeof closePanel==='function'){
+    closePanel();
+    e.preventDefault();
+    return;
   }
 });
 
+// ═══════════════════════════════════════════════════════════
+// ⚡ 빠른 검색 팔레트 (Cmd+K / Ctrl+K)
+// 회사명·사용자·기능을 한 곳에서 검색 → 즉시 점프
+// ═══════════════════════════════════════════════════════════
+let _qpState = { selectedIdx: 0, results: [] };
+
+const QP_COMMANDS = [
+  // 화면 이동 (역할별 노출은 실행 시점에 검증)
+  { type:'nav', label:'📊 대시보드', screen:'admin', roles:['admin'] },
+  { type:'nav', label:'🗄️ DB관리', screen:'leads', roles:['admin','dbmanager','branch','team'] },
+  { type:'nav', label:'🏢 지점관리', screen:'branch', roles:['branch'] },
+  { type:'nav', label:'🎯 단계별 현황', screen:'stage-dashboard', roles:['admin','branch','team'] },
+  { type:'nav', label:'📞 대전 업무현황', screen:'dj-status', roles:['admin'] },
+  { type:'nav', label:'📅 활동', screen:'activity', roles:['admin','dbmanager','branch','team'] },
+  { type:'nav', label:'🏆 고객관리', screen:'my-clients', roles:['branch','team'] },
+  { type:'nav', label:'📢 공지함', screen:'notices', roles:['dbmanager','branch','team','tm'] },
+  { type:'nav', label:'💌 쪽지함', screen:'messages', roles:['admin','dbmanager','branch','team','tm'] },
+  { type:'nav', label:'⚙️ 설정', screen:'settings', roles:['admin'] },
+  { type:'nav', label:'📞 관리 DB (대전TM)', screen:'tm-panel', roles:['tm'] },
+  // 액션
+  { type:'action', label:'✏️ 새 쪽지 작성', fn:'openComposeModal' },
+  { type:'action', label:'📢 새 공지 작성 (관리자)', fn:'openAnnouncementModal', roles:['admin'] },
+  { type:'action', label:'🔍 정합성 진단 (관리자)', fn:'sdashDiagnose', roles:['admin'] },
+];
+
+function openQuickPalette(){
+  const ov = document.getElementById('qp-overlay');
+  if(ov){ ov.style.display='flex'; }
+  const inp = document.getElementById('qp-input');
+  if(inp){ inp.value=''; inp.focus(); }
+  _qpState = { selectedIdx: 0, results: [] };
+  qpRenderResults('');
+}
+
+function closeQuickPalette(){
+  const ov = document.getElementById('qp-overlay');
+  if(ov) ov.style.display='none';
+}
+
+function qpOnInput(e){
+  const q = e.target.value;
+  qpRenderResults(q);
+}
+
+function qpRenderResults(q){
+  const body = document.getElementById('qp-results');
+  if(!body) return;
+  const ql = (q||'').toLowerCase().trim();
+  const role = curUser?.role || '';
+  const results = [];
+
+  // 1) 명령(화면·액션)
+  QP_COMMANDS.forEach(c=>{
+    if(c.roles && !c.roles.includes(role)) return;
+    if(!ql || c.label.toLowerCase().includes(ql)){
+      results.push({ ...c, group:'⚡ 빠른 이동' });
+    }
+  });
+
+  // 2) 회사명 검색 (allLeads 사용)
+  if(ql.length >= 1 && Array.isArray(allLeads)){
+    const matches = allLeads.filter(l =>
+      l && l.status!=='deleted' &&
+      ((l.company_name||'').toLowerCase().includes(ql) ||
+       (l.contact_name||'').toLowerCase().includes(ql) ||
+       (l.phone||'').includes(ql))
+    ).slice(0, 8);
+    matches.forEach(l=>{
+      results.push({
+        type:'lead',
+        label: `🏢 ${l.company_name||'(이름없음)'}`,
+        sub: `${l.contact_name||'-'} · ${l.phone||'-'} · ${l.branch_name||'미배정'}${l.team_name?' / '+l.team_name:''}`,
+        leadId: l.id,
+        group: '📋 회사·연락처'
+      });
+    });
+  }
+
+  // 3) 사용자 검색 (accounts)
+  if(ql.length >= 1){
+    const accs = (typeof getAccs==='function') ? getAccs() : [];
+    const roleLabel = {admin:'관리자',dbmanager:'DB관리자',branch:'지점장',team:'팀장',tm:'대전TM'};
+    accs.filter(a => a && a.name && (
+      a.name.toLowerCase().includes(ql) ||
+      (a.branch||'').toLowerCase().includes(ql)
+    )).slice(0, 5).forEach(a=>{
+      results.push({
+        type:'user',
+        label: `👤 ${a.name}`,
+        sub: `${roleLabel[a.role]||a.role||''} ${a.branch?'· '+a.branch:''}`,
+        userName: a.name,
+        group: '👥 사용자'
+      });
+    });
+  }
+
+  _qpState.results = results;
+  if(_qpState.selectedIdx >= results.length) _qpState.selectedIdx = 0;
+
+  if(results.length===0){
+    body.innerHTML = '<div style="padding:30px;text-align:center;color:var(--gray-400);font-size:13px">검색 결과 없음</div>';
+    return;
+  }
+
+  // 그룹별 렌더
+  const byGroup = {};
+  results.forEach((r,i)=>{
+    const g = r.group||'';
+    if(!byGroup[g]) byGroup[g]=[];
+    byGroup[g].push({...r, idx:i});
+  });
+
+  let html='';
+  Object.entries(byGroup).forEach(([g,items])=>{
+    html += `<div style="padding:6px 14px;font-size:10px;font-weight:700;color:var(--gray-500);background:#f8fafc;border-top:1px solid var(--gray-100)">${esc(g)}</div>`;
+    items.forEach(item=>{
+      const isSel = item.idx === _qpState.selectedIdx;
+      const bgColor = isSel ? '#eef3f9' : '#fff';
+      html += `<div data-qp-idx="${item.idx}" onclick="qpExecute(${item.idx})" style="padding:9px 14px;cursor:pointer;background:${bgColor};border-bottom:1px solid var(--gray-100)" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='${bgColor}'">
+        <div style="font-size:13px;font-weight:${isSel?'700':'500'};color:var(--gray-900)">${esc(item.label)}</div>
+        ${item.sub?`<div style="font-size:11px;color:var(--gray-500);margin-top:1px">${esc(item.sub)}</div>`:''}
+      </div>`;
+    });
+  });
+  body.innerHTML = html;
+}
+
+async function qpExecute(idx){
+  const r = _qpState.results[idx];
+  if(!r) return;
+  closeQuickPalette();
+  if(r.type==='nav'){
+    if(typeof showScreen==='function') showScreen(r.screen, document.querySelector(`.nb[data-s="${r.screen}"]`));
+  } else if(r.type==='action'){
+    const fn = window[r.fn];
+    if(typeof fn==='function') fn();
+  } else if(r.type==='lead'){
+    // 회사 점프 → DB관리 화면 + 검색
+    if(typeof showScreen==='function') showScreen('leads', document.querySelector('.nb[data-s="leads"]'));
+    setTimeout(()=>{
+      // 검색창에 회사명 입력
+      const searchInp = document.getElementById('leads-search') || document.querySelector('input[placeholder*="검색"]');
+      if(searchInp){
+        searchInp.value = (allLeads||[]).find(l=>l.id===r.leadId)?.company_name || '';
+        searchInp.dispatchEvent(new Event('input',{bubbles:true}));
+      }
+      // 그리고 패널 자동 열기
+      setTimeout(()=>{
+        const lead = (allLeads||[]).find(l=>l.id===r.leadId);
+        if(lead && typeof openPanel==='function') openPanel(lead);
+      }, 200);
+    }, 200);
+  } else if(r.type==='user'){
+    // 사용자 점프 → DB관리 + 팀장 필터 (있으면)
+    if(typeof showScreen==='function') showScreen('leads', document.querySelector('.nb[data-s="leads"]'));
+    setTimeout(()=>{
+      const searchInp = document.getElementById('leads-search') || document.querySelector('input[placeholder*="검색"]');
+      if(searchInp){
+        searchInp.value = r.userName;
+        searchInp.dispatchEvent(new Event('input',{bubbles:true}));
+      }
+    }, 200);
+  }
+}
+
+function qpKeydown(e){
+  if(e.key==='ArrowDown'){
+    e.preventDefault();
+    if(_qpState.selectedIdx < _qpState.results.length-1){
+      _qpState.selectedIdx++;
+      qpRenderResults(document.getElementById('qp-input')?.value||'');
+    }
+  } else if(e.key==='ArrowUp'){
+    e.preventDefault();
+    if(_qpState.selectedIdx > 0){
+      _qpState.selectedIdx--;
+      qpRenderResults(document.getElementById('qp-input')?.value||'');
+    }
+  } else if(e.key==='Enter'){
+    e.preventDefault();
+    qpExecute(_qpState.selectedIdx);
+  } else if(e.key==='Escape'){
+    closeQuickPalette();
+  }
+}
+
+// 글로벌 단축키
+document.addEventListener('keydown', function(e){
+  // Cmd+K / Ctrl+K
+  if((e.metaKey || e.ctrlKey) && e.key==='k'){
+    e.preventDefault();
+    openQuickPalette();
+    return;
+  }
+  // 단축키 (입력 필드에서는 무시)
+  const tag = document.activeElement?.tagName;
+  if(['INPUT','TEXTAREA','SELECT'].includes(tag)) return;
+  if(e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+  if(curUser){
+    if(e.key==='/'){
+      // / → 검색 포커스 (현재 화면에 검색창 있으면)
+      const search = document.querySelector('#screen-leads.active input[placeholder*="검색"], #screen-my-clients.active input[placeholder*="검색"]');
+      if(search){ e.preventDefault(); search.focus(); }
+    } else if(e.key==='?'){
+      // ? → 단축키 도움말
+      e.preventDefault();
+      showShortcutsHelp();
+    } else if(e.key==='n' || e.key==='N'){
+      // N → 새 활동 등록 (활동 화면일 때만)
+      if(document.getElementById('screen-activity')?.classList.contains('active')
+         && typeof openActEntryModal==='function'){
+        e.preventDefault();
+        openActEntryModal(null);
+      }
+    } else if(e.key==='d' || e.key==='D'){
+      // D → 대시보드 (관리자)
+      if(curUser?.role==='admin' && typeof showScreen==='function'){
+        e.preventDefault();
+        showScreen('admin', document.querySelector('.nb[data-s="admin"]'));
+      }
+    }
+  }
+});
+
+// 단축키 도움말 모달
+function showShortcutsHelp(){
+  let ov = document.getElementById('shortcut-help-overlay');
+  if(!ov){
+    ov = document.createElement('div');
+    ov.id = 'shortcut-help-overlay';
+    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9700;display:flex;align-items:center;justify-content:center';
+    ov.onclick = (e)=>{ if(e.target===ov) ov.remove(); };
+    document.body.appendChild(ov);
+  }
+  ov.innerHTML = `
+    <div style="background:#fff;border-radius:12px;width:480px;max-width:95vw;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div style="font-size:16px;font-weight:800">⌨️ 단축키 도움말</div>
+        <button onclick="document.getElementById('shortcut-help-overlay').remove()" style="background:transparent;border:none;font-size:18px;cursor:pointer;color:var(--gray-500)">✕</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:13px">
+        <div style="display:flex;justify-content:space-between;padding:8px 12px;background:#fafbfd;border-radius:6px">
+          <span>빠른 검색</span><kbd style="background:#fff;border:1px solid var(--gray-300);border-radius:4px;padding:2px 8px;font-family:monospace;font-size:11px">Ctrl + K</kbd>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:8px 12px;background:#fafbfd;border-radius:6px">
+          <span>검색창 포커스</span><kbd style="background:#fff;border:1px solid var(--gray-300);border-radius:4px;padding:2px 8px;font-family:monospace;font-size:11px">/</kbd>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:8px 12px;background:#fafbfd;border-radius:6px">
+          <span>새 활동 등록 (활동 화면)</span><kbd style="background:#fff;border:1px solid var(--gray-300);border-radius:4px;padding:2px 8px;font-family:monospace;font-size:11px">N</kbd>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:8px 12px;background:#fafbfd;border-radius:6px">
+          <span>대시보드 (관리자)</span><kbd style="background:#fff;border:1px solid var(--gray-300);border-radius:4px;padding:2px 8px;font-family:monospace;font-size:11px">D</kbd>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:8px 12px;background:#fafbfd;border-radius:6px">
+          <span>모달·패널 닫기</span><kbd style="background:#fff;border:1px solid var(--gray-300);border-radius:4px;padding:2px 8px;font-family:monospace;font-size:11px">Esc</kbd>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:8px 12px;background:#fafbfd;border-radius:6px">
+          <span>도움말 (이 화면)</span><kbd style="background:#fff;border:1px solid var(--gray-300);border-radius:4px;padding:2px 8px;font-family:monospace;font-size:11px">?</kbd>
+        </div>
+      </div>
+      <div style="margin-top:14px;padding:10px 12px;background:#eff6ff;border-left:3px solid #3b82f6;border-radius:6px;font-size:11px;color:var(--gray-700);line-height:1.6">
+        💡 입력창에 포커스되어 있을 때는 단축키가 작동하지 않습니다 (Cmd+K 제외).
+      </div>
+    </div>`;
+}
+
 </script>
+
+<!-- ══ 빠른 검색 팔레트 (Cmd+K) ══ -->
+<div id="qp-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9600;align-items:flex-start;justify-content:center;padding-top:80px;backdrop-filter:blur(3px)" onclick="if(event.target===this)closeQuickPalette()">
+  <div style="background:#fff;border-radius:12px;width:560px;max-width:95vw;max-height:70vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden">
+    <div style="padding:10px 14px;border-bottom:1px solid var(--gray-200);display:flex;align-items:center;gap:8px">
+      <span style="font-size:18px">🔍</span>
+      <input type="text" id="qp-input" oninput="qpOnInput(event)" onkeydown="qpKeydown(event)" placeholder="회사명·사용자·기능 검색…"
+        style="flex:1;border:none;outline:none;font-size:15px;font-family:inherit;background:transparent">
+      <kbd style="background:var(--gray-100);border:1px solid var(--gray-300);border-radius:4px;padding:2px 8px;font-family:monospace;font-size:11px;color:var(--gray-500)">ESC</kbd>
+    </div>
+    <div id="qp-results" style="overflow-y:auto;max-height:480px"></div>
+    <div style="padding:6px 14px;background:#fafbfd;border-top:1px solid var(--gray-100);font-size:10px;color:var(--gray-500);display:flex;justify-content:space-between">
+      <span>↑↓ 이동 · Enter 선택 · Esc 닫기</span>
+      <span>Ctrl+K 로 언제든 열기</span>
+    </div>
+  </div>
+</div>
 
 <!-- ══ 매뉴얼 모달 ══ -->
 <div id="manual-overlay" onclick="if(event.target===this)closeManual()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;backdrop-filter:blur(3px)"></div>
