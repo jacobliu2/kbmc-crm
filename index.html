@@ -10778,6 +10778,23 @@ function _fmtRelativeTime(iso){
   return Math.floor(d/365)+'년 전';
 }
 
+// 절대 시간 포맷 (KST 기준) — "2026-05-18 14:32"
+function _fmtAbsoluteDateTime(iso){
+  if(!iso) return '';
+  try{
+    const d = new Date(iso);
+    if(isNaN(d.getTime())) return '';
+    // KST = UTC+9
+    const kst = new Date(d.getTime() + 9*3600*1000);
+    const y  = kst.getUTCFullYear();
+    const mo = String(kst.getUTCMonth()+1).padStart(2,'0');
+    const da = String(kst.getUTCDate()).padStart(2,'0');
+    const h  = String(kst.getUTCHours()).padStart(2,'0');
+    const mi = String(kst.getUTCMinutes()).padStart(2,'0');
+    return `${y}-${mo}-${da} ${h}:${mi}`;
+  }catch(e){ return iso.slice(0,16).replace('T',' '); }
+}
+
 // 마지막 접속일 색상 분류
 // 0일=초록, 1-7일=노랑, 8-30일=주황, 30일+=빨강, 기록없음=회색
 function _loginStatusInfo(iso){
@@ -10866,7 +10883,25 @@ async function renderUsersTab(){
 
   const RL2 = {admin:'관리자', dbmanager:'DB관리자', branch:'지점장', team:'팀장', tm:'대전TM'};
 
+  // SQL 누락 감지: 모든 사용자가 last_login_at NULL이면 컬럼 미존재 가능성
+  const allMissing = accs.length > 0 && accs.every(a => !a.last_login_at);
+  const sqlBanner = allMissing ? `
+    <div style="margin-bottom:14px;padding:12px 14px;background:#fff7ed;border:1.5px solid #f59e0b;border-radius:8px;font-size:12.5px;color:var(--gray-800);line-height:1.7">
+      <div style="font-weight:800;color:#d97706;margin-bottom:6px">⚠️ Supabase SQL 실행 필요</div>
+      현재 모든 사용자의 마지막 접속일이 비어있습니다. Supabase SQL Editor에서 아래를 실행해주세요:
+      <div style="margin-top:8px;padding:8px 12px;background:#1f2937;color:#93c5fd;border-radius:6px;font-family:monospace;font-size:11px;position:relative">
+        <span id="ll-sql-code">ALTER TABLE accounts ADD COLUMN IF NOT EXISTS last_login_at timestamptz;</span>
+        <button onclick="navigator.clipboard.writeText(document.getElementById('ll-sql-code').textContent).then(()=>showToast('✅ SQL 복사 완료','success'))"
+          style="position:absolute;right:8px;top:6px;background:#374151;color:#fff;border:none;padding:3px 8px;border-radius:4px;font-size:10px;font-family:inherit;cursor:pointer">📋 복사</button>
+      </div>
+      <div style="margin-top:6px;font-size:11px;color:var(--gray-600)">
+        실행 후 로그아웃 → 재로그인하면 본인 계정에 시간이 기록됩니다. 다른 사용자는 그들이 로그인할 때 자동으로 채워집니다.
+      </div>
+    </div>
+  ` : '';
+
   panel.innerHTML = `
+    ${sqlBanner}
     <!-- 통계 요약 -->
     <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px">
       <div style="padding:10px 12px;background:rgba(16,185,129,.08);border:1px solid #b4ebd0;border-radius:8px;text-align:center">
@@ -10958,7 +10993,7 @@ function _renderUsersTbody(){
   tbody.innerHTML = filtered.map(a => {
     const li = _loginStatusInfo(a.last_login_at);
     const dateStr = a.last_login_at
-      ? `${a.last_login_at.slice(0,10)} <span style="font-size:11px;color:var(--gray-500)">(${esc(_fmtRelativeTime(a.last_login_at))})</span>`
+      ? `${_fmtAbsoluteDateTime(a.last_login_at)} <span style="font-size:11px;color:var(--gray-500)">(${esc(_fmtRelativeTime(a.last_login_at))})</span>`
       : `<span style="color:var(--gray-400);font-size:11px">기록 없음</span>`;
     const pwStatus = a.pw?.length===64
       ? '<span style="font-size:11px;color:var(--ok);font-weight:600">✓ 변경됨</span>'
@@ -11067,7 +11102,7 @@ function renderOrgTab(){
   const userCard = (a, opts={}) => {
     const li = _loginStatusInfo(a.last_login_at);
     const sub = a.last_login_at
-      ? `${a.last_login_at.slice(0,10)} (${_fmtRelativeTime(a.last_login_at)})`
+      ? `${_fmtAbsoluteDateTime(a.last_login_at)} (${_fmtRelativeTime(a.last_login_at)})`
       : '기록 없음';
     return `<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#fff;border:1px solid var(--gray-200);border-radius:8px;${opts.indent?'margin-left:24px':''}">
       <span style="font-size:14px">${li.dot}</span>
@@ -22018,17 +22053,38 @@ async function doLogin(){
   saveSession(curUser); startApp();
 
   // 마지막 접속일 자동 갱신 (Supabase + 로컬 캐시)
+  // dbU는 updated_at을 강제 추가하므로 sbPatch 직접 호출
   try{
     const nowIso = new Date().toISOString();
-    if(!testMode){
-      await dbU('accounts', user.id, { last_login_at: nowIso }).catch(e=>console.warn('last_login_at update failed:',e));
-    }
-    // 로컬 accs 캐시도 즉시 반영
+    // 1) 로컬 accs 캐시 즉시 반영
     const _accs = getAccs();
     const _i = _accs.findIndex(a => a.id === user.id);
     if(_i >= 0){
       _accs[_i].last_login_at = nowIso;
       saveAccs(_accs);
+    }
+    // 2) Supabase 갱신 (테스트 모드 아닐 때만)
+    if(!testMode){
+      try{
+        // sbPatch 직접 사용 — updated_at 자동 추가 안 함
+        const r = await fetch(SB_URL+'/rest/v1/accounts?id=eq.'+encodeURIComponent(user.id), {
+          method: 'PATCH',
+          headers: sbH(),
+          body: JSON.stringify({ last_login_at: nowIso })
+        });
+        if(!r.ok){
+          const errTxt = await r.text().catch(()=>'');
+          console.warn('[last_login_at] Supabase 갱신 실패:', r.status, errTxt);
+          // 컬럼 없음 안내
+          if(errTxt.includes('last_login_at') || errTxt.includes('column')){
+            console.warn('💡 안내: Supabase에 last_login_at 컬럼이 없습니다. 다음 SQL을 실행하세요:\nALTER TABLE accounts ADD COLUMN IF NOT EXISTS last_login_at timestamptz;');
+          }
+        } else {
+          console.log('[last_login_at] 갱신 성공:', user.id, nowIso);
+        }
+      }catch(e){
+        console.warn('[last_login_at] 네트워크 오류:', e);
+      }
     }
   }catch(e){ console.warn('last_login_at sync error',e); }
 
