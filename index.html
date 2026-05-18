@@ -10858,6 +10858,33 @@ async function renderUsersTab(){
   }catch(e){ accs = getAccs(); }
   if(!Array.isArray(accs)) accs = [];
 
+  // 활동 캐시 보장 (작성자별 건수 집계에 사용)
+  // 최근 30일치만 fetch해서 메모리 부담 줄임
+  if(!Array.isArray(allActivities) || allActivities.length === 0){
+    try{
+      if(testMode){
+        if(!Array.isArray(allActivities)) allActivities = lg('activities') || [];
+      } else {
+        const ms30 = new Date(Date.now() - 30*86400000).toISOString();
+        // PostgREST 직접 fetch (날짜 범위 쿼리)
+        const url = SB_URL+'/rest/v1/activities?select=*&created_at=gte.'+encodeURIComponent(ms30)+'&order=created_at.desc&limit=5000';
+        const r = await fetch(url, {headers:sbH()});
+        if(r.ok){
+          const recentActs = await r.json().catch(()=>[]);
+          if(Array.isArray(recentActs)){
+            if(!Array.isArray(allActivities)) allActivities = [];
+            // 중복 없이 병합
+            const existIds = new Set((allActivities||[]).map(a=>a?.id));
+            recentActs.forEach(a=>{ if(a && a.id && !existIds.has(a.id)) allActivities.push(a); });
+            console.log('[사용자 관리] 최근 30일 활동 로드:', recentActs.length, '건');
+          }
+        } else {
+          console.warn('[사용자 관리] 활동 fetch 실패:', r.status);
+        }
+      }
+    }catch(e){ console.warn('[사용자 관리] 활동 캐시 로드 실패:', e); }
+  }
+
   // 카운트
   const cntEl = document.getElementById('users-count-users');
   if(cntEl) cntEl.textContent = `(${accs.length})`;
@@ -10952,6 +10979,8 @@ async function renderUsersTab(){
             <th style="padding:9px 10px;text-align:left">역할</th>
             <th style="padding:9px 10px;text-align:left">소속</th>
             <th style="padding:9px 10px;text-align:left">마지막 접속</th>
+            <th style="padding:9px 10px;text-align:center" title="최근 7일간 작성한 활동 건수 (시스템 자동기록 제외)">📊 7일 활동</th>
+            <th style="padding:9px 10px;text-align:center" title="최근 30일간 작성한 활동 건수 (시스템 자동기록 제외)">📈 30일 활동</th>
             <th style="padding:9px 10px;text-align:center">비번 상태</th>
             <th style="padding:9px 10px;text-align:center">관리</th>
           </tr>
@@ -10983,12 +11012,55 @@ function _renderUsersTbody(){
   }
 
   if(filtered.length === 0){
-    tbody.innerHTML = `<tr><td colspan="7">${kbmcEmpty({icon:'🔍', title:'검색 결과가 없습니다', sub:'다른 검색어를 시도해보세요'})}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9">${kbmcEmpty({icon:'🔍', title:'검색 결과가 없습니다', sub:'다른 검색어를 시도해보세요'})}</td></tr>`;
     return;
   }
 
   const RL2 = {admin:'관리자', dbmanager:'DB관리자', branch:'지점장', team:'팀장', tm:'대전TM'};
   const RBADGE = {admin:'background:#0c1e35;color:#fff', dbmanager:'background:#0891b2;color:#fff', branch:'background:#7c3aed;color:#fff', team:'background:#2563eb;color:#fff', tm:'background:#059669;color:#fff'};
+
+  // ── 활동 건수 집계 (author 기준, 7일/30일, 모든 활동 유형 포함)
+  // 시스템 활동(assign, status_change)은 자동 생성이므로 제외
+  const nowMs = Date.now();
+  const DAY = 86400000;
+  const ms7 = nowMs - 7 * DAY;
+  const ms30 = nowMs - 30 * DAY;
+  const _SYSTEM_TYPES = new Set(['assign','status_change']);
+  const actCount7 = {};   // name → count
+  const actCount30 = {};  // name → count
+  if(Array.isArray(allActivities)){
+    allActivities.forEach(a=>{
+      if(!a || !a.author || !a.created_at) return;
+      if(_SYSTEM_TYPES.has(a.type)) return; // 시스템 자동 활동 제외
+      const ms = new Date(a.created_at).getTime();
+      if(isNaN(ms)) return;
+      if(ms >= ms30){
+        actCount30[a.author] = (actCount30[a.author]||0) + 1;
+        if(ms >= ms7){
+          actCount7[a.author] = (actCount7[a.author]||0) + 1;
+        }
+      }
+    });
+  }
+
+  // 활동 건수 셀 렌더 헬퍼
+  const _actCountCell = (count, isWeek) => {
+    if(!count){
+      return `<td style="padding:9px 10px;text-align:center;font-size:11px;color:var(--gray-300)">-</td>`;
+    }
+    // 색상 분류: 7일 기준 ≥5 활발, 1-4 보통, 0 없음 / 30일 기준 ≥20 활발, 5-19 보통
+    let color, weight;
+    if(isWeek){
+      if(count >= 5)      { color='#10b981'; weight='800'; }
+      else if(count >= 1) { color='var(--gray-700)'; weight='700'; }
+      else                { color='var(--gray-400)'; weight='500'; }
+    } else {
+      if(count >= 20)     { color='#10b981'; weight='800'; }
+      else if(count >= 5) { color='var(--gray-700)'; weight='700'; }
+      else                { color='var(--gray-400)'; weight='500'; }
+    }
+    return `<td style="padding:9px 10px;text-align:center;font-size:13px;font-weight:${weight};color:${color}">${count}</td>`;
+  };
 
   tbody.innerHTML = filtered.map(a => {
     const li = _loginStatusInfo(a.last_login_at);
@@ -10998,6 +11070,8 @@ function _renderUsersTbody(){
     const pwStatus = a.pw?.length===64
       ? '<span style="font-size:11px;color:var(--ok);font-weight:600">✓ 변경됨</span>'
       : '<span style="font-size:11px;color:var(--warn);font-weight:600">⚠ 초기값</span>';
+    const c7  = actCount7[a.name]  || 0;
+    const c30 = actCount30[a.name] || 0;
     return `<tr style="border-bottom:1px solid var(--gray-100)">
       <td style="padding:9px 10px;font-family:monospace;font-size:11px;color:var(--gray-600)">${esc(a.id||'-')}</td>
       <td style="padding:9px 10px;font-weight:700;color:var(--gray-900)">${esc(a.name||'-')}</td>
@@ -11006,6 +11080,8 @@ function _renderUsersTbody(){
       <td style="padding:9px 10px;font-size:12px">
         <span style="margin-right:4px">${li.dot}</span>${dateStr}
       </td>
+      ${_actCountCell(c7, true)}
+      ${_actCountCell(c30, false)}
       <td style="padding:9px 10px;text-align:center">${pwStatus}</td>
       <td style="padding:9px 10px;text-align:center">
         <div style="display:flex;gap:4px;justify-content:center">
@@ -11098,18 +11174,43 @@ function renderOrgTab(){
     branchMap[bn].push(t);
   });
 
+  // ── 카드용 활동 건수 집계 (7일, 시스템 활동 제외) ──
+  const _SYSTEM_TYPES = new Set(['assign','status_change']);
+  const _ms7 = Date.now() - 7 * 86400000;
+  const _act7 = {};
+  if(Array.isArray(allActivities)){
+    allActivities.forEach(a=>{
+      if(!a || !a.author || !a.created_at) return;
+      if(_SYSTEM_TYPES.has(a.type)) return;
+      const ms = new Date(a.created_at).getTime();
+      if(isNaN(ms) || ms < _ms7) return;
+      _act7[a.author] = (_act7[a.author]||0) + 1;
+    });
+  }
+
   // 카드 렌더 헬퍼
   const userCard = (a, opts={}) => {
     const li = _loginStatusInfo(a.last_login_at);
     const sub = a.last_login_at
       ? `${_fmtAbsoluteDateTime(a.last_login_at)} (${_fmtRelativeTime(a.last_login_at)})`
       : '기록 없음';
+    const cnt7 = _act7[a.name] || 0;
+    // 활동 배지: 7일 5건+ 활발, 1-4 보통, 0 회색
+    let actBadge = '';
+    if(cnt7 >= 5){
+      actBadge = `<div style="font-size:10px;font-weight:800;color:#10b981;background:rgba(16,185,129,.10);padding:2px 7px;border-radius:10px;white-space:nowrap" title="최근 7일 활동 건수">📊 ${cnt7}</div>`;
+    } else if(cnt7 >= 1){
+      actBadge = `<div style="font-size:10px;font-weight:700;color:var(--gray-600);background:var(--gray-100);padding:2px 7px;border-radius:10px;white-space:nowrap" title="최근 7일 활동 건수">📊 ${cnt7}</div>`;
+    } else {
+      actBadge = `<div style="font-size:10px;font-weight:500;color:var(--gray-400);background:var(--gray-50);padding:2px 7px;border-radius:10px;white-space:nowrap" title="최근 7일 활동 건수">📊 0</div>`;
+    }
     return `<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#fff;border:1px solid var(--gray-200);border-radius:8px;${opts.indent?'margin-left:24px':''}">
       <span style="font-size:14px">${li.dot}</span>
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:700;color:var(--gray-900)">${esc(a.name||'-')}</div>
         <div style="font-size:10.5px;color:var(--gray-500);margin-top:1px">${esc(sub)}</div>
       </div>
+      ${actBadge}
       <div style="font-size:10px;color:var(--gray-400)">${esc(a.id||'')}</div>
     </div>`;
   };
