@@ -5233,6 +5233,35 @@ function toKstDateTime(v){
   return iso.slice(0,10)+' '+iso.slice(11,16);
 }
 
+// ⑤ KST 기준 활동 시각 (HH:MM:SS) — 히스토리 항목 보조 표시용
+// 같은 날 여러 활동의 순서를 명확하게 구분하기 위해 초까지 표시
+function toKstTimeOnly(v){
+  if(!v) return '';
+  const d=new Date(v); if(isNaN(d)) return '';
+  const kst=new Date(d.getTime()+9*3600*1000);
+  const iso=kst.toISOString();
+  return iso.slice(11,19); // HH:MM:SS
+}
+
+// ⑥ 활동 항목용 일시 포맷 — "2026-05-19 14:32:08" 형태
+// 우선순위: created_at(원본 timestamptz) > date(YYYY-MM-DD만 있는 활동) > '-'
+// created_at이 있으면 항상 초까지 표시. 없고 date만 있으면 날짜만.
+function fmtActDateTime(a){
+  if(!a) return '';
+  // created_at이 ISO datetime이면 KST 변환해 초까지
+  if(a.created_at){
+    const d=new Date(a.created_at);
+    if(!isNaN(d)){
+      const kst=new Date(d.getTime()+9*3600*1000);
+      const iso=kst.toISOString();
+      return iso.slice(0,10) + ' ' + iso.slice(11,19); // YYYY-MM-DD HH:MM:SS
+    }
+  }
+  // fallback: date 필드만 있는 경우
+  if(a.date) return String(a.date).slice(0,10);
+  return '';
+}
+
 // ═══════════════════════════════════════════════════════════
 // 히스토리 공통 헬퍼 — 4개 뷰(관리자 DB상세, TM 기록모달, 팀장 DB상세, 회수 미리보기)에서 공유
 // ═══════════════════════════════════════════════════════════
@@ -7964,7 +7993,7 @@ function _renderLDetailHistory(acts, leadId){
             ${_isTmAct?'<span style="font-size:9px;font-weight:700;color:#fff;background:#00a86b;padding:1px 5px;border-radius:8px">TM</span>':''}
           </div>
           <div style="display:flex;align-items:center;gap:6px">
-            <span style="font-size:10px;color:var(--gray-400)">${(a.date||toKstDate(a.created_at)||'')}</span>
+            <span style="font-size:10px;color:var(--gray-400)">${fmtActDateTime(a)}</span>
             ${isAdminDH?`<button onclick="event.stopPropagation();openEditActivity('${a.id}')" style="padding:1px 7px;font-size:10px;font-weight:700;color:var(--blue);background:rgba(49,130,246,.08);border:1px solid rgba(49,130,246,.2);border-radius:4px;cursor:pointer;line-height:1.6">수정</button>
             <button onclick="event.stopPropagation();deleteActivity('${a.id}','${leadId}')" style="padding:1px 7px;font-size:10px;font-weight:700;color:var(--err);background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15);border-radius:4px;cursor:pointer;line-height:1.6">삭제</button>`:''}
           </div>
@@ -8485,7 +8514,7 @@ function _renderActModalHistory(leadId){
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
           <span style="font-size:12px;font-weight:700;color:var(--navy)">${esc(a.author||'-')}</span>
           <div style="display:flex;align-items:center;gap:6px">
-            <span style="font-size:10px;color:var(--gray-400)">${(a.date||toKstDate(a.created_at)||'')}</span>
+            <span style="font-size:10px;color:var(--gray-400)">${fmtActDateTime(a)}</span>
             ${isAdmin?`<button onclick="event.stopPropagation();openEditActivity('${a.id}')" style="padding:1px 7px;font-size:10px;font-weight:700;color:var(--blue);background:rgba(49,130,246,.08);border:1px solid rgba(49,130,246,.2);border-radius:4px;cursor:pointer;line-height:1.6">수정</button>
             <button onclick="event.stopPropagation();deleteActivity('${a.id}','${leadId}')" style="padding:1px 7px;font-size:10px;font-weight:700;color:var(--err);background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15);border-radius:4px;cursor:pointer;line-height:1.6">삭제</button>`:''}
           </div>
@@ -8507,7 +8536,7 @@ function openEditActivity(actId){
   if(!ov){ov=document.createElement('div');ov.id='ov-edit-activity';ov.className='ov-bg';document.body.appendChild(ov);}
   ov.innerHTML=`<div class="ov-box" style="width:460px;max-width:96vw">
     <div style="font-size:16px;font-weight:800;color:var(--navy);margin-bottom:4px">✏️ 활동기록 수정</div>
-    <div style="font-size:12px;color:var(--gray-400);margin-bottom:16px">${esc(a.author||'')} · ${(a.date||toKstDate(a.created_at)||'')}</div>
+    <div style="font-size:12px;color:var(--gray-400);margin-bottom:16px">${esc(a.author||'')} · ${fmtActDateTime(a)}</div>
     <div class="fg" style="margin-bottom:12px">
       <label style="font-size:12px;font-weight:700;color:var(--gray-600);margin-bottom:6px;display:block">유형</label>
       <select id="edit-act-type" style="width:100%;padding:9px 12px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;background:#fff">
@@ -17989,7 +18018,7 @@ async function _renderTmCompanyHistory(lid, lead){
                 <span style="font-size:11px;font-weight:700;color:${authorColor}">${esc(a.author||'-')}</span>
                 ${isTmAct?'<span style="font-size:9px;font-weight:700;color:#fff;background:#00a86b;padding:1px 4px;border-radius:6px">TM</span>':''}
               </div>
-              <span style="font-size:10px;color:var(--gray-400)">${(a.date||toKstDate(a.created_at)||'')}</span>
+              <span style="font-size:10px;color:var(--gray-400)">${fmtActDateTime(a)}</span>
             </div>
             <div style="font-size:12px;color:var(--gray-700);white-space:pre-wrap;word-break:break-all">${esc((a.content||'').slice(0,200))}</div>
             ${a.stage?`<span style="font-size:10px;color:var(--blue);margin-top:1px;display:inline-block">${esc(a.stage)}</span>`:''}
