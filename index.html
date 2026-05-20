@@ -2632,7 +2632,7 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
         </div>
         <!-- 드랍 사유 입력 (드랍 선택 시 표시) -->
         <div id="act-drop-reason-wrap" style="display:none;margin-top:10px;padding:14px;background:rgba(239,68,68,.04);border:1.5px solid rgba(239,68,68,.2);border-radius:var(--r-sm)">
-          <label style="font-size:12px;font-weight:700;color:var(--err);margin-bottom:8px;display:block">드랍 사유 <span style="color:var(--err)">*필수</span></label>
+          <label id="act-drop-reason-label" style="font-size:12px;font-weight:700;color:var(--err);margin-bottom:8px;display:block">드랍 사유 <span style="color:var(--err)">*필수</span></label>
           <div style="font-size:11px;color:var(--gray-500);margin-bottom:6px">① 대범주 선택</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px" id="act-drop-reason-presets">
             <button type="button" onclick="selectDropCategory(this,'act')" data-cat="보험 기피" style="padding:5px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;color:var(--gray-700)">보험 기피</button>
@@ -8346,12 +8346,49 @@ function openActM(lid,cname){
   // 진행단계 선택 버튼 렌더
   const stageWrap=document.getElementById('status-select-wrap')||document.createElement('div');
   const STAGE_CLR_MAP={'배정':'#00c073','접촉':'#38bdf8','상담':'#38bdf8','제안':'#38bdf8','계약':'#3182f6','관리':'#3182f6','보류':'#f59e0b','드랍':'#ef4444'};
+
+  // ── 다운그레이드 차단 비활성화 시각화 (팀장만, 관리자는 모든 버튼 활성) ──
+  const _stageOrder = {'배정':1, '접촉':2, '상담':3, '제안':4, '계약':5, '관리':6};
+  const _stageMap = {'관리고객':'관리','초기접촉':'접촉','미팅':'상담','협의':'제안','상담중':'접촉','제안완료':'제안'};
+  const _curNorm = _stageMap[curStage] || curStage;
+  const _curIsHoldDrop = _curNorm === '보류' || _curNorm === '드랍';
+  const _isTeam = curUser?.role === 'team';
+  const _isContract = _curNorm === '계약';
+
   stageWrap.innerHTML=SLIST_STAGES.map(s=>{
     const isActive=s===curStage;
     const clr=STAGE_CLR_MAP[s]||'#94a3b8';
-    return `<div class="status-opt${isActive?' active':''}" 
+
+    // ── 계약/관리 단계인 경우 "드랍" 라벨을 "계약 해지"로 ──
+    const _displayLabel = (s === '드랍' && _isContract) ? '계약 해지' : s;
+
+    // ── 팀장 다운그레이드 차단 시각화 ──
+    let _isDisabled = false;
+    if(_isTeam){
+      const _sNorm = _stageMap[s] || s;
+      const _sIsHoldDrop = _sNorm === '보류' || _sNorm === '드랍';
+      // 보류·드랍에서는 보류·드랍만 가능
+      if(_curIsHoldDrop && !_sIsHoldDrop){
+        _isDisabled = true;
+      }
+      // 활동 단계 간: 다운그레이드 차단
+      if(!_curIsHoldDrop && !_sIsHoldDrop){
+        const _cOrd = _stageOrder[_curNorm] || 0;
+        const _nOrd = _stageOrder[_sNorm] || 0;
+        if(_cOrd > 0 && _nOrd > 0 && _nOrd < _cOrd) _isDisabled = true;
+      }
+    }
+
+    if(_isDisabled){
+      return `<div class="status-opt"
+        style="color:#cbd5e1;border-color:#e2e8f0;background:#f8fafc;cursor:not-allowed;opacity:0.55;text-decoration:line-through"
+        title="현재 단계(${_curNorm})에서 이전 단계로 되돌릴 수 없습니다. 관리자에게 요청하세요."
+        onclick="showToast('⛔ 이 단계로 되돌릴 수 없습니다. 관리자에게 요청하세요.','error')">${_displayLabel}</div>`;
+    }
+
+    return `<div class="status-opt${isActive?' active':''}"
       style="${isActive?'background:'+clr+';color:#fff;border-color:'+clr:'color:'+clr+';border-color:'+clr+'44'}"
-      onclick="pickStage(this,'${s}')">${s}</div>`;
+      onclick="pickStage(this,'${s}')">${_displayLabel}</div>`;
   }).join('');
   curActStatus=STAGE_TO_STATUS[curStage]||'assigned';
   window._curActStage=curStage;
@@ -9321,6 +9358,37 @@ function pickStatus(el,s){ // 하위호환 유지
 }
 function pickStage(el, stage){
   const STAGE_CLR_MAP2={'배정':'#00c073','접촉':'#38bdf8','상담':'#38bdf8','제안':'#38bdf8','계약':'#3182f6','관리':'#3182f6','보류':'#f59e0b','드랍':'#ef4444'};
+
+  // ── 팀장 다운그레이드 차단 (관리자는 통과) ──
+  // 현재 리드의 단계가 더 높을 때 낮은 단계 선택 시도하면 안내 후 차단
+  if(curUser?.role === 'team'){
+    const _stageOrder = {'배정':1, '접촉':2, '상담':3, '제안':4, '계약':5, '관리':6};
+    const _stageMap = {'관리고객':'관리','초기접촉':'접촉','미팅':'상담','협의':'제안','상담중':'접촉','제안완료':'제안'};
+    const lid = document.getElementById('act-lead-id')?.value;
+    const _lead = lid ? (allLeads||[]).find(l => l.id === lid) : null;
+    const _curStage = _stageMap[_lead?.current_stage] || _lead?.current_stage;
+    const _newStage = _stageMap[stage] || stage;
+    if(_curStage && _newStage){
+      const _curIsHoldDrop = _curStage === '보류' || _curStage === '드랍';
+      const _newIsHoldDrop = _newStage === '보류' || _newStage === '드랍';
+
+      // 케이스 1: 보류·드랍에서 활동 단계 복귀
+      if(_curIsHoldDrop && !_newIsHoldDrop){
+        showToast(`⛔ "${_curStage}" 상태에서 "${_newStage}"(으)로 복귀할 수 없습니다. 관리자에게 요청하세요.`, 'error');
+        return;
+      }
+      // 케이스 2: 활동 단계 간 다운그레이드
+      if(!_curIsHoldDrop && !_newIsHoldDrop){
+        const _cOrd = _stageOrder[_curStage] || 0;
+        const _nOrd = _stageOrder[_newStage] || 0;
+        if(_cOrd > 0 && _nOrd > 0 && _nOrd < _cOrd){
+          showToast(`⛔ "${_curStage}" → "${_newStage}" 다운그레이드는 관리자만 가능합니다.`, 'error');
+          return;
+        }
+      }
+    }
+  }
+
   const clr=STAGE_CLR_MAP2[stage]||'#94a3b8';
   document.querySelectorAll('.status-opt').forEach(e=>{
     e.classList.remove('active');
@@ -9335,6 +9403,36 @@ function pickStage(el, stage){
   // 드랍/보류 선택 시 사유 입력창 표시
   const dropReasonWrap=document.getElementById('act-drop-reason-wrap');
   if(dropReasonWrap) dropReasonWrap.style.display=(stage==='드랍')?'':'none';
+
+  // ── 드랍 사유 라벨: 계약/관리 단계에서 드랍이면 "계약 해지 사유"로 ──
+  const _dropLabel = document.getElementById('act-drop-reason-label');
+  if(_dropLabel && stage==='드랍'){
+    const _lid = document.getElementById('act-lead-id')?.value;
+    const _lead = _lid ? (allLeads||[]).find(l=>l.id===_lid) : null;
+    const _stageMap2 = {'관리고객':'관리','초기접촉':'접촉','미팅':'상담','협의':'제안','상담중':'접촉','제안완료':'제안'};
+    const _curN = _stageMap2[_lead?.current_stage] || _lead?.current_stage;
+    const _isContractCancel = _curN === '계약';
+    if(_isContractCancel){
+      _dropLabel.innerHTML = '📄 계약 해지 사유 <span style="color:var(--err)">*필수</span>';
+      // wrap 박스 색상도 약간 변경 (계약 해지는 더 신중)
+      if(dropReasonWrap){
+        dropReasonWrap.style.background = 'rgba(245,158,11,.06)';
+        dropReasonWrap.style.borderColor = 'rgba(245,158,11,.35)';
+      }
+      // 글로벌 플래그 설정 (saveActivity에서 활동로그 메시지에 사용)
+      window._isContractCancel = true;
+    } else {
+      _dropLabel.innerHTML = '드랍 사유 <span style="color:var(--err)">*필수</span>';
+      if(dropReasonWrap){
+        dropReasonWrap.style.background = 'rgba(239,68,68,.04)';
+        dropReasonWrap.style.borderColor = 'rgba(239,68,68,.2)';
+      }
+      window._isContractCancel = false;
+    }
+  } else {
+    window._isContractCancel = false;
+  }
+
   const holdReasonWrap=document.getElementById('act-hold-reason-wrap');
   if(holdReasonWrap) holdReasonWrap.style.display=(stage==='보류')?'':'none';
   // 상담 내용 필수/선택 라벨 동적 변경 — 드랍/보류일 때는 선택 (각 사유가 대체)
@@ -9391,6 +9489,42 @@ async function saveActivity(){
   const nextAct=document.getElementById('act-next').value.trim();
   const isDropStage=(window._curActStage==='드랍'||curActStatus==='drop');
   const isHoldStage=(window._curActStage==='보류');
+
+  // ═══════════════════════════════════════════════════════════
+  // 🛡️ 팀장 단계 다운그레이드 차단 (관리자는 예외)
+  // 퍼널: 배정 < 접촉 < 상담 < 제안 < 계약 < 관리
+  //   ㄴ 보류·드랍은 어느 단계에서든 가능 (예외 처리)
+  // 팀장은: 이전 단계로 되돌리기 불가 + 보류·드랍에서 활동 단계로 복귀 불가
+  // 관리자는: 모든 변경 허용 (운영 권한)
+  // ═══════════════════════════════════════════════════════════
+  if(curUser?.role === 'team' && stage){
+    const _stageOrder = {'배정':1, '접촉':2, '상담':3, '제안':4, '계약':5, '관리':6};
+    const _lead = (allLeads||[]).find(l => l.id === lid);
+    const _stageMap = {'관리고객':'관리','초기접촉':'접촉','미팅':'상담','협의':'제안','상담중':'접촉','제안완료':'제안'};
+    const _curStage = _stageMap[_lead?.current_stage] || _lead?.current_stage;
+    const _newStage = _stageMap[stage] || stage;
+
+    if(_curStage && _newStage){
+      const _curIsHoldDrop = _curStage === '보류' || _curStage === '드랍';
+      const _newIsHoldDrop = _newStage === '보류' || _newStage === '드랍';
+
+      // 케이스 1: 보류·드랍에서 활동 단계로 복귀 시도
+      if(_curIsHoldDrop && !_newIsHoldDrop){
+        showToast(`⛔ "${_curStage}" 상태에서 "${_newStage}"(으)로 되돌릴 수 없습니다.\n관리자에게 요청하세요.`, 'error');
+        return;
+      }
+      // 케이스 2: 활동 단계 간 다운그레이드 (보류·드랍 제외)
+      if(!_curIsHoldDrop && !_newIsHoldDrop){
+        const _cOrd = _stageOrder[_curStage] || 0;
+        const _nOrd = _stageOrder[_newStage] || 0;
+        if(_cOrd > 0 && _nOrd > 0 && _nOrd < _cOrd){
+          showToast(`⛔ 단계를 거꾸로 되돌릴 수 없습니다.\n"${_curStage}" → "${_newStage}"은(는) 관리자만 가능합니다.`, 'error');
+          return;
+        }
+      }
+    }
+  }
+
   // 드랍/보류 단계: 사유가 상담내용을 대체 — 상담내용 필수 아님
   if(!isDropStage && !isHoldStage && !content){showToast('상담 내용을 입력하세요.','error');return;}
   // 드랍 선택 시 사유 필수
@@ -9398,9 +9532,10 @@ async function saveActivity(){
     const dropCategory=document.getElementById('act-drop-category')?.value.trim()||'';
   const dropDetail=document.getElementById('act-drop-reason')?.value.trim();
   const dropReason=dropDetail?(dropCategory?`${dropCategory} - ${dropDetail}`:dropDetail):(dropCategory||'');
-    if(!dropReason){showToast('드랍 사유를 입력하세요.','error');document.getElementById('act-drop-reason')?.focus();return;}
-    // 상담내용이 비어있으면 드랍사유를 자동으로 활동기록 내용으로 사용
-    if(!content) content = `[드랍] ${dropReason}`;
+    if(!dropReason){showToast(window._isContractCancel?'계약 해지 사유를 입력하세요.':'드랍 사유를 입력하세요.','error');document.getElementById('act-drop-reason')?.focus();return;}
+    // 계약 해지인 경우 라벨 다르게 표시 (드랍과 동일 처리, 사유만 다름)
+    const _logPrefix = window._isContractCancel ? '[계약 해지]' : '[드랍]';
+    if(!content) content = `${_logPrefix} ${dropReason}`;
   }
   // 보류 선택 시 사유 필수
   if(isHoldStage){
@@ -9953,6 +10088,128 @@ async function downloadTmTemplate(){
   showToast('양식 다운로드 완료','success');
 }
 
+// ═══════════════════════════════════════════════════════════
+// 📋 중복 업로드 알림 다이얼로그
+// 엑셀 업로드 시 전화번호가 기존 DB와 겹치는 건을 발견하면 사용자에게 보여주고
+// "계속하기"(중복 제외) / "모두 업로드" / "취소" / 개별 체크 옵션 제공
+// ═══════════════════════════════════════════════════════════
+function _showDuplicateDialog(dupRows, totalCount){
+  return new Promise(resolve=>{
+    const ov = document.createElement('div');
+    ov.className = 'modal-overlay open';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9800;display:flex;align-items:center;justify-content:center;padding:20px';
+    const newCnt = totalCount - dupRows.length;
+
+    // 행별 체크박스: 기본은 모두 "제외" 체크됨
+    const rowsHtml = dupRows.slice(0, 50).map((d, i)=>{
+      const existInfo = d.existBranch
+        ? `${esc(d.existBranch)}${d.existTeam?' / '+esc(d.existTeam):''}`
+        : '<span style="color:var(--gray-400)">담당 없음</span>';
+      const stageInfo = d.existStage ? esc(d.existStage) : '-';
+      return `<tr style="border-bottom:1px solid #eef2f7">
+        <td style="padding:7px 10px;text-align:center">
+          <input type="checkbox" class="_dup-excl-cb" data-row="${d.rowIdx}" checked
+            style="width:14px;height:14px;cursor:pointer;accent-color:var(--err)">
+        </td>
+        <td style="padding:7px 10px;font-weight:700;color:var(--gray-900)">${esc(d.excelCo)}</td>
+        <td style="padding:7px 10px;font-family:monospace;font-size:11px;color:var(--gray-600)">${esc(d.excelPhone)}</td>
+        <td style="padding:7px 10px;font-size:11.5px;color:var(--gray-600)">${existInfo}</td>
+        <td style="padding:7px 10px;font-size:11px;color:var(--gray-600)">${stageInfo}</td>
+      </tr>`;
+    }).join('');
+
+    const moreNote = dupRows.length > 50
+      ? `<div style="padding:8px 12px;background:#fff7ed;font-size:11.5px;color:var(--gray-600);border-top:1px solid #fde68a">
+          ⚠️ 처음 50건만 표시. 전체 ${dupRows.length}건 모두 같은 처리가 적용됩니다.
+        </div>`
+      : '';
+
+    ov.innerHTML = `
+      <div style="background:#fff;border-radius:12px;width:780px;max-width:96vw;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden">
+        <!-- 헤더 -->
+        <div style="padding:18px 22px;background:linear-gradient(180deg,#fff7ed 0%,#fff 100%);border-bottom:1px solid var(--gray-200)">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+            <div style="width:38px;height:38px;border-radius:50%;background:#fef3c7;display:flex;align-items:center;justify-content:center;font-size:20px">⚠️</div>
+            <div>
+              <div style="font-size:15px;font-weight:800;color:var(--gray-900)">중복 연락처 발견</div>
+              <div style="font-size:11px;color:var(--gray-500);margin-top:2px">기존 DB에 동일한 전화번호가 이미 등록되어 있습니다</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:14px;margin-top:12px;font-size:12px">
+            <span><strong style="color:var(--err)">${dupRows.length}건</strong> 중복</span>
+            <span style="color:var(--gray-300)">|</span>
+            <span><strong style="color:var(--ok)">${newCnt}건</strong> 신규</span>
+            <span style="color:var(--gray-300)">|</span>
+            <span>총 <strong>${totalCount}건</strong></span>
+          </div>
+        </div>
+
+        <!-- 목록 -->
+        <div style="flex:1;overflow-y:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead style="background:#fafbfd;position:sticky;top:0">
+              <tr style="border-bottom:1px solid var(--gray-200)">
+                <th style="padding:8px 10px;text-align:center;font-size:10px;color:var(--gray-500);width:50px">제외</th>
+                <th style="padding:8px 10px;text-align:left;font-size:10px;color:var(--gray-500)">업로드 회사명</th>
+                <th style="padding:8px 10px;text-align:left;font-size:10px;color:var(--gray-500);width:120px">연락처</th>
+                <th style="padding:8px 10px;text-align:left;font-size:10px;color:var(--gray-500);width:180px">기존 담당</th>
+                <th style="padding:8px 10px;text-align:left;font-size:10px;color:var(--gray-500);width:90px">기존 단계</th>
+              </tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+          ${moreNote}
+        </div>
+
+        <!-- 액션 -->
+        <div style="padding:14px 22px;background:#fafbfd;border-top:1px solid var(--gray-200)">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <button id="_dup-check-all" class="btn btn-outline btn-sm" type="button">✅ 전체 제외</button>
+              <button id="_dup-uncheck-all" class="btn btn-outline btn-sm" type="button">⬜ 전체 해제</button>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <button id="_dup-cancel" class="btn btn-outline">취소</button>
+              <button id="_dup-all" class="btn btn-outline" style="color:#d97706;border-color:#d97706" title="중복까지 모두 업로드 (주의: 중복 DB 생성)">⚠ 모두 업로드</button>
+              <button id="_dup-ok" class="btn btn-primary">✅ 선택대로 진행</button>
+            </div>
+          </div>
+          <div style="margin-top:8px;font-size:11px;color:var(--gray-500);line-height:1.6">
+            💡 체크된 행은 <strong>제외</strong>됩니다. 기본값은 "전체 제외"입니다. <br>
+            "모두 업로드"를 선택하면 중복 알림에도 불구하고 모든 행이 업로드됩니다 (이중 DB 생성).
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(ov);
+
+    const cleanup = (result)=>{
+      try{ ov.remove(); }catch(e){}
+      resolve(result);
+    };
+
+    ov.querySelector('#_dup-check-all').onclick = ()=>{
+      ov.querySelectorAll('._dup-excl-cb').forEach(cb => cb.checked = true);
+    };
+    ov.querySelector('#_dup-uncheck-all').onclick = ()=>{
+      ov.querySelectorAll('._dup-excl-cb').forEach(cb => cb.checked = false);
+    };
+    ov.querySelector('#_dup-cancel').onclick = ()=>cleanup({ action:'cancel' });
+    ov.querySelector('#_dup-all').onclick = ()=>{
+      if(confirm('정말 중복까지 모두 업로드하시겠습니까?\n\n같은 전화번호의 DB가 중복으로 생성됩니다.')){
+        cleanup({ action:'all' });
+      }
+    };
+    ov.querySelector('#_dup-ok').onclick = ()=>{
+      const excludedIds = new Set();
+      ov.querySelectorAll('._dup-excl-cb').forEach(cb=>{
+        if(cb.checked) excludedIds.add(parseInt(cb.dataset.row));
+      });
+      cleanup({ action:'partial', excludedIds });
+    };
+    ov.onclick = (e)=>{ if(e.target===ov) cleanup({ action:'cancel' }); };
+  });
+}
+
 async function importExcel(event){
   const file=event.target.files[0];if(!file)return;event.target.value='';
   if(!window.XLSX){await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
@@ -10035,8 +10292,76 @@ async function importExcel(event){
     if(nm) _dbNameSet.add(nm);
   });
 
+  // ── _dbLeadMap: 전화번호 → 기존 lead (중복 팝업 표시용) ──
+  const _dbLeadMap = new Map();
+  (allLeads||[]).forEach(l=>{
+    if(l.status==='deleted') return;
+    const ph=String(l.phone||'').replace(/[^0-9]/g,'');
+    if(ph.length>=9 && !_dbLeadMap.has(ph)) _dbLeadMap.set(ph, l);
+  });
+  // Supabase에서 누락된 lead 보완 (allLeads 캐시 외)
+  try{
+    if(!testMode && _excelPhones.length){
+      const _chunks2=[];
+      for(let ci=0;ci<_excelPhones.length;ci+=100)
+        _chunks2.push(_excelPhones.slice(ci,ci+100));
+      for(const chunk of _chunks2){
+        const _r=await fetch(SB_URL+'/rest/v1/leads?select=id,phone,company_name,branch_name,team_name,current_stage,status&status=neq.deleted',{
+          headers:{...sbH(),'Range-Unit':'items','Range':'0-9999','Prefer':'count=none'}
+        });
+        if(_r.ok){
+          const _rows=await _r.json().catch(()=>[]);
+          (_rows||[]).forEach(l=>{
+            const ph=String(l.phone||'').replace(/[^0-9]/g,'');
+            if(ph.length>=9 && !_dbLeadMap.has(ph)) _dbLeadMap.set(ph, l);
+          });
+        }
+        break; // 한 번에 다 들어옴 (Range 0-9999)
+      }
+    }
+  }catch(e){}
+
   const existing=allLeads||[]; // 하위 호환용
   const existSet=_dbPhoneSet;  // 기존 변수명 유지
+
+  // ── 1차 통과: 중복 사전 스캔 (사용자에게 미리 보여주기) ──
+  // _dupRows: 업로드 행 중 기존 DB와 전화번호 중복인 건들
+  const _dupRows = [];
+  for(let i=1;i<rows.length;i++){
+    const row=rows[i];
+    const map={};hdrs.forEach((h,j)=>{const k=hm[h.toLowerCase()];if(k)map[k]=row[j];else if(h)map[h]=row[j];});
+    const co=String(map.company_name||'').trim();if(!co)continue;
+    const ph=String(map.phone||'').trim().replace(/[^0-9]/g,'');
+    if(ph.length>=9 && existSet.has(ph)){
+      // 기존 lead 정보도 함께 (담당자·단계 표시용)
+      const _existLead = _dbLeadMap ? _dbLeadMap.get(ph) : null;
+      _dupRows.push({
+        rowIdx:i,
+        excelCo: co,
+        excelPhone: formatPhone(String(map.phone||'')),
+        existCo: _existLead?.company_name || '',
+        existBranch: _existLead?.branch_name || '',
+        existTeam: _existLead?.team_name || '',
+        existStage: _existLead?.current_stage || _existLead?.status || '',
+      });
+    }
+  }
+
+  // ── 중복이 있으면 팝업 표시 ──
+  // 사용자 액션: 'partial'(체크된 것만 제외) | 'all'(중복도 모두 업로드) | 'cancel'
+  let _userDecision = 'partial';
+  let _excludedRowIds = new Set();
+
+  if(_dupRows.length > 0){
+    const decision = await _showDuplicateDialog(_dupRows, rows.length - 1);
+    if(decision.action === 'cancel'){
+      showToast('업로드 취소됨','info');
+      return;
+    }
+    _userDecision = decision.action;
+    _excludedRowIds = decision.excludedIds || new Set();
+  }
+
   for(let i=1;i<rows.length;i++){
     const row=rows[i];
     const map={};hdrs.forEach((h,j)=>{const k=hm[h.toLowerCase()];if(k)map[k]=row[j];else if(h)map[h]=row[j];});
@@ -10044,7 +10369,19 @@ async function importExcel(event){
     const ph=String(map.phone||'').trim().replace(/[^0-9]/g,'');
     // 1순위: 전화번호 정규화 비교 (DB 직접 조회 기반)
     const _phNorm=ph.replace(/[^0-9]/g,'');
-    if(_phNorm.length>=9&&existSet.has(_phNorm)){dup++;continue;}
+    // ── 중복 처리: 사용자 결정에 따라 분기 ──
+    if(_phNorm.length>=9&&existSet.has(_phNorm)){
+      if(_userDecision === 'all'){
+        // 중복도 모두 업로드 — 그대로 통과
+      } else {
+        // partial 또는 _dupRows.length === 0(팝업 안 뜬 케이스)
+        // 체크된 행은 제외
+        if(_excludedRowIds.has(i)){
+          dup++;continue;
+        }
+        // 체크 해제된 행은 통과 (사용자가 "이건 업로드해" 선택)
+      }
+    }
     // 2순위: 전화번호 없으면 회사명 비교
     if(_phNorm.length<9&&co&&_dbNameSet.has(co)){dup++;continue;}
     const _branch=String(map.branch_name||'').trim();
