@@ -20661,34 +20661,51 @@ function rcSendNotice(){
 }
 
 // ── 회수 공통 패치 ────────────────────────────────────────────────────
-function _rcBuildPatch(reason){
-  // ⚠️ 변경: 회수 시 대전 직행이 아니라 '회수목록(대기)' 상태로 전환
-  // tm_transferred=false 유지, recall_pending=true 설정
-  // 팀장 화면에서는 사라지지만(아래 필터), 대전엔 아직 안 감 → 관리자가 별도 이관
+function _rcBuildPatch(reason, lead){
+  // ⚠️ 회수 시 '회수목록(대기)' 상태로 전환
+  // ★ 대전이관 건(tm_transferred=true) 재회수 시: 대전 정보 제거 + 원본 소속 복원
   const now = new Date().toISOString();
-  return {
+  const isTmTransferred = lead && (lead.tm_transferred===true || lead.tm_transferred==='true');
+  const patch = {
     recall_pending:true,
     auto_recalled:true,
     auto_recall_reason:reason||'수동 회수',
     auto_recall_at:now,
-    // 회수 직전 소속을 보존 (원복 시 복귀 대상)
-    // branch_name/team_name은 그대로 유지 — 원복 시 그대로 복귀
-    // status는 회수됨을 의미하는 별도 표기 없이 유지(팀장 화면 필터로 숨김)
     updated_at:now
   };
+  if(isTmTransferred){
+    // 대전이관 상태 해제 + 원본 소속 복원
+    patch.tm_transferred = false;
+    patch.tm_transferred_at = null;
+    patch.branch_name = lead.pre_transfer_branch || lead.branch_name || '';
+    patch.team_name   = lead.pre_transfer_team   || lead.team_name   || '';
+    patch.team_names  = lead.pre_transfer_team
+      ? JSON.stringify([lead.pre_transfer_team])
+      : (lead.team_names || null);
+    patch.status = 'assigned';
+  }
+  return patch;
 }
 
 // 대전 이관 패치 (회수목록 → 대전TM 최종 이관)
-function _rpBuildTransferPatch(reason){
+function _rpBuildTransferPatch(reason, lead){
   const now = new Date().toISOString();
+  // ★ 이관 전 원본 branch/team 보존 → 재회수 시 복원용
+  const origBranch = (lead?.branch_name && lead.branch_name!=='대전' && lead.branch_name!=='대전TM' && lead.branch_name!=='대전센터')
+    ? lead.branch_name : (lead?.pre_transfer_branch || null);
+  const origTeam   = (lead?.team_name && lead.team_name!=='대전센터')
+    ? lead.team_name : (lead?.pre_transfer_team || null);
   return {
-    branch_name:'대전',team_name:'대전센터',team_names:JSON.stringify(['대전센터']),
-    tm_transferred:true,assigned_at:now,
-    status:'assigned',collab_branches:null,
+    branch_name:'대전', team_name:'대전센터', team_names:JSON.stringify(['대전센터']),
+    tm_transferred:true, assigned_at:now,
+    status:'assigned', collab_branches:null,
     recall_pending:false,
     auto_recalled:true,
     auto_recall_reason:reason||'회수 후 대전 이관',
     auto_recall_at:now,
+    // ★ 재회수를 위한 원본 소속 보존
+    pre_transfer_branch: origBranch,
+    pre_transfer_team:   origTeam,
     updated_at:now
   };
 }
@@ -20744,7 +20761,7 @@ async function rcRecallOne(id){
   if(!confirm(`"${t.company_name||''}" 을(를) 회수하시겠습니까?\n\n회수 후 '회수목록'으로 이동하며, 관리자가 검토 후 대전 이관합니다.`)) return;
   try{
     const lead = (allLeads||[]).find(x=>x.id===id);
-    let patch=_rcBuildPatch(t._rcReason?.text);    await dbU('leads',id,patch);
+    let patch=_rcBuildPatch(t._rcReason?.text, lead);    await dbU('leads',id,patch);
     await logActivity(id,'assign','회수 → 회수목록 보관 ('+(t._rcReason?.text||'수동 회수')+')','assigned','');
     if(allLeads){const i=allLeads.findIndex(x=>x.id===id);if(i>=0)allLeads[i]={...allLeads[i],...patch};}
     {const ri=_allLeadsRaw.findIndex(x=>x.id===id);if(ri>=0)_allLeadsRaw[ri]={..._allLeadsRaw[ri],...patch};else _allLeadsRaw.push({...(allLeads||[]).find(x=>x.id===id)||{},...patch});}
@@ -20811,7 +20828,8 @@ async function rcRecallSelected(){
           }
         });
       }
-      let patch=_rcBuildPatch(t?._rcReason?.text);      await dbU('leads',id,patch);
+      const _rcLead=_rpFindLead(id)||(allLeads||[]).find(x=>x.id===id);
+      let patch=_rcBuildPatch(t?._rcReason?.text, _rcLead);      await dbU('leads',id,patch);
       await logActivity(id,'assign','일괄 회수 → 회수목록 보관 ('+(t?._rcReason?.text||'수동 회수')+')','assigned','');
       if(allLeads){const i=allLeads.findIndex(x=>x.id===id);if(i>=0)allLeads[i]={...allLeads[i],...patch};}
       {const ri=_allLeadsRaw.findIndex(x=>x.id===id);if(ri>=0)_allLeadsRaw[ri]={..._allLeadsRaw[ri],...patch};else _allLeadsRaw.push({...(allLeads||[]).find(x=>x.id===id)||{},...patch});}
@@ -21028,7 +21046,7 @@ async function rpTransferOne(id){
   if(!lead){ showToast('대상 없음','error'); return; }
   if(!confirm(`"${lead.company_name||''}" 을(를) 대전TM으로 이관하시겠습니까?\n\n이관 후에는 '대전이관 원복'에서 되돌릴 수 있습니다.`)) return;
   try{
-    const patch=_rpBuildTransferPatch(lead.auto_recall_reason);
+    const patch=_rpBuildTransferPatch(lead.auto_recall_reason, lead);
     await dbU('leads',id,patch);
     await logActivity(id,'assign','회수목록 → 대전TM 최종 이관','assigned','');
     _rpPatchLocal(id, patch);
@@ -21083,7 +21101,7 @@ async function rpTransferSelected(){
           auto_recall_reason:lead.auto_recall_reason, collab_branches:lead.collab_branches, assigned_at:lead.assigned_at
         }});
       }
-      const patch=_rpBuildTransferPatch(lead?.auto_recall_reason);
+      const patch=_rpBuildTransferPatch(lead?.auto_recall_reason, lead);
       await dbU('leads',id,patch);
       await logActivity(id,'assign','일괄 회수목록 → 대전TM 최종 이관','assigned','');
       _rpPatchLocal(id, patch);
