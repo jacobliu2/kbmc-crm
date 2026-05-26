@@ -13705,7 +13705,7 @@ async function confirmTmRevert(){
 // 일자별/지점별 본사→대전 이관 목록 + 일괄/단건 원복
 // ═══════════════════════════════════════════════════════════
 let _rvData = [];        // 현재 표시 중인 원복 후보 리드 배열
-let _rvSelected = new Set();
+let _rvSelected = new Set(), _rvLastCheckedIdx = -1;
 let _rvBranchOptionsBuilt = false;
 
 // 미니탭 전환
@@ -13951,7 +13951,7 @@ function rvRender(){
               </tr>
             </thead>
             <tbody>
-              ${list.map(l=>_rvRowHtml(l)).join('')}
+              ${list.map((l,i)=>_rvRowHtml(l,i)).join('')}
             </tbody>
           </table>
         </div>
@@ -13962,7 +13962,7 @@ function rvRender(){
 }
 
 // 행 렌더
-function _rvRowHtml(l){
+function _rvRowHtml(l, rvRowIdx){
   const origin = _rvGetOriginInfo(l);
   const type = _rvGetType(l);
   const ts = _rvGetTransferDate(l);
@@ -13977,7 +13977,7 @@ function _rvRowHtml(l){
 
   return `
     <tr style="border-top:1px solid var(--gray-100)">
-      <td style="padding:8px 10px;text-align:center"><input type="checkbox" ${checked} onclick="rvToggle('${esc(l.id)}',this.checked)"></td>
+      <td style="padding:8px 10px;text-align:center"><input type="checkbox" class="rv-cb" data-id="${esc(l.id)}" data-idx="${rvRowIdx}" ${checked} onclick="rvClickCb(event,this)"></td>
       <td style="padding:8px 10px;font-weight:600;color:var(--gray-900);cursor:pointer" onclick="openPanel(${JSON.stringify(l).replace(/"/g,'&quot;')})">${esc(l.company_name||'-')}</td>
       <td style="padding:8px 10px;color:var(--gray-600)">${esc(l.contact_name||'-')}</td>
       <td style="padding:8px 10px;color:var(--gray-600)">${esc(l.phone||'-')}</td>
@@ -13990,7 +13990,30 @@ function _rvRowHtml(l){
   `;
 }
 
-// 단건 체크
+// 단건 체크 (Shift 클릭 범위 선택 지원)
+function rvClickCb(event, cb){
+  const id = cb.dataset.id;
+  const idx = parseInt(cb.dataset.idx);
+  const checked = cb.checked;
+  if(event.shiftKey && _rvLastCheckedIdx >= 0 && _rvLastCheckedIdx !== idx){
+    // Shift 클릭: 범위 체크
+    const from = Math.min(_rvLastCheckedIdx, idx);
+    const to   = Math.max(_rvLastCheckedIdx, idx);
+    const allCbs = document.querySelectorAll('.rv-cb');
+    allCbs.forEach(c=>{
+      const ci = parseInt(c.dataset.idx);
+      if(ci >= from && ci <= to){
+        c.checked = checked;
+        if(checked) _rvSelected.add(c.dataset.id);
+        else _rvSelected.delete(c.dataset.id);
+      }
+    });
+  } else {
+    if(checked) _rvSelected.add(id);
+    else _rvSelected.delete(id);
+  }
+  _rvLastCheckedIdx = idx;
+}
 function rvToggle(id, checked){
   if(checked) _rvSelected.add(id);
   else _rvSelected.delete(id);
@@ -14009,7 +14032,7 @@ function rvCheckGroup(day, checked){
 }
 
 // 전체 체크 (현재 필터된 항목 기준)
-function rvCheckAll(checked){
+function rvCheckAll(checked){ _rvLastCheckedIdx=-1;
   // 현재 표시 중인 rows 다시 계산
   const period = document.getElementById('rv-period')?.value || '90';
   const branch = document.getElementById('rv-branch')?.value || '';
