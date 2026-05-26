@@ -7030,7 +7030,7 @@ async function renderMonthlyChart(all){
 }
 
 // ── DB 관리 ───────────────────────────────────────────────
-let allLeads=[], filtered=[], selIds=new Set(), curPage=1, _lastSelId=null, _stageFilter='';
+let allLeads=[], _allLeadsRaw=[], filtered=[], selIds=new Set(), curPage=1, _lastSelId=null, _stageFilter='';
 let allActivities=[], allNextActions=[];  // Supabase 전역 캐시 (lg() 대체)
 // 지점 화면 전역 (openRemoveLeader 등이 화면 진입 전에도 호출될 수 있으므로 여기서 선언)
 let brAllLeads=[], brFiltered=[], brSelIds=new Set(), brPage=1;
@@ -7097,6 +7097,8 @@ async function loadLeads(){
   allNextActions = _nasRaw;
   allLeads = _leadsRaw;
   allLeads=allLeads.filter(l=>l.status!=='deleted');
+  // ★ 원본 보존: recall_pending 항목 포함한 전체 리드 (회수목록 탭에서 참조)
+  _allLeadsRaw = [...allLeads];
   if(curUser.role==='admin'||curUser.role==='dbmanager'){
     // 관리자/DB관리자: 모든 DB 열람 — 단, 회수목록(대기) 건은 일반 목록에서 숨김
     // (회수목록 전용 탭에서 조회/이관/원복)
@@ -20738,6 +20740,8 @@ async function rcRecallOne(id){
     let patch=_rcBuildPatch(t._rcReason?.text);    await dbU('leads',id,patch);
     await logActivity(id,'assign','회수 → 회수목록 보관 ('+(t._rcReason?.text||'수동 회수')+')','assigned','');
     if(allLeads){const i=allLeads.findIndex(x=>x.id===id);if(i>=0)allLeads[i]={...allLeads[i],...patch};}
+    // ★ 원본 배열도 동기화
+    {const ri=_allLeadsRaw.findIndex(x=>x.id===id);if(ri>=0)_allLeadsRaw[ri]={..._allLeadsRaw[ri],...patch};else if(allLeads){const src=allLeads.find(x=>x.id===id)||{};_allLeadsRaw.push({...src,...patch});}}
     _rcSelected.delete(id);
     showToast('회수 완료 → 회수목록으로 이동','success');
     filterLeads(); await rcRender();
@@ -20804,6 +20808,8 @@ async function rcRecallSelected(){
       let patch=_rcBuildPatch(t?._rcReason?.text);      await dbU('leads',id,patch);
       await logActivity(id,'assign','일괄 회수 → 회수목록 보관 ('+(t?._rcReason?.text||'수동 회수')+')','assigned','');
       if(allLeads){const i=allLeads.findIndex(x=>x.id===id);if(i>=0)allLeads[i]={...allLeads[i],...patch};}
+      // ★ 원본 배열도 동기화
+      {const ri=_allLeadsRaw.findIndex(x=>x.id===id);if(ri>=0)_allLeadsRaw[ri]={..._allLeadsRaw[ri],...patch};else if(allLeads){const src=allLeads.find(x=>x.id===id)||{};_allLeadsRaw.push({...src,...patch});}}
     }
     if(undoItems.length > 0){
       recordBulkOp({
@@ -20848,7 +20854,7 @@ function openPanelById(id){
 
 // 회수목록 후보 (recall_pending=true, 삭제/드랍 제외)
 function _rpCandidates(){
-  let list = (allLeads||[]).filter(l=>{
+  let list = (_allLeadsRaw.length ? _allLeadsRaw : (allLeads||[])).filter(l=>{
     if(!l) return false;
     if(!(l.recall_pending===true||l.recall_pending==='true')) return false;
     const st=String(l.status||'');
@@ -21000,16 +21006,26 @@ function rpCheckAll(checked){
 }
 
 // ── 단건 대전 이관 (관리자만) ──
+// ★ 회수목록 리드 조회 헬퍼 - allLeads에서 recall_pending 항목이 제거되므로 _allLeadsRaw 우선 참조
+function _rpFindLead(id){
+  return (_allLeadsRaw.length ? _allLeadsRaw : (allLeads||[])).find(l=>l.id===id) || (allLeads||[]).find(l=>l.id===id);
+}
+function _rpPatchLocal(id, patch){
+  // allLeads와 _allLeadsRaw 양쪽 동기화
+  if(allLeads){const i=allLeads.findIndex(l=>l.id===id);if(i>=0)allLeads[i]={...allLeads[i],...patch};}
+  {const ri=_allLeadsRaw.findIndex(l=>l.id===id);if(ri>=0)_allLeadsRaw[ri]={..._allLeadsRaw[ri],...patch};}
+}
+
 async function rpTransferOne(id){
   if(curUser?.role!=='admin'){ showToast('관리자만 가능합니다','error'); return; }
-  const lead=(allLeads||[]).find(l=>l.id===id);
+  const lead=_rpFindLead(id);
   if(!lead){ showToast('대상 없음','error'); return; }
   if(!confirm(`"${lead.company_name||''}" 을(를) 대전TM으로 이관하시겠습니까?\n\n이관 후에는 '대전이관 원복'에서 되돌릴 수 있습니다.`)) return;
   try{
     const patch=_rpBuildTransferPatch(lead.auto_recall_reason);
     await dbU('leads',id,patch);
     await logActivity(id,'assign','회수목록 → 대전TM 최종 이관','assigned','');
-    if(allLeads){const i=allLeads.findIndex(l=>l.id===id);if(i>=0)allLeads[i]={...allLeads[i],...patch};}
+    _rpPatchLocal(id, patch);
     _rpSelected.delete(id);
     showToast('대전TM 이관 완료','success');
     rpRender(); _updatePendingCount(); if(typeof filterLeads==='function') filterLeads();
@@ -21019,7 +21035,7 @@ async function rpTransferOne(id){
 // ── 단건 원복 (관리자만) ──
 async function rpRevertOne(id){
   if(curUser?.role!=='admin'){ showToast('관리자만 가능합니다','error'); return; }
-  const lead=(allLeads||[]).find(l=>l.id===id);
+  const lead=_rpFindLead(id);
   if(!lead){ showToast('대상 없음','error'); return; }
   if(!confirm(`"${lead.company_name||''}" 을(를) 회수 취소하고 원래 팀장(${lead.team_name||'미배정'})에게 되돌리시겠습니까?`)) return;
   try{
@@ -21027,7 +21043,7 @@ async function rpRevertOne(id){
     const patch={recall_pending:false, auto_recalled:false, auto_recall_reason:null, auto_recall_at:null, updated_at:now};
     await dbU('leads',id,patch);
     await logActivity(id,'assign',`↩ 회수목록 원복 → ${lead.team_name||'원래 팀장'} 복귀`,'assigned','');
-    if(allLeads){const i=allLeads.findIndex(l=>l.id===id);if(i>=0)allLeads[i]={...allLeads[i],...patch};}
+    _rpPatchLocal(id, patch);
     _rpSelected.delete(id);
     showToast('원복 완료 → 원래 팀장에게 복귀','success');
     rpRender(); _updatePendingCount(); if(typeof filterLeads==='function') filterLeads();
@@ -21052,7 +21068,7 @@ async function rpTransferSelected(){
   const undoItems=[];
   try{
     for(const id of ids){
-      const lead=(allLeads||[]).find(l=>l.id===id);
+      const lead=_rpFindLead(id);
       if(lead){
         undoItems.push({id, prev:{
           branch_name:lead.branch_name, team_name:lead.team_name, team_names:lead.team_names,
@@ -21064,7 +21080,7 @@ async function rpTransferSelected(){
       const patch=_rpBuildTransferPatch(lead?.auto_recall_reason);
       await dbU('leads',id,patch);
       await logActivity(id,'assign','일괄 회수목록 → 대전TM 최종 이관','assigned','');
-      if(allLeads){const i=allLeads.findIndex(l=>l.id===id);if(i>=0)allLeads[i]={...allLeads[i],...patch};}
+      _rpPatchLocal(id, patch);
     }
     if(undoItems.length>0) recordBulkOp({actionLabel:'회수목록 → 대전TM 이관', items:undoItems, dbTable:'leads'});
     _rpSelected.clear();
@@ -21092,7 +21108,7 @@ async function rpRevertSelected(){
   try{
     const now=new Date().toISOString();
     for(const id of ids){
-      const lead=(allLeads||[]).find(l=>l.id===id);
+      const lead=_rpFindLead(id);
       if(lead){
         undoItems.push({id, prev:{
           recall_pending:lead.recall_pending, auto_recalled:lead.auto_recalled,
@@ -21102,7 +21118,7 @@ async function rpRevertSelected(){
       const patch={recall_pending:false, auto_recalled:false, auto_recall_reason:null, auto_recall_at:null, updated_at:now};
       await dbU('leads',id,patch);
       await logActivity(id,'assign',`↩ 일괄 회수목록 원복 → ${lead?.team_name||'원래 팀장'} 복귀`,'assigned','');
-      if(allLeads){const i=allLeads.findIndex(l=>l.id===id);if(i>=0)allLeads[i]={...allLeads[i],...patch};}
+      _rpPatchLocal(id, patch);
     }
     if(undoItems.length>0) recordBulkOp({actionLabel:'회수목록 원복', items:undoItems, dbTable:'leads'});
     _rpSelected.clear();
