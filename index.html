@@ -19982,33 +19982,94 @@ async function confirmBrAssignPopup(){
 
 async function confirmBrRecall(){
   if(!brSelIds.size){showToast('DB를 선택하세요.','error');return;}
-  if(!confirm(brSelIds.size+'건 팀장 배정을 회수하시겠습니까?'))return;
-  const ids=[...brSelIds];
-  const recallData={team_name:'',team_names:JSON.stringify([]),yj_transferred:false,yj_from_role:'',yj_from_branch:''};
-  for(const id of ids){
-    await dbU('leads',id,recallData);
-    await logActivity(id,'assign','팀장 회수 ('+curUser.name+')','','');
-  }
-  // brAllLeads / allLeads 캐시 즉시 갱신
-  [brAllLeads, allLeads].forEach(cache=>{
-    if(!cache) return;
-    ids.forEach(id=>{
-      const l=cache.find(r=>r.id===id);
-      if(l){l.team_name='';l.team_names=JSON.stringify([]);}
-    });
+
+  // ★ 회수 방식 선택 모달
+  const mode = await new Promise(resolve=>{
+    let ov=document.getElementById('ov-br-recall-mode');
+    if(!ov){ov=document.createElement('div');ov.id='ov-br-recall-mode';ov.className='ov-bg';document.body.appendChild(ov);}
+    ov.innerHTML=`<div class="ov-box" style="width:380px;max-width:96vw;padding:28px">
+      <div style="font-size:17px;font-weight:800;color:var(--navy);margin-bottom:6px">↩ 회수 방식 선택</div>
+      <div style="font-size:13px;color:var(--gray-500);margin-bottom:20px">${brSelIds.size}건 선택됨</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <button onclick="document.getElementById('ov-br-recall-mode').classList.remove('open'); window._brRecallResolve('pending')"
+          class="btn btn-primary" style="justify-content:flex-start;gap:10px;padding:14px 16px;text-align:left">
+          <div>
+            <div style="font-weight:700;font-size:14px">📦 회수목록으로 회수</div>
+            <div style="font-size:11px;font-weight:400;opacity:.8;margin-top:3px">회수목록 보관 → 관리자가 대전 이관 처리</div>
+          </div>
+        </button>
+        <button onclick="document.getElementById('ov-br-recall-mode').classList.remove('open'); window._brRecallResolve('team')"
+          class="btn btn-outline" style="justify-content:flex-start;gap:10px;padding:14px 16px;text-align:left">
+          <div>
+            <div style="font-weight:700;font-size:14px">🔄 담당자에게 직접 회수</div>
+            <div style="font-size:11px;font-weight:400;opacity:.7;margin-top:3px">팀장 배정만 해제 → 미배정 상태로</div>
+          </div>
+        </button>
+        <button onclick="document.getElementById('ov-br-recall-mode').classList.remove('open'); window._brRecallResolve(null)"
+          class="btn btn-ghost" style="font-size:12px;color:var(--gray-400)">취소</button>
+      </div>
+    </div>`;
+    window._brRecallResolve = resolve;
+    ov.classList.add('open');
   });
-  // brFiltered도 즉시 동기화 (현재 보이는 목록 갱신)
-  if(typeof brFiltered!=='undefined'&&brFiltered){
-    ids.forEach(id=>{
-      const l=brFiltered.find(r=>r.id===id);
-      if(l){l.team_name='';l.team_names=JSON.stringify([]);}
+
+  if(!mode) return;
+
+  const ids=[...brSelIds];
+  const now=new Date().toISOString();
+
+  if(mode==='pending'){
+    // ── 회수목록으로 ──
+    for(const id of ids){
+      const lead=(brAllLeads||allLeads||[]).find(r=>r.id===id);
+      const patch={
+        recall_pending:true, auto_recalled:true,
+        auto_recall_reason:'지점장 수동 회수',
+        auto_recall_at:now, updated_at:now,
+        // 원복 시 복귀할 원본 소속 보존
+        pre_transfer_branch: lead?.branch_name||'',
+        pre_transfer_team:   lead?.team_name||''
+      };
+      await dbU('leads',id,patch);
+      await logActivity(id,'assign','↩ 지점장 회수 → 회수목록 보관 ('+curUser.name+')','assigned','');
+      // 로컬 캐시 동기화
+      [brAllLeads, allLeads, _allLeadsRaw].forEach(cache=>{
+        if(!cache) return;
+        const l=cache.find(r=>r.id===id);
+        if(l) Object.assign(l, patch);
+      });
+    }
+    clearBrSel();
+    showToast(`${ids.length}건 회수목록으로 이동`,'success');
+    if(typeof _updatePendingCount==='function') _updatePendingCount();
+    renderBrTable();
+    loadBranchScreen();
+
+  } else {
+    // ── 팀장 배정만 해제 (기존 동작) ──
+    const recallData={team_name:'',team_names:JSON.stringify([]),yj_transferred:false,yj_from_role:'',yj_from_branch:''};
+    for(const id of ids){
+      await dbU('leads',id,recallData);
+      await logActivity(id,'assign','팀장 회수 ('+curUser.name+')','','');
+    }
+    [brAllLeads, allLeads].forEach(cache=>{
+      if(!cache) return;
+      ids.forEach(id=>{
+        const l=cache.find(r=>r.id===id);
+        if(l){l.team_name='';l.team_names=JSON.stringify([]);}
+      });
     });
+    if(typeof brFiltered!=='undefined'&&brFiltered){
+      ids.forEach(id=>{
+        const l=brFiltered.find(r=>r.id===id);
+        if(l){l.team_name='';l.team_names=JSON.stringify([]);}
+      });
+    }
+    clearBrSel();
+    showToast(`${ids.length}건 회수 완료`,'success');
+    renderBrTable();
+    loadBranchScreen();
   }
-  clearBrSel();
-  showToast(`${ids.length}건 회수 완료`,'success');
-  // 카드 카운트 + 테이블 즉시 반영 후 전체 재로드
-  renderBrTable();
-  loadBranchScreen();
 }
 function confirmBrDrop(){
   if(!brSelIds.size){showToast('DB를 선택하세요.','error');return;}
