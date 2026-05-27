@@ -13924,6 +13924,7 @@ function rvRender(){
   const dayKeys = Object.keys(groups).sort().reverse();
 
   let html = diagInfo;
+  let _rvGlobalIdx = 0; // ★ 전체 연속 인덱스
   dayKeys.forEach(day=>{
     const list = groups[day];
     const dayLabel = day || '(일자 미상)';
@@ -13951,7 +13952,7 @@ function rvRender(){
               </tr>
             </thead>
             <tbody>
-              ${list.map((l,i)=>_rvRowHtml(l,i)).join('')}
+              ${list.map((l)=>_rvRowHtml(l,_rvGlobalIdx++)).join('')}
             </tbody>
           </table>
         </div>
@@ -14021,6 +14022,7 @@ function rvToggle(id, checked){
 
 // 일자별 그룹 체크
 function rvCheckGroup(day, checked){
+  // _rvSelected 업데이트
   (_rvData||[]).forEach(l=>{
     const ts = _rvGetTransferDate(l);
     if((ts||'').slice(0,10)===day){
@@ -14028,7 +14030,15 @@ function rvCheckGroup(day, checked){
       else _rvSelected.delete(l.id);
     }
   });
-  rvRender();
+  // ★ 해당 그룹의 체크박스 UI 직접 갱신 (rvRender 없이)
+  document.querySelectorAll('.rv-cb').forEach(cb=>{
+    const id = cb.dataset.id;
+    const lead = (_rvData||[]).find(l=>l.id===id);
+    if(!lead) return;
+    const ts = _rvGetTransferDate(lead);
+    if((ts||'').slice(0,10)===day) cb.checked = checked;
+  });
+  _rvLastCheckedIdx = -1;
 }
 
 // 전체 체크 (현재 필터된 항목 기준)
@@ -20953,7 +20963,9 @@ let _rpBranchOptionsBuilt = false;
 
 // id로 상세 패널 열기 (회수목록 회사명 클릭용)
 function openPanelById(id){
-  const lead = (allLeads||[]).find(l=>l.id===id);
+  // ★ recall_pending 항목은 allLeads에서 제거되므로 _allLeadsRaw 우선 참조
+  const lead = (_allLeadsRaw.length ? _allLeadsRaw : (allLeads||[])).find(l=>l.id===id)
+            || (allLeads||[]).find(l=>l.id===id);
   if(lead && typeof openPanel==='function') openPanel(lead);
   else showToast('해당 DB를 찾을 수 없습니다','error');
 }
