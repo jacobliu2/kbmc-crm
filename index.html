@@ -1248,6 +1248,8 @@ tbody tr.selected td{background:var(--blue-50)!important}
         <button class="btn btn-outline btn-sm" id="qtab-contract" onclick="quickTab('contract_stage',this)">🎉 계약</button>
         <button class="btn btn-outline btn-sm" id="qtab-reassign" onclick="quickTab('reassign',this)" style="color:#7c3aed;border-color:#7c3aed">🔄 재배정대기</button>
         <button class="btn btn-outline btn-sm" id="qtab-overdue30" onclick="quickTab('overdue30',this)" style="display:none;color:var(--warn);border-color:var(--warn)">⏰ 30h+ 미기록</button>
+        <button class="btn btn-outline btn-sm" id="qtab-recall-view" onclick="quickTab('recall_view',this)" style="display:none;color:var(--err);border-color:var(--err)">⛔ 회수대상</button>
+        <button class="btn btn-outline btn-sm" id="qtab-djmanage" onclick="quickTab('djmanage',this)" style="display:none;color:#7c3aed;border-color:#7c3aed">📞 대전관리</button>
         <button class="btn btn-outline btn-sm" id="qtab-yj-initial" onclick="yjQuickFilter('yj_voucher')" style="display:none;background:rgba(139,92,246,.08);border-color:rgba(139,92,246,.3);color:#7c3aed">🗺️ 지방바우처</button>
         <div style="margin-left:auto;display:flex;align-items:center;gap:8px"><select onchange="setPG(this.value)" id="pg-size-sel" style="padding:3px 8px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:12px;font-family:inherit"><option value="50">50건</option><option value="100">100건</option><option value="all">전체</option></select><div style="font-size:12px;color:var(--gray-400)" id="leads-stats-mini"></div></div>
       </div>
@@ -3741,19 +3743,36 @@ async function approveLeaderReq(reqId){
   req.status='approved';
   req.approved_at=new Date().toISOString();
   saveLeaderReqs(reqs);
+  // 처리 완료된 요청 공지(notice) 제거 — 재로그인 시 _sbLoadNotices 부활 방지
+  await _purgeLeaderReqNotice(reqId);
   renderLeaderReqs();
   loadSettings();
+  updateNBadge();
 }
 
-function rejectLeaderReq(reqId){
+async function rejectLeaderReq(reqId){
   const reqs=getLeaderReqs();
   const req=reqs.find(r=>r.id===reqId); if(!req) return;
   req.status='rejected';
   req.rejected_at=new Date().toISOString();
   saveLeaderReqs(reqs);
+  // 처리 완료된 요청 공지(notice) 제거 — 재로그인 시 _sbLoadNotices 부활 방지
+  await _purgeLeaderReqNotice(reqId);
   renderLeaderReqs();
+  updateNBadge();
   showToast('요청을 거절했습니다','success');
   addN('system','❌ 요청 거절',req.branch+' → '+req.name+' ('+req.type+') 거절됨','system:settings');
+}
+
+// 처리 완료(승인/거절)된 팀장요청 공지를 로컬·Supabase notices에서 제거
+async function _purgeLeaderReqNotice(id){
+  if(!id) return;
+  try{
+    const arr=JSON.parse(localStorage.getItem(NOTICE_V2_KEY)||'[]');
+    const next=arr.filter(n=>n.id!==id);
+    if(next.length!==arr.length) localStorage.setItem(NOTICE_V2_KEY,JSON.stringify(next));
+  }catch(e){}
+  if(!testMode){ try{ await _sbDeleteNotice(id); }catch(e){} }
 }
 
 function openRequestAddLeader(){
@@ -7053,7 +7072,7 @@ async function loadLeads(){
   const _showAdminTabs = curUser?.role==='admin';
   // 30h+ 버튼 관리자에게만 표시
   const _o30btn=document.getElementById('qtab-overdue30');
-  if(_o30btn) _o30btn.style.display=_showAdminTabs?'':'none';  // trash 탭
+  if(_o30btn) _o30btn.style.display=(_showAdminTabs||curUser?.role==='branch')?'':'none';  // trash 탭
   ['leads-subtab-recall','leads-subtab-trash'].forEach(id=>{
     const el=document.getElementById(id);
     if(el){ el.style.removeProperty('display'); if(!_showAdminTabs) el.style.display='none'; }
@@ -7188,6 +7207,71 @@ async function loadLeads(){
 }
 
 function yjQuickFilter(val){document.querySelectorAll('[id^="qtab-"]').forEach(b=>{b.style.background='';b.style.color='';b.style.borderColor='';});_quickTab='';_stageFilter='';const sel=document.getElementById('leads-yj-filter');if(sel)sel.value=val;filterLeads();}
+// ── 지점장 대전관리건 카운트 / 빠른탭 갱신 ──────────────
+// 자기 지점 소속(branch_name=지점)을 유지한 채 대전TM이 관여 중인 건 수
+function _djManageCount(){
+  if(curUser?.role!=='branch') return 0;
+  const br=curUser.name;
+  return (allLeads||[]).filter(l=>{
+    if(['drop','deleted'].includes(l.status)) return false;
+    if(l.branch_name!==br) return false;
+    if(l.tm_hq_transferred===true||l.tm_hq_transferred==='true') return true;
+    if(l.tm_transferred===true||l.tm_transferred==='true') return true;
+    try{const cb=JSON.parse(l.collab_branches||'[]');if(cb.includes('대전TM'))return true;}catch(e){}
+    return false;
+  }).length;
+}
+function _refreshDjManageTab(){
+  const btn=document.getElementById('qtab-djmanage');
+  if(btn){
+    if(curUser?.role==='branch'){
+      const c=_djManageCount();
+      btn.style.display='';
+      btn.innerHTML='📞 대전관리'+(c?` <span style="font-size:10px;font-weight:800;background:#7c3aed;color:#fff;border-radius:8px;padding:1px 6px;margin-left:2px">${c}</span>`:'');
+    } else {
+      btn.style.display='none';
+    }
+  }
+  // 지점장 전용: 30h 미기록 / 회수대상 빠른탭 건수 배지
+  if(curUser?.role==='branch'){
+    const o30=document.getElementById('qtab-overdue30');
+    if(o30){ const c=_overdue30Count(); o30.innerHTML='⏰ 30h+ 미기록'+(c?` <span style="font-size:10px;font-weight:800;background:var(--warn);color:#fff;border-radius:8px;padding:1px 6px;margin-left:2px">${c}</span>`:''); }
+    const rv=document.getElementById('qtab-recall-view');
+    if(rv){ const c=_recallViewCount(); rv.style.display=''; rv.innerHTML='⛔ 회수대상'+(c?` <span style="font-size:10px;font-weight:800;background:var(--err);color:#fff;border-radius:8px;padding:1px 6px;margin-left:2px">${c}</span>`:''); }
+  } else {
+    const rv=document.getElementById('qtab-recall-view');
+    if(rv) rv.style.display='none';
+  }
+}
+// 지점장 30h+ 미기록 건수 (자기 지점 소속) — filterLeads overdue30 분기 미러링
+function _overdue30Count(){
+  if(curUser?.role!=='branch') return 0;
+  const br=curUser.name, _now=Date.now();
+  const _lastMap=new Map();
+  (allActivities||[]).filter(a=>!['assign','status_change'].includes(a.type)).forEach(a=>{
+    const t=new Date(a.created_at).getTime();const p=_lastMap.get(a.lead_id);
+    if(!p||t>p)_lastMap.set(a.lead_id,t);
+  });
+  return (allLeads||[]).filter(l=>{
+    if(l.branch_name!==br) return false;
+    if(['drop','deleted'].includes(l.status)) return false;
+    if(['계약','관리','드랍','보류'].includes(l.current_stage||'')) return false;
+    if(l.yj_transferred||l.tm_transferred) return false;
+    const _t=_lastMap.get(l.id)||new Date(l.assigned_at||l.created_at||0).getTime();
+    return bizElapsedMs(_t,_now)>=30*3600000;
+  }).length;
+}
+// 지점장 회수대상 건수 (자기 지점 소속) — _rcCandidates+_rcJudge 미러링
+function _recallViewCount(){
+  if(curUser?.role!=='branch') return 0;
+  const br=curUser.name;
+  const _lam=_rcBuildLastActMapFromCache();
+  return _rcCandidates().filter(l=>{
+    if(l.branch_name!==br) return false;
+    const _v=_lam.get(String(l.id));
+    return !!_rcJudge(l,_v?.lastMs);
+  }).length;
+}
 function filterLeads(){
   const s=(document.getElementById('leads-search')?.value||'').toLowerCase();
   // 역할에 따라 지점/팀장 필터 적용 여부 결정
@@ -7334,9 +7418,33 @@ function filterLeads(){
       return bizElapsedMs(_lastT,_now30)>=30*3600000;
     });
   }
+  else if(_quickTab==='djmanage'){
+    // 대전관리: 자기 지점 소속을 유지한 채 대전TM이 관여 중인 건
+    // (협업 collab_branches='대전TM' / 대전동반 tm_transferred / 본사이관완료 tm_hq_transferred)
+    // ※ TM v2 판별 기준 미러링. branch_name=지점 필터는 위 br 필터에서 이미 적용됨
+    filtered=filtered.filter(l=>{
+      if(['drop','deleted'].includes(l.status)) return false;
+      if(l.tm_hq_transferred===true||l.tm_hq_transferred==='true') return true;
+      if(l.tm_transferred===true||l.tm_transferred==='true') return true;
+      try{const cb=JSON.parse(l.collab_branches||'[]');if(cb.includes('대전TM'))return true;}catch(e){}
+      return false;
+    });
+  }
+  else if(_quickTab==='recall_view'){
+    // 회수대상 조회: 관리자 회수대상 판정(_rcCandidates+_rcJudge)을 그대로 미러링
+    // br 필터(branch_name=지점)는 위에서 이미 적용됨 → 자기 지점 회수대상만
+    const _lam=_rcBuildLastActMapFromCache();
+    const _candIds=new Set(_rcCandidates().map(l=>String(l.id)));
+    filtered=filtered.filter(l=>{
+      if(!_candIds.has(String(l.id))) return false;
+      const _v=_lam.get(String(l.id));
+      return !!_rcJudge(l, _v?.lastMs);
+    });
+  }
   curPage=1; renderLeadsTable();
   (document.getElementById('leads-sub')||{}).textContent=filtered.length+'건';
   updateLeadsStatsMini();
+  if(curUser?.role==='branch') _refreshDjManageTab();
   // 회수대상 카운트 갱신 (관리자만)
   if(curUser?.role==='admin'){
     const _rcCntEl=document.getElementById('leads-subtab-recall-cnt');
@@ -7409,11 +7517,16 @@ const TM_COLS = [
   {k:'recall_at',    l:'회수일',     w:80},
   {k:'tm_trans_at',  l:'직접이관일', w:90},
   {k:'last_content', l:'진행내용',   w:200, lock:true},
+  {k:'last_act_date',l:'최종활동일', w:90,  lock:true},
   {k:'action_btn',   l:'액션',       w:60,  lock:true},
 ];
-const TM_DEFAULT_COLS = ['company_name','contact_name','phone','consult_type','region','branch_name','team_name','current_stage','tm_meeting','assigned_at','recall_at','tm_trans_at','last_content','action_btn'];
+const TM_DEFAULT_COLS = ['company_name','contact_name','phone','consult_type','region','branch_name','team_name','current_stage','tm_meeting','assigned_at','recall_at','tm_trans_at','last_content','last_act_date','action_btn'];
 function getTmVisCols(){
-  try{const v=JSON.parse(localStorage.getItem(TM_COL_LS));if(v&&Array.isArray(v))return v;}catch(e){}
+  try{const v=JSON.parse(localStorage.getItem(TM_COL_LS));if(v&&Array.isArray(v)){
+    // 저장값에 없는 lock 컬럼은 항상 포함 (신규 lock 컬럼 자동 반영). 렌더 순서는 TM_COLS 정의 순서를 따름
+    TM_COLS.forEach(c=>{ if(c.lock && !v.includes(c.k)) v.push(c.k); });
+    return v;
+  }}catch(e){}
   return [...TM_DEFAULT_COLS];
 }
 // 기본 표시 컬럼
@@ -17582,6 +17695,16 @@ function tmV2Render(){
         return `<td style="font-size:11px;color:var(--blue);font-weight:700;padding:9px 10px" title="${isLegacy?'레거시 데이터: 정확한 이관일자가 기록되지 않아 배정일을 표시 (이번 패치 이후 이관건부터 정확히 기록됨)':'팀장이 직접 대전TM으로 이관한 시점'}">${fmtShort(ts)}${isLegacy?' <span style=\"font-size:9px;color:var(--gray-300);font-weight:500\">*</span>':''}</td>`;
       })(),
       last_content: `<td style="font-size:11px;color:var(--gray-600);padding:9px 10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(lastContent.slice(0,50)||'-')}</td>`,
+      last_act_date: (function(){
+        // 최종 활동일: 마지막 실활동(assign·status_change 제외) 날짜
+        // 오늘 기준 영업일 5일(1주일) 이상 경과 시 빨강 강조
+        if(!lastAct||!lastAct.created_at) return `<td style="font-size:11px;color:var(--gray-300);padding:9px 10px">-</td>`;
+        const _ms=new Date(lastAct.created_at).getTime();
+        if(isNaN(_ms)) return `<td style="font-size:11px;color:var(--gray-300);padding:9px 10px">-</td>`;
+        const _bd=bizElapsedDays(_ms, Date.now());
+        const _over=_bd>=5;
+        return `<td style="font-size:11px;color:${_over?'#ef4444':'var(--gray-500)'};font-weight:${_over?'800':'500'};padding:9px 10px" title="마지막 활동 후 영업 ${_bd}일 경과 (강조 기준 5영업일)">${fmtShort(lastAct.created_at)}</td>`;
+      })(),
       action_btn:   `<td style="padding:9px 10px" onclick="event.stopPropagation()">${actionBtn}</td>`,
     };
 
@@ -19058,6 +19181,9 @@ function _applyQuickTab(tab, btn){
   else if(tab==='consulting'){if(statusEl)statusEl.value='contacted';}
   else if(tab==='drop'){if(statusEl)statusEl.value='드랍';}
   else if(tab==='reassign'){if(statusEl)statusEl.value='';}
+  else if(tab==='overdue30'){if(statusEl)statusEl.value='';}
+  else if(tab==='djmanage'){if(statusEl)statusEl.value='';}
+  else if(tab==='recall_view'){if(statusEl)statusEl.value='';}
   filterLeads();
 }
 
@@ -22743,9 +22869,13 @@ async function _sbLoadNotices(){
         const existing = getLeaderReqs();
         const existIds = new Set(existing.map(r=>r.id));
         leaderReqRows.forEach(n=>{
-          if(!existIds.has(n.id)){
-            try{ const req=JSON.parse(n.content||'{}'); if(req.id) existing.unshift(req); }catch(e){}
-          }
+          let req=null; try{ req=JSON.parse(n.content||'{}'); }catch(e){ return; }
+          if(!req || !req.id) return;
+          // 이미 로컬에 있으면(승인/거절 포함) 로컬 상태 유지 — 부활 금지
+          if(existIds.has(req.id)) return;
+          // 로컬에 없어도 이미 처리된 요청이면 재유입 금지
+          if(req.status && req.status!=='pending') return;
+          existing.unshift(req);
         });
         saveLeaderReqs(existing);
       }
