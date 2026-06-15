@@ -23225,6 +23225,7 @@ function showNoticePopups(){
   const hidden=JSON.parse(localStorage.getItem(HIDE_KEY)||'{}');
   // 유효 공지 필터: 기간 내 + 대상 + 오늘 안 숨긴 것
   const notices=getNoticesV2().filter(n=>{
+    if(n.type==='leader_req') return false; // 팀장 추가/삭제 요청은 공지 팝업 대상 아님 (사용자관리>팀장요청 탭에서 처리)
     if(hidden[n.id]===today) return false;
     if(!isCalVisibleTo(n,curUser)) return false;
     const sd=n.start_date||'2000-01-01';
