@@ -3781,8 +3781,8 @@ async function approveLeaderReq(reqId){
   req.status='approved';
   req.approved_at=new Date().toISOString();
   saveLeaderReqs(reqs);
-  // 처리 완료된 요청 공지(notice) 제거 — 재로그인 시 _sbLoadNotices 부활 방지
-  await _purgeLeaderReqNotice(reqId);
+  // 처리 완료된 요청 공지(notice)를 '처리완료'로 갱신·삭제 — 재로그인/타 도메인 부활 방지
+  await _purgeLeaderReqNotice(reqId, req);
   renderLeaderReqs();
   loadSettings();
   updateNBadge();
@@ -3794,8 +3794,8 @@ async function rejectLeaderReq(reqId){
   req.status='rejected';
   req.rejected_at=new Date().toISOString();
   saveLeaderReqs(reqs);
-  // 처리 완료된 요청 공지(notice) 제거 — 재로그인 시 _sbLoadNotices 부활 방지
-  await _purgeLeaderReqNotice(reqId);
+  // 처리 완료된 요청 공지(notice)를 '처리완료'로 갱신·삭제 — 재로그인/타 도메인 부활 방지
+  await _purgeLeaderReqNotice(reqId, req);
   renderLeaderReqs();
   updateNBadge();
   showToast('요청을 거절했습니다','success');
@@ -3803,14 +3803,35 @@ async function rejectLeaderReq(reqId){
 }
 
 // 처리 완료(승인/거절)된 팀장요청 공지를 로컬·Supabase notices에서 제거
-async function _purgeLeaderReqNotice(id){
+async function _purgeLeaderReqNotice(id, reqObj){
   if(!id) return;
   try{
     const arr=JSON.parse(localStorage.getItem(NOTICE_V2_KEY)||'[]');
     const next=arr.filter(n=>n.id!==id);
     if(next.length!==arr.length) localStorage.setItem(NOTICE_V2_KEY,JSON.stringify(next));
   }catch(e){}
-  if(!testMode){ try{ await _sbDeleteNotice(id); }catch(e){} }
+  if(!testMode){
+    // 1) Supabase notice content 를 '처리완료' 상태로 갱신(upsert) — 단일 진실 소스화.
+    //    삭제가 실패하거나, 다른 도메인(github.io ↔ kbmcrm.com)·다른 기기에서 로컬 가드가 없어도
+    //    content.status 가 pending 이 아니면 _sbLoadNotices 가 절대 부활시키지 않는다.
+    if(reqObj && reqObj.id && reqObj.status && reqObj.status!=='pending'){
+      try{
+        await _sbSaveNotice({
+          id:reqObj.id,
+          title:'(처리완료) 팀장요청 — '+(reqObj.name||''),
+          content:JSON.stringify(reqObj),
+          type:'leader_req',
+          target_role:'admin', target_roles:['admin'], target_branches:[],
+          start_date:todayKst(), end_date:null,
+          author:(typeof curUser!=='undefined'&&curUser&&curUser.name)||'',
+          is_recall_notice:false,
+          created_at:reqObj.created_at||new Date().toISOString()
+        });
+      }catch(e){}
+    }
+    // 2) 그 후 완전 삭제 시도(성공 시 가장 깔끔). 실패해도 1)이 부활을 막는다.
+    try{ await _sbDeleteNotice(id); }catch(e){}
+  }
 }
 
 function openRequestAddLeader(){
@@ -22906,16 +22927,24 @@ async function _sbLoadNotices(){
       if(leaderReqRows.length){
         const existing = getLeaderReqs();
         const existIds = new Set(existing.map(r=>r.id));
+        let changedReq = false;
         leaderReqRows.forEach(n=>{
           let req=null; try{ req=JSON.parse(n.content||'{}'); }catch(e){ return; }
           if(!req || !req.id) return;
-          // 이미 로컬에 있으면(승인/거절 포함) 로컬 상태 유지 — 부활 금지
+          // ── content 가 '처리완료'(approved/rejected) ──
+          //    어느 도메인·기기에서 처리했든, 로컬에 같은 요청이 pending 으로 남아 있으면
+          //    처리완료로 동기화해 배지를 끈다. 로컬에 없으면 그냥 무시(재유입 금지).
+          if(req.status && req.status!=='pending'){
+            const i = existing.findIndex(r=>r.id===req.id);
+            if(i>=0 && existing[i].status==='pending'){ existing[i]=req; changedReq=true; }
+            return;
+          }
+          // ── content 가 pending ──
+          // 이미 로컬에 있으면 로컬 상태 유지(승인/거절 포함) — 부활 금지
           if(existIds.has(req.id)) return;
-          // 로컬에 없어도 이미 처리된 요청이면 재유입 금지
-          if(req.status && req.status!=='pending') return;
-          existing.unshift(req);
+          existing.unshift(req); changedReq=true;
         });
-        saveLeaderReqs(existing);
+        if(changedReq) saveLeaderReqs(existing);
       }
       // type='comp_cal' → getCompCals에도 반영 (전사 캘린더 동기화)
       const compCalRows = mapped.filter(n=>n.type==='comp_cal');
