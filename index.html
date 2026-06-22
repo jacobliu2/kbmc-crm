@@ -7358,19 +7358,24 @@ function renderLeadTime(leads){
     const el=document.getElementById('insight-leadtime');
     if(!el) return;
     const _pD=s=>{ if(!s) return NaN; const m=String(s).match(/(\d{4})[-./](\d{1,2})[-./](\d{1,2})/); if(m) return new Date(+m[1],+m[2]-1,+m[3]).getTime(); return new Date(s).getTime(); };
+    // 계약 활동(type=contract) 시점 맵 — contract_date 미입력 보조
+    const _cMap={};
+    (allActivities||[]).forEach(a=>{ if(String(a.type||'')==='contract'){ const t=new Date(a.created_at).getTime(); if(!isNaN(t)){ const k=String(a.lead_id); if(!_cMap[k]||t<_cMap[k]) _cMap[k]=t; } } });
     const cs=(leads||[]).filter(l=>{
-      const isC = String(l.current_stage||'')==='계약' || l.customer_type==='contract';
-      return isC && (l.assigned_at||l.distributed_at) && l.contract_date;
+      const isC = String(l.current_stage||'')==='계약' || l.customer_type==='contract' || _cMap[String(l.id)]!==undefined;
+      return isC && (l.assigned_at||l.distributed_at);
     });
     const days=[]; const byBranch={};
     cs.forEach(l=>{
       const a=_pD(l.assigned_at||l.distributed_at);
-      const c=_pD(l.contract_date);
+      let c = l.contract_date ? _pD(l.contract_date) : NaN;
+      if(isNaN(c)) c = _cMap[String(l.id)] ?? NaN;
       if(isNaN(a)||isNaN(c)||c<a) return;
       const d=Math.round((c-a)/86400000);
       days.push(d);
       const b=l.branch_name||'미지정'; (byBranch[b]=byBranch[b]||[]).push(d);
     });
+    console.log('[리드타임] 계약리드:',cs.length,'/ 계산됨:',days.length);
     if(!days.length){ el.innerHTML='<div style="color:var(--gray-300);font-size:12px;text-align:center;padding:24px">계약 리드타임 데이터 없음</div>'; return; }
     const sum=days.reduce((x,y)=>x+y,0);
     const avg=Math.round(sum/days.length);
