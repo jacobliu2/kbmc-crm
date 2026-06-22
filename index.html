@@ -181,7 +181,7 @@ nav::-webkit-scrollbar{display:none}
 
 /* ══ Layout ══ */
 main{
-  margin-top:56px;padding:20px 20px;
+  margin-top:56px;padding:20px 40px;
   max-width:1600px;margin-left:auto;margin-right:auto;
   overflow-x:auto;
 }
@@ -6856,11 +6856,13 @@ async function loadInsights(){
   renderInflowCal();
   try{ if(!allActivities?.length) allActivities=await dbQ('activities'); }catch(_){}
   try{ if(!allNextActions?.length) allNextActions=await dbQ('next_actions'); }catch(_){}
-  renderRecallWarning();
-  renderManagedAnalysis(leads);
+  const _lam=_rcBuildLastActMapFromCache();
+  const _lbi={}; (allLeads||[]).forEach(l=>{ _lbi[l.id]=l; });
+  renderRecallWarning(_lam);
+  renderManagedAnalysis(leads,_lam);
   renderLeadTime(leads);
-  renderBranchTrend();
-  renderTeamActivity();
+  renderBranchTrend(_lbi);
+  renderTeamActivity(_lbi);
   renderSalesRhythm();
 }
 // 단계 전환 퍼널 (깔때기 시각화 · 스냅샷 누적 도달 기준)
@@ -6963,14 +6965,19 @@ function renderInsightDrop(leads){
       const s=`<circle cx="70" cy="70" r="${R}" fill="none" stroke="${col}" stroke-width="20" stroke-dasharray="${len.toFixed(2)} ${(C-len).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 70 70)"/>`;
       off+=len; return s;
     }).join('');
-    const legend=entries.map(([k,v])=>{
+    const _legItems=entries.map(([k,v])=>{
       const col=dropColors[k]||'#94a3b8'; const pct=Math.round(v/total*100);
       return `<div style="display:flex;align-items:center;gap:7px;font-size:12px;margin-bottom:6px">
         <span style="width:10px;height:10px;border-radius:2px;background:${col};flex-shrink:0"></span>
         <span style="color:var(--gray-700);font-weight:600;flex:1">${esc(k)}</span>
         <span style="color:var(--gray-500)"><strong style="color:var(--navy)">${v}</strong> · ${pct}%</span>
       </div>`;
-    }).join('');
+    });
+    const _LT=10; let legend=_legItems.slice(0,_LT).join('');
+    if(_legItems.length>_LT){ const _n=_legItems.length-_LT;
+      legend+=`<div id="drop-leg-more" style="display:none">${_legItems.slice(_LT).join('')}</div>`+
+        `<button onclick="_toggleInsMore(this,'drop-leg-more')" data-more="+${_n} 더보기 \u25be" style="margin-top:4px;background:none;border:none;color:var(--blue);font-size:11px;font-weight:600;cursor:pointer;padding:2px 0">+${_n} 더보기 \u25be</button>`;
+    }
     el.innerHTML=`<div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;justify-content:center">
       <div style="position:relative;width:140px;height:140px;flex-shrink:0">
         <svg viewBox="0 0 140 140" style="width:140px;height:140px">${segs}</svg>
@@ -6995,7 +7002,7 @@ function renderInsightNeeds(leads){
     const sorted=Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,10);
     const max=sorted[0][1];
     const palette=['#2563eb','#0ea5e9','#06b6d4','#14b8a6','#10b981','#84cc16','#eab308','#f59e0b','#f97316','#94a3b8'];
-    el.innerHTML=sorted.map(([t,c],i)=>{
+    const _nBars=sorted.map(([t,c],i)=>{
       const pct=Math.round(c/total*100);
       const w=Math.max(Math.round(c/max*100),2);
       return `<div style="margin-bottom:10px">
@@ -7007,7 +7014,13 @@ function renderInsightNeeds(leads){
           <div style="height:100%;width:${w}%;background:${palette[i%palette.length]};border-radius:5px;transition:width .4s"></div>
         </div>
       </div>`;
-    }).join('');
+    });
+    const _NT=10; let _nh=_nBars.slice(0,_NT).join('');
+    if(_nBars.length>_NT){ const _n=_nBars.length-_NT;
+      _nh+=`<div id="needs-more" style="display:none">${_nBars.slice(_NT).join('')}</div>`+
+        `<button onclick="_toggleInsMore(this,'needs-more')" data-more="+${_n} 더보기 \u25be" style="margin-top:2px;background:none;border:none;color:var(--blue);font-size:11px;font-weight:600;cursor:pointer;padding:2px 0">+${_n} 더보기 \u25be</button>`;
+    }
+    el.innerHTML=_nh;
   }catch(e){ console.warn('[Needs]',e); }
 }
 // 기업규모 분포 (매출 구간별 · 순서 고정)
@@ -7094,13 +7107,13 @@ function _weekStartKstMs(ms){
 }
 const _BRANCH_COLORS=['#2563eb','#16a34a','#f59e0b','#8b5cf6','#0ea5e9','#ef4444','#14b8a6','#a855f7'];
 // 지점별 주간 활동 추이 (멀티라인)
-function renderBranchTrend(){
+function renderBranchTrend(leadById){
   try{
     const el=document.getElementById('insight-branch-trend');
     if(!el) return;
     const branches=(typeof BRANCHES!=='undefined'&&BRANCHES.length)?BRANCHES.slice():[];
     if(!branches.length){ el.innerHTML='<div style="color:var(--gray-300);font-size:12px;text-align:center;padding:24px">지점 정보 없음</div>'; return; }
-    const leadById={}; (allLeads||[]).forEach(l=>{ leadById[l.id]=l; });
+    if(!leadById){ leadById={}; (allLeads||[]).forEach(l=>{ leadById[l.id]=l; }); }
     const NW=6;
     const thisWeek=_weekStartKstMs(Date.now());
     const weeks=[]; for(let i=NW-1;i>=0;i--) weeks.push(thisWeek-i*7*86400000);
@@ -7148,11 +7161,11 @@ function renderBranchTrend(){
   }catch(e){ console.warn('[지점추이]',e); }
 }
 // 팀장별 활동량 (최근 4주 순위 + 직전 4주 대비 증감)
-function renderTeamActivity(){
+function renderTeamActivity(leadById){
   try{
     const el=document.getElementById('insight-team-activity');
     if(!el) return;
-    const leadById={}; (allLeads||[]).forEach(l=>{ leadById[l.id]=l; });
+    if(!leadById){ leadById={}; (allLeads||[]).forEach(l=>{ leadById[l.id]=l; }); }
     const now=Date.now(), w4=now-28*86400000, w8=now-56*86400000;
     const cur={}, prev={}, branchOf={};
     (allActivities||[]).forEach(a=>{
@@ -7191,12 +7204,12 @@ function renderTeamActivity(){
 }
 
 // ── 회수·이탈 조기경보 (회수 기준 70%+ 도달, 아직 회수 전) ──
-function renderRecallWarning(){
+function renderRecallWarning(lastMap){
   try{
     const el=document.getElementById('insight-recall-warn');
     if(!el) return;
     let cands=[]; try{ cands=_rcCandidates()||[]; }catch(_e){}
-    let lastMap; try{ lastMap=_rcBuildLastActMapFromCache(); }catch(_e){ lastMap=new Map(); }
+    if(!lastMap){ try{ lastMap=_rcBuildLastActMapFromCache(); }catch(_e){ lastMap=new Map(); } }
     const NOW=Date.now(), H48=48*3600*1000;
     let imminent=0, over=0;
     const byBranch={}, byStage={'배정 미접촉':0,'접촉·상담':0,'관리':0};
@@ -7260,14 +7273,14 @@ function renderRecallWarning(){
   }catch(e){ console.warn('[회수경보]',e); }
 }
 // ── 관리고객 분석 (매출 · 니즈 · 활동) ──
-function renderManagedAnalysis(leads){
+function renderManagedAnalysis(leads, lastMap){
   try{
     const el=document.getElementById('insight-managed');
     if(!el) return;
     const mg=(leads||[]).filter(l=>String(l.current_stage||'')==='관리');
     const n=mg.length;
     if(!n){ el.innerHTML='<div style="color:var(--gray-300);font-size:12px;text-align:center;padding:24px">관리 고객 없음</div>'; return; }
-    let lastMap; try{ lastMap=_rcBuildLastActMapFromCache(); }catch(_e){ lastMap=new Map(); }
+    if(!lastMap){ try{ lastMap=_rcBuildLastActMapFromCache(); }catch(_e){ lastMap=new Map(); } }
     const NOW=Date.now();
     let stale=0;
     mg.forEach(l=>{ const r=lastMap.get(String(l.id)); const base=r?r.lastMs:new Date(l.assigned_at).getTime();
@@ -7415,6 +7428,14 @@ function openDropDetail(){
     body.innerHTML=html;
     openM('modal-drop-detail');
   }catch(e){ console.warn('[드랍상세]',e); }
+}
+
+// ── 인사이트 목록 더보기 토글 ──
+function _toggleInsMore(btn,id){
+  const m=document.getElementById(id); if(!m) return;
+  const open=m.style.display!=='none';
+  m.style.display=open?'none':'block';
+  btn.textContent=open?(btn.dataset.more||'\ub354\ubcf4\uae30 \u25be'):'\uc811\uae30 \u25b4';
 }
 // 세일즈 리듬 범위 옵션(전체/지점/팀장) 채우기
 function _rhythmScopeOptions(){
