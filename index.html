@@ -3536,12 +3536,12 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
       </div>
       <div id="insight-managed"></div>
     </div>
-    <!-- 계약 리드타임 -->
+    <!-- 활동 유형 분포 -->
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-        <div class="section-title" style="margin:0;font-size:14px"><svg class="li" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>계약 리드타임</div>
+        <div class="section-title" style="margin:0;font-size:14px"><svg class="li" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>활동 유형 분포</div>
       </div>
-      <div id="insight-leadtime"></div>
+      <div id="insight-acttype"></div>
     </div>
     <!-- 지점별 활동 추이 -->
     <div class="card">
@@ -6891,7 +6891,7 @@ async function loadInsights(){
   const _lbi={}; ((allLeads&&allLeads.length)?allLeads:leads||[]).forEach(l=>{ _lbi[l.id]=l; });
   renderRecallWarning(_lam);
   renderManagedAnalysis(leads,_lam);
-  renderLeadTime(leads);
+  renderActType();
   renderBranchTrend(_lbi);
   renderTeamActivity(_lbi);
   renderSalesRhythm();
@@ -7353,67 +7353,35 @@ function renderManagedAnalysis(leads, lastMap){
   }catch(e){ console.warn('[관리고객]',e); }
 }
 // ── 계약 리드타임 (배정 → 계약 소요일) ──
-function renderLeadTime(leads){
+function renderActType(){
   try{
-    const el=document.getElementById('insight-leadtime');
+    const el=document.getElementById('insight-acttype');
     if(!el) return;
-    const _pD=s=>{ if(!s) return NaN; const m=String(s).match(/(\d{4})[-./](\d{1,2})[-./](\d{1,2})/); if(m) return new Date(+m[1],+m[2]-1,+m[3]).getTime(); return new Date(s).getTime(); };
-    // 계약 활동(type=contract) 시점 맵 — contract_date 미입력 보조
-    const _cMap={};
-    (allActivities||[]).forEach(a=>{ if(String(a.type||'')==='contract'){ const t=new Date(a.created_at).getTime(); if(!isNaN(t)){ const k=String(a.lead_id); if(!_cMap[k]||t<_cMap[k]) _cMap[k]=t; } } });
-    const cs=(leads||[]).filter(l=>{
-      const isC = String(l.current_stage||'')==='계약' || l.customer_type==='contract' || _cMap[String(l.id)]!==undefined;
-      return isC && (l.assigned_at||l.distributed_at);
-    });
-    const days=[]; const byBranch={};
-    cs.forEach(l=>{
-      const a=_pD(l.assigned_at||l.distributed_at);
-      let c = l.contract_date ? _pD(l.contract_date) : NaN;
-      if(isNaN(c)) c = _cMap[String(l.id)] ?? NaN;
-      if(isNaN(a)||isNaN(c)||c<a) return;
-      const d=Math.round((c-a)/86400000);
-      days.push(d);
-      const b=l.branch_name||'미지정'; (byBranch[b]=byBranch[b]||[]).push(d);
-    });
-    console.log('[리드타임] 계약리드:',cs.length,'/ 계산됨:',days.length);
-    if(!days.length){ el.innerHTML='<div style="color:var(--gray-300);font-size:12px;text-align:center;padding:24px">계약 리드타임 데이터 없음</div>'; return; }
-    const sum=days.reduce((x,y)=>x+y,0);
-    const avg=Math.round(sum/days.length);
-    const sorted=[...days].sort((a,b)=>a-b);
-    const median=sorted[Math.floor(sorted.length/2)];
-    const branches=(typeof BRANCHES!=='undefined'?BRANCHES:[]);
-    const bColor=b=>{ const i=branches.indexOf(b); return i>=0?_BRANCH_COLORS[i%_BRANCH_COLORS.length]:'#94a3b8'; };
-    // 분포 구간
-    const buckets=[['~7일',0,7],['8~14일',8,14],['15~30일',15,30],['31~60일',31,60],['60일+',61,1e9]];
-    const dist=buckets.map(([lab,lo,hi])=>[lab,days.filter(d=>d>=lo&&d<=hi).length]);
-    const distMax=Math.max(...dist.map(d=>d[1]),1);
-    // 지점별 평균
-    const brAvg=Object.entries(byBranch).map(([b,arr])=>[b,Math.round(arr.reduce((x,y)=>x+y,0)/arr.length),arr.length]).sort((a,b)=>a[1]-b[1]);
-    const brMax=Math.max(...brAvg.map(x=>x[1]),1);
-    el.innerHTML=`<div style="display:flex;gap:10px;margin-bottom:14px">
-        <div style="flex:1;text-align:center;padding:11px;background:linear-gradient(135deg,#fffbeb,#fef3c7);border-radius:10px;border:1px solid rgba(245,158,11,.15)">
-          <div style="font-size:10px;color:var(--gray-500)">평균 리드타임</div>
-          <div style="font-size:20px;font-weight:800;color:var(--warn)">${avg}<span style="font-size:11px;font-weight:600">일</span></div>
+    const acts=Array.isArray(allActivities)?allActivities:[];
+    const LAB={call:'전화',meeting:'미팅',online:'온라인',proposal:'제안',contract:'계약',email:'이메일',note:'메모'};
+    const COL={call:'#3182f6',meeting:'#00c073',online:'#14b8a6',proposal:'#8b5cf6',contract:'#f59e0b',email:'#0ea5e9',note:'#94a3b8'};
+    const cnt={};
+    acts.forEach(a=>{ const ty=String(a.type||'').trim(); if(LAB[ty]) cnt[ty]=(cnt[ty]||0)+1; });
+    const entries=Object.entries(cnt).sort((a,b)=>b[1]-a[1]);
+    const total=entries.reduce((s,[,v])=>s+v,0);
+    if(!total){ el.innerHTML='<div style="color:var(--gray-300);font-size:12px;text-align:center;padding:24px">활동 데이터 없음</div>'; return; }
+    const max=entries[0][1];
+    let html=`<div style="text-align:center;padding:11px;background:var(--gray-50);border-radius:var(--r-sm);margin-bottom:14px">
+        <div style="font-size:10px;color:var(--gray-500)">총 활동</div>
+        <div style="font-size:22px;font-weight:800;color:var(--navy)">${total.toLocaleString()}<span style="font-size:12px;font-weight:600">건</span></div>
+      </div>`;
+    html+=entries.map(([k,v])=>{
+      const pct=Math.round(v/total*100); const w=Math.max(Math.round(v/max*100),2);
+      return `<div style="margin-bottom:9px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:12px;margin-bottom:3px">
+          <span style="font-weight:700;color:var(--gray-700);display:inline-flex;align-items:center;gap:6px"><span style="width:9px;height:9px;border-radius:2px;background:${COL[k]||'#94a3b8'}"></span>${LAB[k]}</span>
+          <span style="color:var(--gray-500)"><strong style="color:var(--navy)">${v.toLocaleString()}</strong>건 · ${pct}%</span>
         </div>
-        <div style="flex:1;text-align:center;padding:11px;background:linear-gradient(135deg,#f8fafc,#f1f5f9);border-radius:10px;border:1px solid var(--gray-100)">
-          <div style="font-size:10px;color:var(--gray-500)">중앙값</div>
-          <div style="font-size:20px;font-weight:800;color:var(--navy)">${median}<span style="font-size:11px;font-weight:600">일</span></div>
-          <div style="font-size:9px;color:var(--gray-400)">계약 ${days.length}건</div>
-        </div>
-      </div>
-      <div style="font-size:11px;font-weight:700;color:var(--gray-500);margin-bottom:7px">소요일 분포</div>
-      ${dist.map(([lab,v])=>`<div style="display:flex;align-items:center;gap:7px;margin-bottom:5px">
-        <span style="width:54px;font-size:11px;color:var(--gray-600);flex-shrink:0;text-align:right">${lab}</span>
-        <div style="flex:1;height:7px;background:var(--gray-100);border-radius:4px;overflow:hidden"><div style="height:100%;width:${Math.max(Math.round(v/distMax*100),2)}%;background:#f59e0b;border-radius:4px"></div></div>
-        <span style="font-size:11px;font-weight:700;color:var(--navy);width:18px">${v}</span>
-      </div>`).join('')}
-      ${brAvg.length>1?`<div style="font-size:11px;font-weight:700;color:var(--gray-500);margin:12px 0 7px">지점별 평균</div>`+
-        brAvg.map(([b,av])=>`<div style="display:flex;align-items:center;gap:7px;margin-bottom:5px">
-          <span style="width:54px;font-size:11px;color:var(--gray-600);flex-shrink:0;text-align:right">${esc(b)}</span>
-          <div style="flex:1;height:7px;background:var(--gray-100);border-radius:4px;overflow:hidden"><div style="height:100%;width:${Math.max(Math.round(av/brMax*100),3)}%;background:${bColor(b)};border-radius:4px"></div></div>
-          <span style="font-size:11px;font-weight:700;color:var(--navy);width:30px">${av}일</span>
-        </div>`).join(''):''}`;
-  }catch(e){ console.warn('[리드타임]',e); }
+        <div style="height:8px;background:var(--gray-100);border-radius:4px;overflow:hidden"><div style="height:100%;width:${w}%;background:${COL[k]||'#94a3b8'};border-radius:4px;transition:width .4s"></div></div>
+      </div>`;
+    }).join('');
+    el.innerHTML=html;
+  }catch(e){ console.warn('[활동유형]',e); }
 }
 
 // ── 드랍 사유 상세 (자세히 보기 팝업) ──
