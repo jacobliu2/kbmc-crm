@@ -11044,7 +11044,7 @@ async function saveContract(){
   const data={date:document.getElementById('ct-date').value,company:document.getElementById('ct-lead-name').value.trim(),lead_id:document.getElementById('ct-lead').value||null,amount:parseInt(document.getElementById('ct-amount').value)||0,status:document.getElementById('ct-status').value,content:document.getElementById('ct-content').value.trim(),team_leader:curUser.name};
   if(eid){ await dbU('contracts',eid,data); }
   else { await dbI('contracts',data); }
-  closeM('modal-contract'); showToast('계약 저장','success'); renderPerfTable();
+  closeM('modal-contract'); showToast('계약 저장','success'); if(typeof loadAdmin==='function') loadAdmin();
 }
 
 // ── 보고 요청 발송 (관리자→팀장) ─────────────────────────
@@ -20410,6 +20410,10 @@ function openDbCleanup(){
 
   const unassigned=leads.filter(l=>!l.branch_name||l.branch_name==='');
   const dropped=leads.filter(l=>l.status==='drop');
+  // 중복 그룹: 활동 기록이 가장 최근/많은 건을 맨 앞(유지 기본값)으로 정렬
+  const _actMap={};
+  (allActivities||[]).forEach(a=>{ if(['assign','status_change'].includes(a.type))return; const k=a.lead_id; const t=new Date(a.created_at).getTime()||0; if(!_actMap[k])_actMap[k]={ms:0,cnt:0}; _actMap[k].cnt++; if(t>_actMap[k].ms)_actMap[k].ms=t; });
+  dupGroups.forEach(dg=>{ dg.group.sort((a,b)=>{ const A=_actMap[a.id]||{ms:0,cnt:0}, B=_actMap[b.id]||{ms:0,cnt:0}; if(B.ms!==A.ms) return B.ms-A.ms; if(B.cnt!==A.cnt) return B.cnt-A.cnt; return (new Date(b.created_at||0)-new Date(a.created_at||0)); }); });
   window._dbCleanupGroups=dupGroups; // 전역 저장
 
   let ov=document.getElementById('ov-cleanup');
@@ -25609,6 +25613,27 @@ function openManual(){
 
 let _manualObserver = null;
 
+function getUnrecordedLeads(){
+  try{
+    if(typeof _rcBuildLastActMapFromCache!=='function') return [];
+    const lastMap=_rcBuildLastActMapFromCache();
+    return (allLeads||[]).filter(l=>{
+      if(!l||l.status==='deleted'||l.status==='drop') return false;
+      if(['\ub4dc\ub7a9','\ubcf4\ub958'].includes(l.current_stage||'')) return false;
+      if(!l.assigned_at && !l.distributed_at) return false;
+      if(!l.team_name) return false;
+      const r=lastMap.get(String(l.id));
+      return !r || !r.count;
+    });
+  }catch(e){ return []; }
+}
+function scrollToUnrecorded(){
+  try{
+    if(typeof closeM==='function'){ closeM('modal-briefing'); closeM('modal-brief'); }
+    const t=document.getElementById('lead-table')||document.getElementById('leads-list')||document.querySelector('.lead-list')||document.getElementById('screen-leads');
+    if(t) t.scrollIntoView({behavior:'smooth',block:'start'});
+  }catch(e){}
+}
 function closeManual(){
   const panel   = document.getElementById('manual-panel');
   const overlay = document.getElementById('manual-overlay');
