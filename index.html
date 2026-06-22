@@ -6839,7 +6839,7 @@ async function loadAdmin(){
   _initDashboardExtraSelectors();
   renderDaejeonRecall();
   renderTeamMeeting();
-  
+  renderTeamActChart();
 }
 // 인사이트 화면 로더
 async function loadInsights(){
@@ -7676,6 +7676,45 @@ function _parseDashPeriod(val){
 }
 
 // ── 대전 재배정 현황 렌더 ────────────────────────────────────
+function renderKpiDashboard(all){
+  try{
+    const leads=(all||[]).filter(l=>l.status!=='deleted');
+    const acts=Array.isArray(allActivities)?allActivities:[];
+    const REAL=new Set(['call','meeting','online','proposal','contract','email']);
+    const NOW=new Date();
+    const set=(id,v)=>{ const e=document.getElementById(id); if(e) e.textContent=v; };
+    // 이번주(월요일~) 실활동
+    const dd=new Date(NOW); const dow=(dd.getDay()+6)%7;
+    const weekStart=new Date(dd.getFullYear(),dd.getMonth(),dd.getDate()-dow).getTime();
+    const prevWeekStart=weekStart-7*86400000;
+    let wk=0,pwk=0;
+    acts.forEach(a=>{ if(!REAL.has(String(a.type||'').trim()))return; const ts=new Date(a.created_at).getTime(); if(isNaN(ts))return; if(ts>=weekStart)wk++; else if(ts>=prevWeekStart)pwk++; });
+    set('kpi-acts', wk);
+    const wd=wk-pwk; set('kpi-acts-sub',(wd>=0?'\u25b2 +':'\u25bc ')+Math.abs(wd)+' \uc9c0\ub09c\uc8fc \ub300\ube44');
+    // 평균 첫 연락 (배정→첫 실활동, 일)
+    const firstMap={};
+    acts.forEach(a=>{ if(!REAL.has(String(a.type||'').trim()))return; const ts=new Date(a.created_at).getTime(); if(isNaN(ts))return; const k=String(a.lead_id); if(firstMap[k]===undefined||ts<firstMap[k]) firstMap[k]=ts; });
+    let fsum=0,fn=0;
+    leads.forEach(l=>{ if(!l.assigned_at)return; const a=new Date(l.assigned_at).getTime(); if(isNaN(a))return; const f=firstMap[String(l.id)]; if(f===undefined||f<a)return; fsum+=(f-a); fn++; });
+    set('kpi-first-contact', fn? (fsum/fn/86400000).toFixed(1)+'\uc77c' : '\u2013');
+    // 이번달 드랍 (dropped_at 우선, 없으면 updated_at)
+    const monStart=new Date(NOW.getFullYear(),NOW.getMonth(),1).getTime();
+    const prevMonStart=new Date(NOW.getFullYear(),NOW.getMonth()-1,1).getTime();
+    const dms=l=>{ const s=l.dropped_at||l.updated_at; const ts=s?new Date(s).getTime():NaN; return isNaN(ts)?null:ts; };
+    let md=0,pmd=0;
+    leads.forEach(l=>{ const isD=l.current_stage==='\ub4dc\ub7a9'||l.status==='drop'; if(!isD)return; const ts=dms(l); if(ts===null)return; if(ts>=monStart)md++; else if(ts>=prevMonStart)pmd++; });
+    set('kpi-drops', md);
+    const mdd=md-pmd; set('kpi-drops-sub',(mdd>=0?'\u25b2 +':'\u25bc ')+Math.abs(mdd)+' \uc804\uc6d4 \ub300\ube44');
+    // 전환율 (상담 이상 도달 → 계약/관리)
+    const _sm={'\uad00\ub9ac\uace0\uac1d':'\uad00\ub9ac','\ucd08\uae30\uc811\ucd09':'\uc811\ucd09','\ubbf8\ud305':'\uc0c1\ub2f4','\ud611\uc758':'\uc81c\uc548','\uc0c1\ub2f4\uc911':'\uc811\ucd09','\uc81c\uc548\uc644\ub8cc':'\uc81c\uc548'};
+    const norm=s=>_sm[s]||s||'';
+    const ORDER=['\ubc30\uc815','\uc811\ucd09','\uc0c1\ub2f4','\uc81c\uc548','\uacc4\uc57d','\uad00\ub9ac'];
+    const ci=ORDER.indexOf('\uc0c1\ub2f4');
+    let cp=0,cc=0;
+    leads.forEach(l=>{ const s=norm(l.current_stage); const i=ORDER.indexOf(s); if(i>=ci)cp++; if(s==='\uacc4\uc57d'||s==='\uad00\ub9ac')cc++; });
+    set('kpi-conv', cp? Math.round(cc/cp*100)+'%' : '0%');
+  }catch(e){ console.warn('[KPI]',e); }
+}
 function renderDaejeonRecall(){
   const body=document.getElementById('daejeon-recall-body');
   if(!body) return;
@@ -7920,9 +7959,16 @@ function _buildTeamActCache(){
 
 function renderTeamActChart(){
   const sel=document.getElementById('team-act-month');
-  const ym=sel?.value||new Date().toISOString().slice(0,7);
   // allActivities 크기 변화 시 캐시 재빌드
   if(!_teamActCache||_teamActCacheTime!==(allActivities?.length||0)) _buildTeamActCache();
+  // 월 선택 옵션 초기화 (비어있을 때)
+  if(sel && sel.options.length===0){
+    const yms=Object.keys(_teamActCache||{}).sort().reverse();
+    const cur=new Date().toISOString().slice(0,7);
+    if(!yms.includes(cur)) yms.unshift(cur);
+    sel.innerHTML=yms.map(m=>`<option value="${m}">${m.slice(0,4)}\ub144 ${parseInt(m.slice(5),10)}\uc6d4</option>`).join('');
+  }
+  const ym=sel?.value||new Date().toISOString().slice(0,7);
   const ymData=_teamActCache[ym]||{};
   const allTeams=Object.values(TEAM_MAP).flat();
   const teamActCts=allTeams.map(t=>({
