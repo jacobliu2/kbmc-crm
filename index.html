@@ -5118,6 +5118,34 @@ async function dbQ(table, filters={}){
     console.log('[leads] 전체 로드 완료:',all.length,'건');
     return all;
   }
+  // ★ activities: PostgREST 1000건 한계 우회 — Range 페이지네이션
+  if(table==='activities'){
+    const PAGE=1000;
+    let offset=0;
+    const all=[];
+    let qs='activities?select=*&order=created_at.desc';
+    Object.entries(filters).forEach(([k,v])=>{if(v!==undefined&&v!=='')qs+=`&${k}=eq.${encodeURIComponent(v)}`;});
+    while(true){
+      try{
+        const r=await fetch(SB_URL+'/rest/v1/'+qs,{
+          headers:{...sbH(),'Range-Unit':'items','Range':offset+'-'+(offset+PAGE-1),'Prefer':'count=none'}
+        });
+        if(!r.ok){ if(offset===0) return []; break; }
+        const rows=await r.json().catch(()=>[]);
+        if(!rows||!rows.length) break;
+        all.push(...rows);
+        if(rows.length<PAGE) break;
+        offset+=PAGE;
+        if(offset>500000) break;
+      }catch(e){
+        console.warn('dbQ activities err:',e.message);
+        if(offset===0) return [];
+        break;
+      }
+    }
+    console.log('[activities] 전체 로드 완료:',all.length,'건');
+    return all;
+  }
   // 그 외 테이블은 기존 로직 유지
   let path=table+'?select=*&order=created_at.desc&limit='+(table==='activities'?100000:5000);
   Object.entries(filters).forEach(([k,v])=>{if(v!==undefined&&v!=='')path+=`&${k}=eq.${encodeURIComponent(v)}`;});
@@ -6874,13 +6902,13 @@ function renderStageFunnel(leads){
     if(!body) return;
     const _stageMap={'\uad00\ub9ac\uace0\uac1d':'\uad00\ub9ac','\ucd08\uae30\uc811\ucd09':'\uc811\ucd09','\ubbf8\ud305':'\uc0c1\ub2f4','\ud611\uc758':'\uc81c\uc548','\uc0c1\ub2f4\uc911':'\uc811\ucd09','\uc81c\uc548\uc644\ub8cc':'\uc81c\uc548'};
     const norm=s=>_stageMap[s]||s||'';
-    const ORDER=['\ubc30\uc815','\uc811\ucd09','\uc0c1\ub2f4','\uc81c\uc548','\uacc4\uc57d','\uad00\ub9ac'];
+    const ORDER=['\ubc30\uc815','\uc811\ucd09','\uc0c1\ub2f4','\uc81c\uc548','\uacc4\uc57d'];
     const cnt={}; ORDER.forEach(s=>cnt[s]=0);
     let total=0;
     (leads||[]).forEach(l=>{
       if(l.status==='deleted') return;
       const s=norm(l.current_stage);
-      if(s==='\ubcf4\ub958'||s==='\ub4dc\ub7a9') return;
+      if(s==='\ubcf4\ub958'||s==='\ub4dc\ub7a9'||s==='\uad00\ub9ac') return;
       total++;
       if(cnt[s]!==undefined) cnt[s]++;
     });
@@ -7198,7 +7226,7 @@ function renderTeamActivity(leadById){
           <span style="color:var(--gray-500)"><strong style="color:var(--navy)">${r.c}</strong>건 ${arrow}</span>
         </div>
         <div style="height:9px;background:var(--gray-100);border-radius:5px;overflow:hidden">
-          <div style="height:100%;width:${w}%;background:${col};border-radius:5px;opacity:.85;transition:width .4s"></div>
+          <div style="height:100%;width:${w}%;background:${col};border-radius:5px;transition:width .4s"></div>
         </div>
       </div>`;
     });
@@ -7328,11 +7356,15 @@ function renderLeadTime(leads){
   try{
     const el=document.getElementById('insight-leadtime');
     if(!el) return;
-    const cs=(leads||[]).filter(l=>String(l.current_stage||'')==='계약'&&l.assigned_at&&l.contract_date);
+    const _pD=s=>{ if(!s) return NaN; const m=String(s).match(/(\d{4})[-./](\d{1,2})[-./](\d{1,2})/); if(m) return new Date(+m[1],+m[2]-1,+m[3]).getTime(); return new Date(s).getTime(); };
+    const cs=(leads||[]).filter(l=>{
+      const isC = String(l.current_stage||'')==='계약' || l.customer_type==='contract';
+      return isC && (l.assigned_at||l.distributed_at) && l.contract_date;
+    });
     const days=[]; const byBranch={};
     cs.forEach(l=>{
-      const a=new Date(l.assigned_at).getTime();
-      const c=new Date(l.contract_date).getTime();
+      const a=_pD(l.assigned_at||l.distributed_at);
+      const c=_pD(l.contract_date);
       if(isNaN(a)||isNaN(c)||c<a) return;
       const d=Math.round((c-a)/86400000);
       days.push(d);
@@ -7509,22 +7541,22 @@ function renderSalesRhythm(){
     }
     const cbg=c=>{ if(!c) return '#f1f5f9'; const r=c/(maxC||1);
       if(r<=0.25) return '#bae6fd'; if(r<=0.5) return '#7dd3fc'; if(r<=0.75) return '#38bdf8'; return 'var(--blue)'; };
-    let grid='<div style="display:flex;gap:3px;overflow-x:auto;padding-bottom:4px"><div style="display:flex;flex-direction:column;gap:3px;flex-shrink:0;margin-right:5px"><div style="height:13px"></div>';
-    WD.forEach(w=>grid+=`<div style="width:13px;height:12px;font-size:8px;color:var(--gray-400);display:flex;align-items:center">${w}</div>`);
+    let grid='<div style="display:flex;gap:3px;overflow-x:auto;padding-bottom:4px"><div style="display:flex;flex-direction:column;gap:3px;flex-shrink:0;margin-right:5px"><div style="height:16px"></div>';
+    WD.forEach(w=>grid+=`<div style="width:18px;height:24px;font-size:9px;color:var(--gray-400);display:flex;align-items:center">${w}</div>`);
     grid+='</div>';
     for(let wk=0;wk<WEEKS;wk++){
       grid+='<div style="display:flex;flex-direction:column;gap:3px;flex-shrink:0">';
       const firstCell=cells[wk*7];
       const fd=new Date(firstCell.ds+'T00:00:00Z');
       const mLabel=(fd.getUTCDate()<=7)?(fd.getUTCMonth()+1)+'월':'';
-      grid+=`<div style="height:13px;font-size:9px;color:var(--gray-400);text-align:center">${mLabel}</div>`;
+      grid+=`<div style="height:16px;font-size:9px;color:var(--gray-400);text-align:center">${mLabel}</div>`;
       for(let dy=0;dy<7;dy++){
         const cell=cells[wk*7+dy];
         const bg=cell.future?'#fafbfc':cbg(cell.c);
         const showPlan=cell.plan&&!cell.future;
         const dot=showPlan?'<div style="position:absolute;top:-2px;right:-2px;width:5px;height:5px;background:#f59e0b;border-radius:50%"></div>':'';
         const title=`${cell.ds} · 활동 ${cell.c}건${cell.plan?' · 일정':''}`;
-        grid+=`<div title="${title}" style="position:relative;width:13px;height:12px;border-radius:3px;background:${bg};${showPlan?'box-shadow:0 0 0 1.5px #f59e0b':''}">${dot}</div>`;
+        grid+=`<div title="${title}" style="position:relative;width:24px;height:24px;border-radius:4px;background:${bg};${showPlan?'box-shadow:0 0 0 1.5px #f59e0b':''}">${dot}</div>`;
       }
       grid+='</div>';
     }
@@ -7602,7 +7634,7 @@ function renderSalesRhythm(){
       </div>
     </div>`;
     body.innerHTML=`<div style="display:flex;gap:18px;flex-wrap:wrap;align-items:stretch">
-      <div style="flex:1 1 150px;min-width:140px;align-self:flex-start">
+      <div style="flex:1 1 230px;min-width:210px;align-self:center">
         <div style="font-size:12px;font-weight:700;color:var(--gray-600);margin-bottom:8px">주간 활동 히트맵</div>
         ${grid}
       </div>
