@@ -1324,6 +1324,7 @@ body.dark-mode *::-webkit-scrollbar-thumb:hover{background:rgba(180,208,232,.30)
           <label class="btn btn-outline btn-sm" id="btn-excel-upload-wrap" style="cursor:pointer"><svg class="li" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>엑셀 업로드<input type="file" accept=".xlsx,.xls" style="display:none" onchange="importExcel(event)" id="btn-excel-upload"></label>
           <button class="btn btn-outline btn-sm" id="btn-template-download" onclick="downloadExcelTemplate()"><svg class="li" viewBox="0 0 24 24"><rect x="8" y="3" width="8" height="4" rx="1"/><path d="M16 5h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2"/></svg>양식 다운로드</button>
           <button class="btn btn-outline btn-sm" onclick="openExport()"><svg class="li" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>내보내기</button>
+          <button class="btn btn-outline btn-sm" id="btn-db-cleanup" onclick="openDbCleanup()"><svg class="li" viewBox="0 0 24 24"><path d="m7 21-4-4a2 2 0 0 1 0-3l9-9a2 2 0 0 1 3 0l5 5a2 2 0 0 1 0 3l-7 7z"/><path d="M22 21H7"/></svg>DB 정리</button>
         </div>
       </div>
       <!-- 빠른 탭 -->
@@ -8081,6 +8082,10 @@ async function loadLeads(){
   const _tplBtn = document.getElementById('btn-template-download');
   if(_uploadWrap) _uploadWrap.style.display = _canUpload ? '' : 'none';
   if(_tplBtn) _tplBtn.style.display = _canUpload ? '' : 'none';
+  // DB 정리: 관리자만
+  const _canCleanup = curUser?.role==='admin';
+  const _cleanBtn = document.getElementById('btn-db-cleanup');
+  if(_cleanBtn) _cleanBtn.style.display = _canCleanup ? '' : 'none';
   // dbmanager: 배정/드랍/삭제 액션바 버튼 숨김
   const _abarDist = document.querySelector('#leads-abar .abar-btn.blue');
   const _abarDrop = document.querySelector('#leads-abar .abar-btn.warn');
@@ -20388,7 +20393,10 @@ async function confirmAutoDist(ids){
   loadAdmin(); loadLeads();
 }
 
-function openDbCleanup(){
+function openDbCleanup(opts){
+  opts=opts||{};
+  const _dateF=opts.date||'';
+  const _keepM=opts.keep||'activity';
   const leads=(allLeads||[]).filter(l=>l.status!=='deleted');
 
   // ── 중복 그룹 계산
@@ -20413,7 +20421,15 @@ function openDbCleanup(){
   // 중복 그룹: 활동 기록이 가장 최근/많은 건을 맨 앞(유지 기본값)으로 정렬
   const _actMap={};
   (allActivities||[]).forEach(a=>{ if(['assign','status_change'].includes(a.type))return; const k=a.lead_id; const t=new Date(a.created_at).getTime()||0; if(!_actMap[k])_actMap[k]={ms:0,cnt:0}; _actMap[k].cnt++; if(t>_actMap[k].ms)_actMap[k].ms=t; });
-  dupGroups.forEach(dg=>{ dg.group.sort((a,b)=>{ const A=_actMap[a.id]||{ms:0,cnt:0}, B=_actMap[b.id]||{ms:0,cnt:0}; if(B.ms!==A.ms) return B.ms-A.ms; if(B.cnt!==A.cnt) return B.cnt-A.cnt; return (new Date(b.created_at||0)-new Date(a.created_at||0)); }); });
+  // 인입 날짜(시스템등록일) 필터 — 해당일 created_at 멤버가 있는 그룹만
+  if(_dateF){ for(let _i=dupGroups.length-1;_i>=0;_i--){ if(!dupGroups[_i].group.some(l=>(l.created_at||'').slice(0,10)===_dateF)) dupGroups.splice(_i,1); } }
+  // 유지 우선 정렬: 활동 우선(기본) 또는 최신 우선
+  dupGroups.forEach(dg=>{ dg.group.sort((a,b)=>{
+    if(_keepM==='recent') return (new Date(b.created_at||0)-new Date(a.created_at||0));
+    const A=_actMap[a.id]||{ms:0,cnt:0}, B=_actMap[b.id]||{ms:0,cnt:0};
+    if(B.ms!==A.ms) return B.ms-A.ms; if(B.cnt!==A.cnt) return B.cnt-A.cnt;
+    return (new Date(b.created_at||0)-new Date(a.created_at||0));
+  }); });
   window._dbCleanupGroups=dupGroups; // 전역 저장
 
   let ov=document.getElementById('ov-cleanup');
@@ -20444,6 +20460,21 @@ function openDbCleanup(){
       </div>
     </div>
 
+    <!-- 필터 -->
+    <div style="display:flex;align-items:center;gap:14px;padding:10px 12px;background:var(--gray-50);border-radius:8px;margin-bottom:8px;flex-wrap:wrap">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gray-600);font-weight:600">
+        인입일(등록일)
+        <input type="date" id="dup-date-filter" value="${_dateF}" style="font-size:12px;padding:4px 8px;border:1px solid var(--gray-200);border-radius:6px;color:var(--navy)" onchange="openDbCleanup({date:this.value, keep:(document.getElementById('dup-keep-mode')||{}).value||'activity'})">
+      </label>
+      ${_dateF?`<button class="btn btn-outline btn-sm" style="font-size:11px;padding:3px 8px" onclick="openDbCleanup({date:'', keep:(document.getElementById('dup-keep-mode')||{}).value||'activity'})">전체 보기</button>`:''}
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gray-600);font-weight:600;margin-left:auto">
+        유지 우선
+        <select id="dup-keep-mode" style="font-size:12px;padding:4px 8px;border:1px solid var(--gray-200);border-radius:6px;color:var(--navy);font-weight:600" onchange="openDbCleanup({date:(document.getElementById('dup-date-filter')||{}).value||'', keep:this.value})">
+          <option value="activity"${_keepM==='activity'?' selected':''}>활동 우선</option>
+          <option value="recent"${_keepM==='recent'?' selected':''}>최신 우선</option>
+        </select>
+      </label>
+    </div>
     <!-- 옵션 -->
     <div style="display:flex;align-items:center;gap:16px;padding:10px 12px;background:rgba(49,130,246,.05);border-radius:8px;margin-bottom:12px">
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
