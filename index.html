@@ -186,6 +186,8 @@ main{
   overflow-x:auto;
 }
 .screen{display:none}.screen.active{display:block;overflow-x:auto}
+#screen-insights{max-width:1600px;margin-left:auto;margin-right:auto;padding-left:40px;padding-right:40px;box-sizing:border-box}
+@media(max-width:768px){#screen-insights{padding-left:10px;padding-right:10px}}
 .page-header{
   display:flex;align-items:center;justify-content:space-between;
   margin-bottom:20px;
@@ -6857,7 +6859,7 @@ async function loadInsights(){
   try{ if(!allActivities?.length) allActivities=await dbQ('activities'); }catch(_){}
   try{ if(!allNextActions?.length) allNextActions=await dbQ('next_actions'); }catch(_){}
   const _lam=_rcBuildLastActMapFromCache();
-  const _lbi={}; (allLeads||[]).forEach(l=>{ _lbi[l.id]=l; });
+  const _lbi={}; ((allLeads&&allLeads.length)?allLeads:leads||[]).forEach(l=>{ _lbi[l.id]=l; });
   renderRecallWarning(_lam);
   renderManagedAnalysis(leads,_lam);
   renderLeadTime(leads);
@@ -7113,7 +7115,7 @@ function renderBranchTrend(leadById){
     if(!el) return;
     const branches=(typeof BRANCHES!=='undefined'&&BRANCHES.length)?BRANCHES.slice():[];
     if(!branches.length){ el.innerHTML='<div style="color:var(--gray-300);font-size:12px;text-align:center;padding:24px">지점 정보 없음</div>'; return; }
-    if(!leadById){ leadById={}; (allLeads||[]).forEach(l=>{ leadById[l.id]=l; }); }
+    if(!leadById||!Object.keys(leadById).length){ leadById={}; (allLeads||[]).forEach(l=>{ leadById[l.id]=l; }); }
     const NW=6;
     const thisWeek=_weekStartKstMs(Date.now());
     const weeks=[]; for(let i=NW-1;i>=0;i--) weeks.push(thisWeek-i*7*86400000);
@@ -7165,7 +7167,7 @@ function renderTeamActivity(leadById){
   try{
     const el=document.getElementById('insight-team-activity');
     if(!el) return;
-    if(!leadById){ leadById={}; (allLeads||[]).forEach(l=>{ leadById[l.id]=l; }); }
+    if(!leadById||!Object.keys(leadById).length){ leadById={}; (allLeads||[]).forEach(l=>{ leadById[l.id]=l; }); }
     const now=Date.now(), w4=now-28*86400000, w8=now-56*86400000;
     const cur={}, prev={}, branchOf={};
     (allActivities||[]).forEach(a=>{
