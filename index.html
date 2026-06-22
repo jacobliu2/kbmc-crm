@@ -6875,9 +6875,10 @@ async function loadAdmin(){
 async function loadInsights(){
   let leads;
   try{
-    leads = (Array.isArray(allLeads)&&allLeads.length)
-      ? allLeads.filter(l=>l.status!=='deleted')
-      : (await dbQ('leads')).filter(l=>l.status!=='deleted');
+    if(!Array.isArray(allLeads)||!allLeads.length){
+      try{ allLeads = await dbQ('leads'); }catch(_e){ allLeads = allLeads||[]; }
+    }
+    leads = (allLeads||[]).filter(l=>l.status!=='deleted');
   }catch(e){ leads = (allLeads||[]).filter(l=>l.status!=='deleted'); }
   renderStageFunnel(leads);
   renderInsightDrop(leads);
