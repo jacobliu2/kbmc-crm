@@ -20352,15 +20352,37 @@ function openAutoDist(){
   ov.classList.add('open');
 }
 
+async function _notifyAssign(recipientName, count){
+  try{
+    if(!recipientName) return;
+    const acc=(getAccs()||[]).find(a=>a.name===recipientName);
+    if(!acc) return;
+    const snap=[{id:acc.id||acc.name, name:acc.name, role:acc.role||'', branch:acc.branch_name||acc.branch||''}];
+    const row={
+      id:uuid(),
+      subject:'새로운 DB 배정',
+      content:(count&&count>1)?(count+'건의 새로운 DB가 배정되었습니다.'):'새로운 DB가 배정되었습니다.',
+      sender_id:'system', sender_name:'시스템',
+      target_type:'individual', target_value:recipientName,
+      recipients_snapshot:snap, read_by:{},
+      is_deleted_by_sender:false, created_at:new Date().toISOString()
+    };
+    const ok=await _sbInsertAnnouncement(row);
+    if(ok && typeof _annsCache!=='undefined' && _annsCache) _annsCache.unshift(row);
+  }catch(e){ console.warn('[배정알림]',e); }
+}
 async function confirmAutoDist(ids){
   const checks=[...document.querySelectorAll('#ov-auto-dist input[type=checkbox]:checked')].map(c=>c.value);
   if(!checks.length){showToast('지점을 선택하세요','error');return;}
   let idx=0;
+  const _byBranch={};
   for(const id of ids){
     const branch=checks[idx%checks.length]; idx++;
     await dbU('leads',id,{branch_name:branch,status:'assigned',assigned_at:new Date().toISOString()});
     await logActivity(id,'assign',`일괄 자동 배정 → ${branch}`,'assigned','초기접촉');
+    _byBranch[branch]=(_byBranch[branch]||0)+1;
   }
+  for(const [_b,_c] of Object.entries(_byBranch)){ await _notifyAssign(_b,_c); }
   closeOv('ov-auto-dist');
   showToast(`${ids.length}건 자동 배정 완료`,'success');
   loadAdmin(); loadLeads();
@@ -21182,6 +21204,7 @@ async function confirmBrAssignPopup(){
   }
   closeOv('ov-br-assign');
   clearBrSel();
+  for(const _tm of finalTeams){ if(_tm && _tm!==curUser.name) await _notifyAssign(_tm, ids.length); }
   showToast(`${ids.length}건 → ${teamDisplay} 배정 완료`,'success');
   loadBranchScreen();
 }
