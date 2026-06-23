@@ -10689,6 +10689,11 @@ async function saveActivity(){
   const lid=document.getElementById('act-lead-id').value;
   let content=document.getElementById('act-content').value.trim();
   const type=document.getElementById('act-type').value;
+  // 중복 활동 방지: 같은 고객·같은 유형·같은 내용을 5분 내 재등록하면 확인 (다른 날 재시도는 영향 없음)
+  const _recentDup=(allActivities||[]).find(a=> a.lead_id===lid && a.type===type && content && (a.content||'').trim()===content && (Date.now()-new Date(a.created_at).getTime())<5*60*1000);
+  if(_recentDup){
+    if(!confirm('방금 같은 고객에게 동일한 내용의 활동을 등록하셨습니다.\n\n그래도 한 번 더 등록할까요?')){ return; }
+  }
   const stage=window._curActStage||document.getElementById('act-stage').value;
   const nextAct=document.getElementById('act-next').value.trim();
   const isDropStage=(window._curActStage==='드랍'||curActStatus==='drop');
