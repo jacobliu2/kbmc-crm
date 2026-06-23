@@ -11137,10 +11137,19 @@ async function importTmExcel(event){
   let _sbLeadRows=[];
   try{
     if(!testMode){
-      const _sr=await fetch(SB_URL+'/rest/v1/leads?select=id,phone,company_name,branch_name,team_name,status,current_stage,tm_transferred&status=neq.deleted',{
-        headers:{...sbH(),'Range-Unit':'items','Range':'0-9999','Prefer':'count=none'}
-      });
-      if(_sr.ok) _sbLeadRows=await _sr.json().catch(()=>[]);
+      let _off=0;
+      while(true){
+        const _sr=await fetch(SB_URL+'/rest/v1/leads?select=id,phone,company_name,branch_name,team_name,status,current_stage,tm_transferred&status=neq.deleted',{
+          headers:{...sbH(),'Range-Unit':'items','Range':_off+'-'+(_off+999),'Prefer':'count=none'}
+        });
+        if(!_sr.ok) break;
+        const _rows=await _sr.json().catch(()=>[]);
+        if(!_rows.length) break;
+        _sbLeadRows.push(..._rows);
+        if(_rows.length<1000) break;
+        _off+=1000;
+        if(_off>300000) break;
+      }
     }
   }catch(e){}
   _sbLeadRows.forEach(l=>{
@@ -11503,24 +11512,26 @@ async function importExcel(event){
     const ph=String(l.phone||'').replace(/[^0-9]/g,'');
     if(ph.length>=9 && !_dbLeadMap.has(ph)) _dbLeadMap.set(ph, l);
   });
-  // Supabase에서 누락된 lead 보완 (allLeads 캐시 외)
+  // Supabase에서 누락된 lead 보완 (allLeads 캐시 외) — 전체 페이지네이션
   try{
-    if(!testMode && _excelPhones.length){
-      const _chunks2=[];
-      for(let ci=0;ci<_excelPhones.length;ci+=100)
-        _chunks2.push(_excelPhones.slice(ci,ci+100));
-      for(const chunk of _chunks2){
+    if(!testMode){
+      let _off=0;
+      while(true){
         const _r=await fetch(SB_URL+'/rest/v1/leads?select=id,phone,company_name,branch_name,team_name,current_stage,status&status=neq.deleted',{
-          headers:{...sbH(),'Range-Unit':'items','Range':'0-9999','Prefer':'count=none'}
+          headers:{...sbH(),'Range-Unit':'items','Range':_off+'-'+(_off+999),'Prefer':'count=none'}
         });
-        if(_r.ok){
-          const _rows=await _r.json().catch(()=>[]);
-          (_rows||[]).forEach(l=>{
-            const ph=String(l.phone||'').replace(/[^0-9]/g,'');
-            if(ph.length>=9 && !_dbLeadMap.has(ph)) _dbLeadMap.set(ph, l);
-          });
-        }
-        break; // 한 번에 다 들어옴 (Range 0-9999)
+        if(!_r.ok) break;
+        const _rows=await _r.json().catch(()=>[]);
+        if(!_rows.length) break;
+        _rows.forEach(l=>{
+          const ph=String(l.phone||'').replace(/[^0-9]/g,'');
+          if(ph.length>=9 && !_dbLeadMap.has(ph)) _dbLeadMap.set(ph, l);
+          if(ph.length>=9) _dbPhoneSet.add(ph);
+          const nm=String(l.company_name||'').trim(); if(nm) _dbNameSet.add(nm);
+        });
+        if(_rows.length<1000) break;
+        _off+=1000;
+        if(_off>300000) break;
       }
     }
   }catch(e){}
