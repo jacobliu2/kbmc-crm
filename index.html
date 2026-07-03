@@ -181,7 +181,7 @@ nav::-webkit-scrollbar{display:none}
 
 /* ══ Layout ══ */
 main{
-  margin-top:56px;padding:20px 40px;
+  margin-top:56px;padding:20px 52px;
   max-width:1600px;margin-left:auto;margin-right:auto;
   overflow-x:auto;
 }
@@ -1852,6 +1852,52 @@ body.dark-mode *::-webkit-scrollbar-thumb:hover{background:rgba(180,208,232,.30)
   </div>
 </div>
 
+<!-- 일정 등록/수정 모달 -->
+<div class="modal-overlay" id="modal-sched">
+  <div class="modal" style="width:460px;max-width:94vw">
+    <div class="mh">
+      <div class="mt" id="sched-modal-title"><svg class="li" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>일정 등록</div>
+      <button class="mc" onclick="closeM('modal-sched')"><svg class="li" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div style="padding:18px 22px">
+      <input type="hidden" id="sched-category" value="work">
+      <div style="margin-bottom:14px">
+        <label style="font-size:12px;font-weight:700;color:var(--gray-600);display:block;margin-bottom:6px">일정 구분</label>
+        <div style="display:flex;gap:8px">
+          <button type="button" id="sched-cat-work" onclick="_setSchedCategory('work')" style="flex:1;padding:9px;border:1.5px solid #2874a6;border-radius:var(--r-sm);background:#2874a6;color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">업무일정</button>
+          <button type="button" id="sched-cat-private" onclick="_setSchedCategory('private')" style="flex:1;padding:9px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);background:#fff;color:var(--gray-500);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">개인일정</button>
+        </div>
+        <div style="font-size:11px;color:var(--gray-400);margin-top:6px">업무일정은 소속 지점장·관리자가 확인할 수 있고, 개인일정은 본인만 볼 수 있습니다.</div>
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="font-size:12px;font-weight:700;color:var(--gray-600);display:block;margin-bottom:5px">제목 <span style="color:var(--err)">*</span></label>
+        <input type="text" id="sched-title" placeholder="예: 세무사 미팅, 연차, 지점 회의" style="width:100%;padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;box-sizing:border-box">
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:12px">
+        <div style="flex:1">
+          <label style="font-size:12px;font-weight:700;color:var(--gray-600);display:block;margin-bottom:5px">날짜 <span style="color:var(--err)">*</span></label>
+          <input type="date" id="sched-date" style="width:100%;padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;box-sizing:border-box">
+        </div>
+        <div style="width:130px">
+          <label style="font-size:12px;font-weight:700;color:var(--gray-600);display:block;margin-bottom:5px">시간</label>
+          <input type="time" id="sched-time" style="width:100%;padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;box-sizing:border-box">
+        </div>
+      </div>
+      <div style="margin-bottom:18px">
+        <label style="font-size:12px;font-weight:700;color:var(--gray-600);display:block;margin-bottom:5px">메모</label>
+        <textarea id="sched-memo" rows="3" placeholder="상세 내용 (선택)" style="width:100%;padding:9px 12px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;line-height:1.6;resize:vertical;box-sizing:border-box"></textarea>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:space-between">
+        <button class="btn btn-danger btn-sm" id="sched-delete-btn" onclick="deleteSchedule()" style="display:none">삭제</button>
+        <div style="display:flex;gap:8px;margin-left:auto">
+          <button class="btn btn-outline btn-sm" onclick="closeM('modal-sched')">취소</button>
+          <button class="btn btn-primary btn-sm" onclick="saveSchedule()">저장</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
     <!-- 내 고객 상세 모달 -->
     <div class="modal-overlay" id="modal-my-client">
       <div class="modal" style="width:660px;max-height:88vh;overflow-y:auto">
@@ -3435,6 +3481,7 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
       <button class="btn btn-outline btn-sm" id="act-view-cal-btn" onclick="switchActView('cal',this)" style="background:var(--navy);color:#fff;border-color:var(--navy)"><svg class="li" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>캘린더</button>
       <button class="btn btn-outline btn-sm" id="act-view-list-btn" onclick="switchActView('list',this)"><svg class="li" viewBox="0 0 24 24"><rect x="8" y="3" width="8" height="4" rx="1"/><path d="M16 5h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2"/></svg>목록</button>
       <button class="btn btn-primary btn-sm" onclick="openActEntryModal(null)">+ 활동 등록</button>
+      <button class="btn btn-sm" id="act-add-sched-btn" onclick="openSchedModal(null)" style="display:none;background:#2874a6;color:#fff;border-color:#2874a6"><svg class="li" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M12 14v4M10 16h4"/></svg> 일정 등록</button>
     </div>
   </div>
   <!-- 필터바 (캘린더/목록 공통) -->
@@ -5516,6 +5563,7 @@ function startApp(){
   document.getElementById('app').style.display='block';
   // Supabase notices 로드 (다른 사용자가 저장한 공지 수신)
   _sbLoadNotices().then(()=>{ if(typeof renderAdminNoticeList==='function') renderAdminNoticeList(); if(typeof updateKbriefDot==='function') updateKbriefDot(); });
+  if(curUser?.role==='team'||curUser?.role==='branch'){ if(typeof loadSchedules==='function') loadSchedules(); }
   // Supabase 프로필 데이터 로드 (goals, potentials, 1on1, contacts)
   if(!testMode){ (async()=>{
     const _keys=[
@@ -13547,29 +13595,36 @@ function renderStageDashboardList(){
     body.innerHTML = `<div style="padding:50px 20px;text-align:center;color:var(--gray-400);font-size:13px"><div style="font-size:32px;margin-bottom:8px;opacity:.6"><svg class="li" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></div>해당 조건의 기업이 없습니다.</div>`;
     return;
   }
-  body.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px">
+  const thBase='position:sticky;top:0;background:#f8fafc;padding:9px 12px;text-align:left;font-weight:700;color:var(--gray-500);border-bottom:1px solid var(--gray-200);font-size:11px;z-index:2';
+  const ell='white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+  body.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed">
+    <colgroup>
+      <col style="width:4%"><col style="width:32%"><col style="width:12%"><col style="width:16%"><col style="width:11%"><col style="width:15%"><col style="width:10%">
+    </colgroup>
     <thead><tr>
-      <th style="position:sticky;top:0;background:#f8fafc;padding:9px 12px;text-align:left;font-weight:700;color:var(--gray-500);border-bottom:1px solid var(--gray-200);font-size:11px;width:36px;z-index:2">#</th>
-      <th style="position:sticky;top:0;background:#f8fafc;padding:9px 12px;text-align:left;font-weight:700;color:var(--gray-500);border-bottom:1px solid var(--gray-200);font-size:11px;z-index:2">회사명</th>
-      <th style="position:sticky;top:0;background:#f8fafc;padding:9px 12px;text-align:left;font-weight:700;color:var(--gray-500);border-bottom:1px solid var(--gray-200);font-size:11px;z-index:2">담당자</th>
-      <th style="position:sticky;top:0;background:#f8fafc;padding:9px 12px;text-align:left;font-weight:700;color:var(--gray-500);border-bottom:1px solid var(--gray-200);font-size:11px;z-index:2">연락처</th>
-      <th style="position:sticky;top:0;background:#f8fafc;padding:9px 12px;text-align:left;font-weight:700;color:var(--gray-500);border-bottom:1px solid var(--gray-200);font-size:11px;z-index:2">지점</th>
-      <th style="position:sticky;top:0;background:#f8fafc;padding:9px 12px;text-align:left;font-weight:700;color:var(--gray-500);border-bottom:1px solid var(--gray-200);font-size:11px;z-index:2">팀장</th>
-      <th style="position:sticky;top:0;background:#f8fafc;padding:9px 12px;text-align:left;font-weight:700;color:var(--gray-500);border-bottom:1px solid var(--gray-200);font-size:11px;z-index:2">단계</th>
+      <th style="${thBase};padding-left:18px">#</th>
+      <th style="${thBase}">회사명</th>
+      <th style="${thBase}">담당자</th>
+      <th style="${thBase}">연락처</th>
+      <th style="${thBase}">지점</th>
+      <th style="${thBase}">팀장</th>
+      <th style="${thBase};padding-right:18px">단계</th>
     </tr></thead>
     <tbody>${list.map((l,i)=>{
       const stg=sdashNormStage(l);
       const teams=sdashLeadTeams(l);
       const clr=SDASH_COLOR[stg]||'#94a3b8';
       const ico=SDASH_ICON[stg]||'<svg class="li" viewBox="0 0 24 24"><path d="M12 3 2 20h20z"/><path d="M12 9v5M12 17h.01"/></svg>';
+      const co=esc(l.company_name||'-');
+      const tmStr=teams.length?teams.map(t=>esc(t)).join(', '):'';
       return `<tr style="border-bottom:1px solid #f1f5f9">
-        <td style="padding:9px 12px;color:var(--gray-400)">${i+1}</td>
-        <td style="padding:9px 12px;font-weight:700;color:var(--navy);cursor:pointer;text-decoration:none" onclick="sdashOpenLead('${esc(l.id)}')" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" title="클릭하여 상세보기">${esc(l.company_name||'-')}</td>
-        <td style="padding:9px 12px">${esc(l.contact_name||'')}</td>
-        <td style="padding:9px 12px;color:var(--gray-500);font-size:12px">${esc(l.phone||'')}</td>
-        <td style="padding:9px 12px;color:var(--gray-500)">${esc(l.branch_name||'-')}</td>
-        <td style="padding:9px 12px">${teams.length?teams.map(t=>esc(t)).join(', '):'<span style="color:var(--gray-300)">-</span>'}</td>
-        <td style="padding:9px 12px"><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:${clr}22;color:${clr}">${ico} ${esc(stg)}</span></td>
+        <td style="padding:9px 12px 9px 18px;color:var(--gray-400)">${i+1}</td>
+        <td style="padding:9px 12px;font-weight:700;color:var(--navy);cursor:pointer;${ell}" onclick="sdashOpenLead('${esc(l.id)}')" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" title="${co} — 클릭하여 상세보기">${co}</td>
+        <td style="padding:9px 12px;${ell}" title="${esc(l.contact_name||'')}">${esc(l.contact_name||'')}</td>
+        <td style="padding:9px 12px;color:var(--gray-500);font-size:12px;${ell}">${esc(l.phone||'')}</td>
+        <td style="padding:9px 12px;color:var(--gray-500);${ell}" title="${esc(l.branch_name||'-')}">${esc(l.branch_name||'-')}</td>
+        <td style="padding:9px 12px;${ell}" title="${tmStr}">${tmStr||'<span style="color:var(--gray-300)">-</span>'}</td>
+        <td style="padding:9px 18px 9px 12px"><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:${clr}22;color:${clr};white-space:nowrap">${ico} ${esc(stg)}</span></td>
       </tr>`;
     }).join('')}</tbody>
   </table>`;
@@ -17558,6 +17613,27 @@ function showDailyBriefing(){
   }):[];
 
   const sections=[];
+
+  // ── 다가오는 내 일정 (3일 전·하루 전·당일) ──
+  const _mySched=(allSchedules||[]).filter(s=>s.status!=='deleted' && String(s.user_id)===String(curUser.id) && s.schedule_date);
+  const _schedDday=(d)=>{ const a=new Date(today+'T00:00:00'), b=new Date(d+'T00:00:00'); return Math.round((b-a)/86400000); };
+  const _upSched=_mySched.map(s=>({s,dd:_schedDday(s.schedule_date)})).filter(x=>x.dd===0||x.dd===1||x.dd===3).sort((a,b)=>a.dd-b.dd);
+  if(_upSched.length){
+    const ddLabel=dd=>dd===0?'오늘':dd===1?'내일':dd+'일 뒤';
+    const ddColor=dd=>dd===0?'#c0392b':dd===1?'#e67e22':'#2874a6';
+    sections.push(`<div style="padding:10px 14px;background:rgba(40,116,166,.06);border-radius:8px;border-left:3px solid #2874a6">
+      <div style="font-size:12px;font-weight:700;color:#2874a6;margin-bottom:6px"><svg class="li" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> 다가오는 일정 ${_upSched.length}건</div>
+      ${_upSched.map(({s,dd})=>{
+        const catL=s.category==='work'?'업무':'개인';
+        return `<div style="font-size:12px;color:var(--gray-700);padding:3px 0;display:flex;gap:8px;align-items:center">
+          <span style="flex-shrink:0;font-size:10px;font-weight:700;color:#fff;background:${ddColor(dd)};border-radius:10px;padding:1px 8px">${ddLabel(dd)}</span>
+          ${s.schedule_time?`<span style="color:var(--gray-400);font-size:11px">${esc(s.schedule_time)}</span>`:''}
+          <span style="font-weight:600">${esc(s.title||'')}</span>
+          <span style="font-size:10px;color:var(--gray-400)">${catL}</span>
+        </div>`;
+      }).join('')}
+    </div>`);
+  }
 
   // 미확인 알림
   if(notifs.length){
@@ -23686,6 +23762,13 @@ async function loadActivityScreen(){
   const leads=await dbQ('leads');
   window._aeLeads=(myLeads||leads.filter(l=>l.team_name===curUser.name||l.branch_name===curUser.name)).slice(0,100).map(l=>l.company_name||'').filter(Boolean);
 
+  // 팀장·지점장: 일정 로드 + 등록 버튼 노출
+  const schedBtn=document.getElementById('act-add-sched-btn');
+  if(curUser.role==='team'||curUser.role==='branch'){
+    if(schedBtn) schedBtn.style.display='';
+  } else if(schedBtn){ schedBtn.style.display='none'; }
+  await loadSchedules();
+
   applyActFilter();
 }
 
@@ -23771,6 +23854,8 @@ function getFilteredActEntries(){
   // 동행 포함 필터
   const compF=document.getElementById('act-companion-filter')?.checked;
   if(compF) entries=entries.filter(a=>a.companions&&a.companions.length>0);
+  // 팀장·지점장 일정 합류 (유형/동행 필터와 무관하게 자체 가시성 규칙으로만 표시)
+  try{ visibleSchedules().forEach(s=>entries.push(_schedToEntry(s))); }catch(e){}
   return entries;
 }
 
@@ -23800,6 +23885,21 @@ function renderActCal(){
 
     // 일정 항목 — 이름 / 활동종류 / 제목 한 줄
     const items=dayActs.slice(0,3).map(a=>{
+      // 팀장·지점장 일정: 업무=파랑, 개인=회색, 본인 것만 수정 가능
+      if(a._sched){
+        const sclr=a.category==='work'?'#2874a6':'#94a3b8';
+        const catL=a.category==='work'?'업무':'개인';
+        const mine=String(a._schedRow?.user_id)===String(curUser?.id);
+        const sline=`${a.time?a.time+' ':''}${catL} · ${a.title||''}`;
+        const stip=`${a.author} | ${catL}일정 | ${a.title||''}${a._schedRow?.memo?' — '+a._schedRow.memo:''}`;
+        return`<div onclick="event.stopPropagation();${mine?`editSchedule('${a._schedId}')`:''}" title="${esc(stip)}"
+          style="margin-bottom:2px;padding:2px 5px;border-radius:4px;background:${sclr}18;
+            border-left:3px solid ${sclr};cursor:${mine?'pointer':'default'};
+            font-size:10px;font-weight:600;color:var(--gray-800);line-height:1.6;transition:opacity .12s"
+          onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'">
+          <svg class="li" viewBox="0 0 24 24" style="width:10px;height:10px;color:${sclr}"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> ${esc(sline)}
+        </div>`;
+      }
       const clr=getColor(a.author);
       const typeLabel=ACT_TYPE_LABEL[a.type]||a.type;
       // 제목: 회사명 우선, 없으면 content 앞부분
@@ -23848,7 +23948,23 @@ function renderActList(){
   if(!entries.length){tbody.innerHTML='<tr><td colspan="8" class="empty">활동 없음</td></tr>';return;}
   const allInfo=getLInfoAll();
   const getColor=name=>{const info=allInfo[name]||{};return info.color||'var(--blue)';};
-  tbody.innerHTML=entries.slice(0,100).map(a=>`<tr>
+  tbody.innerHTML=entries.slice(0,100).map(a=>{
+    if(a._sched){
+      const sclr=a.category==='work'?'#2874a6':'#94a3b8';
+      const catL=a.category==='work'?'업무일정':'개인일정';
+      const mine=String(a._schedRow?.user_id)===String(curUser?.id);
+      return `<tr>
+        <td style="font-size:12px">${fmtD(a.date)}</td>
+        <td style="font-size:11px;color:var(--gray-400)">${a.time||'-'}</td>
+        <td><span class="badge" style="font-size:10px;background:${sclr}1e;color:${sclr};font-weight:700">${catL}</span></td>
+        <td style="font-size:12px;font-weight:600">${esc(a.title||'-')}</td>
+        <td><span style="font-size:11px;font-weight:700;color:${sclr}">${esc(a.author||'-')}</span></td>
+        <td style="font-size:11px;max-width:200px">${esc((a._schedRow?.memo||'').slice(0,60))}</td>
+        <td><span style="color:var(--gray-300)">-</span></td>
+        <td><div style="display:flex;gap:3px">${mine?`<button class="btn btn-outline btn-xs" onclick="editSchedule('${a._schedId}')">수정</button><button class="btn btn-danger btn-xs" onclick="deleteSchedule('${a._schedId}')">삭제</button>`:'<span style="font-size:10px;color:var(--gray-300)">타인</span>'}</div></td>
+      </tr>`;
+    }
+    return `<tr>
     <td style="font-size:12px">${fmtD(a.date)}</td>
     <td style="font-size:11px;color:var(--gray-400)">${a.time||'-'}</td>
     <td><span class="badge badge-blue" style="font-size:10px">${ACT_TYPE_LABEL[a.type]||a.type}</span></td>
@@ -23860,7 +23976,128 @@ function renderActList(){
       <button class="btn btn-outline btn-xs" onclick="editActEntry('${a.id}')">수정</button>
       <button class="btn btn-danger btn-xs" onclick="delActEntry('${a.id}')">삭제</button>
     </div></td>
-  </tr>`).join('');
+  </tr>`;}).join('');
+}
+
+// ════════ 팀장·지점장 일정 (schedules 테이블) ════════════════
+// 업무일정(work): 본인 + (팀장→소속 지점장) + 관리자 열람
+// 개인일정(private): 본인만
+let allSchedules=[];
+let _schedEditId=null;
+
+async function loadSchedules(){
+  try{
+    const rows=await dbQ('schedules');
+    allSchedules=(rows||[]).filter(s=>s.status!=='deleted');
+  }catch(e){ console.warn('loadSchedules',e); allSchedules=[]; }
+}
+
+function schedVisibleTo(s,u){
+  if(!u||!s) return false;
+  if(String(s.user_id)===String(u.id)) return true;        // 본인 일정
+  if(s.category!=='work') return false;                     // 개인일정은 본인만
+  if(u.role==='admin') return true;                         // 관리자: 모든 업무일정
+  if(u.role==='branch') return s.role==='team' && s.branch_name===u.name; // 지점장: 소속 팀장 업무일정
+  return false;                                             // 팀장: 타인 일정 불가
+}
+
+function visibleSchedules(){
+  return (allSchedules||[]).filter(s=>s.status!=='deleted' && schedVisibleTo(s,curUser));
+}
+
+function _schedToEntry(s){
+  const catLabel = s.category==='work'?'업무':'개인';
+  return {
+    id:'sched_'+s.id, _sched:true, _schedId:s.id, _schedRow:s,
+    date:s.schedule_date, time:s.schedule_time||'',
+    type:'schedule', category:s.category,
+    author:s.user_name||'', title:s.title||'',
+    company:s.title||'',
+    content:catLabel+' · '+(s.title||'')+(s.memo?' — '+s.memo:''),
+    companions:[]
+  };
+}
+
+// ── 일정 등록/수정 모달 ──
+function openSchedModal(date){
+  if(curUser?.role!=='team'&&curUser?.role!=='branch'){ showToast('팀장·지점장만 일정을 등록할 수 있습니다','error'); return; }
+  _schedEditId=null;
+  const t=document.getElementById('sched-modal-title'); if(t) t.textContent='일정 등록';
+  document.getElementById('sched-title').value='';
+  document.getElementById('sched-date').value=date||todayKst();
+  document.getElementById('sched-time').value='';
+  document.getElementById('sched-memo').value='';
+  _setSchedCategory('work');
+  const db=document.getElementById('sched-delete-btn'); if(db) db.style.display='none';
+  openM('modal-sched');
+}
+
+function _setSchedCategory(cat){
+  const h=document.getElementById('sched-category'); if(h) h.value=cat;
+  [['work','#2874a6'],['private','#64748b']].forEach(([c,clr])=>{
+    const b=document.getElementById('sched-cat-'+c);
+    if(!b) return;
+    const on=(c===cat);
+    b.style.background=on?clr:'#fff';
+    b.style.color=on?'#fff':'var(--gray-500)';
+    b.style.borderColor=on?clr:'var(--gray-200)';
+  });
+}
+
+function editSchedule(id){
+  const s=(allSchedules||[]).find(x=>String(x.id)===String(id));
+  if(!s){ showToast('일정을 찾을 수 없습니다','error'); return; }
+  if(String(s.user_id)!==String(curUser.id)){ showToast('본인 일정만 수정할 수 있습니다','error'); return; }
+  _schedEditId=id;
+  const t=document.getElementById('sched-modal-title'); if(t) t.textContent='일정 수정';
+  document.getElementById('sched-title').value=s.title||'';
+  document.getElementById('sched-date').value=s.schedule_date||todayKst();
+  document.getElementById('sched-time').value=s.schedule_time||'';
+  document.getElementById('sched-memo').value=s.memo||'';
+  _setSchedCategory(s.category||'work');
+  const db=document.getElementById('sched-delete-btn'); if(db) db.style.display='';
+  openM('modal-sched');
+}
+
+async function saveSchedule(){
+  if(curUser?.role!=='team'&&curUser?.role!=='branch'){ showToast('팀장·지점장만 등록할 수 있습니다','error'); return; }
+  const title=(document.getElementById('sched-title').value||'').trim();
+  const date=(document.getElementById('sched-date').value||'').trim();
+  const time=(document.getElementById('sched-time').value||'').trim();
+  const memo=(document.getElementById('sched-memo').value||'').trim();
+  const category=document.getElementById('sched-category').value||'work';
+  if(!title){ showToast('일정 제목을 입력하세요','error'); return; }
+  if(!date){ showToast('날짜를 선택하세요','error'); return; }
+  const branch_name = curUser.role==='team' ? (curUser.branch||'') : curUser.name;
+  if(_schedEditId){
+    const patch={title,schedule_date:date,schedule_time:time,memo,category};
+    await dbU('schedules',_schedEditId,patch);
+    const i=(allSchedules||[]).findIndex(x=>String(x.id)===String(_schedEditId));
+    if(i>=0) allSchedules[i]={...allSchedules[i],...patch};
+  }else{
+    const row=await dbI('schedules',{
+      user_id:curUser.id, user_name:curUser.name, role:curUser.role,
+      branch_name, title, schedule_date:date, schedule_time:time,
+      category, memo, status:'active'
+    });
+    if(row) allSchedules.unshift(row);
+  }
+  closeM('modal-sched');
+  showToast('일정 저장 완료','success');
+  if(document.getElementById('screen-activity')?.classList.contains('active')) applyActFilter();
+}
+
+async function deleteSchedule(id){
+  const sid=id||_schedEditId;
+  if(!sid) return;
+  const s=(allSchedules||[]).find(x=>String(x.id)===String(sid));
+  if(s && String(s.user_id)!==String(curUser.id)){ showToast('본인 일정만 삭제할 수 있습니다','error'); return; }
+  if(!confirm('이 일정을 삭제할까요?')) return;
+  await dbU('schedules',sid,{status:'deleted'}); // soft delete 원칙
+  allSchedules=(allSchedules||[]).filter(x=>String(x.id)!==String(sid));
+  closeM('modal-sched');
+  showToast('삭제했습니다','success');
+  if(document.getElementById('screen-activity')?.classList.contains('active')) applyActFilter();
 }
 
 // 활동 등록 모달
