@@ -181,12 +181,12 @@ nav::-webkit-scrollbar{display:none}
 
 /* ══ Layout ══ */
 main{
-  margin-top:56px;padding:20px 52px;
+  margin-top:56px;padding:20px clamp(64px, 5vw, 130px);
   max-width:1600px;margin-left:auto;margin-right:auto;
   overflow-x:auto;
 }
 .screen{display:none}.screen.active{display:block;overflow-x:auto}
-#screen-insights{max-width:1600px;margin-left:auto;margin-right:auto;padding-left:40px;padding-right:40px;box-sizing:border-box}
+#screen-insights{max-width:1600px;margin-left:auto;margin-right:auto;padding-left:clamp(64px, 5vw, 130px);padding-right:clamp(64px, 5vw, 130px);box-sizing:border-box}
 @media(max-width:768px){#screen-insights{padding-left:10px;padding-right:10px}}
 .page-header{
   display:flex;align-items:center;justify-content:space-between;
