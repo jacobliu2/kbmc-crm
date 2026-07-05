@@ -187,6 +187,13 @@ main{
 }
 .screen{display:none}.screen.active{display:block;overflow-x:auto}
 #screen-insights{max-width:1600px;margin-left:auto;margin-right:auto;padding-left:clamp(64px, 5vw, 130px);padding-right:clamp(64px, 5vw, 130px);box-sizing:border-box}
+/* main 바깥에 위치한 화면들도 DB관리(main 내부)와 동일한 좌우 여백 확보 */
+#screen-notices,#screen-stage-dashboard,#screen-dj-status,#screen-messages,#screen-users,#screen-activity{
+  max-width:1600px;margin-left:auto;margin-right:auto;
+  padding-left:clamp(64px, 5vw, 130px);padding-right:clamp(64px, 5vw, 130px);
+  box-sizing:border-box;
+}
+@media(max-width:768px){#screen-notices,#screen-stage-dashboard,#screen-dj-status,#screen-messages,#screen-users,#screen-activity{padding-left:12px;padding-right:12px}}
 @media(max-width:768px){#screen-insights{padding-left:10px;padding-right:10px}}
 .page-header{
   display:flex;align-items:center;justify-content:space-between;
@@ -23648,11 +23655,15 @@ function resetKbrief(){
   if(t) t.value='';
 }
 
-function renderKbmcBriefs(openDate){
+function renderKbmcBriefs(openDate, recentOnly){
   const wrap=document.getElementById('kbrief-list');
   const empty=document.getElementById('kbrief-empty');
   if(!wrap) return;
-  const list=_getKbriefs();
+  let list=_getKbriefs();
+  if(recentOnly){ // 자동 팝업: 업로드 24시간 이내 브리핑만
+    const now=Date.now();
+    list=list.filter(n=>{ const c=n.created_at?new Date(n.created_at).getTime():0; return c && (now-c)<24*3600*1000; });
+  }
   const isAdmin=curUser?.role==='admin';
   if(!list.length){
     wrap.innerHTML='';
@@ -23706,7 +23717,7 @@ async function maybeAutoShowKbrief(){
   const editor=document.getElementById('kbrief-editor');
   if(editor) editor.style.display=isAdmin?'':'none';
   if(isAdmin) resetKbrief();
-  renderKbmcBriefs(latest);           // 최신 일자를 펼친 상태로
+  renderKbmcBriefs(latest, true);     // 자동 팝업: 24시간 이내만
   localStorage.setItem(KBRIEF_SEEN_KEY, latest);
   updateKbriefDot();
   openM('modal-kbrief');
