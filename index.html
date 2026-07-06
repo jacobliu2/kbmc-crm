@@ -23867,8 +23867,8 @@ function getFilteredActEntries(){
   // localStorage 수동 등록 항목
   let entries=getActEntries();
 
-  // activities 테이블의 meeting·online 타입을 캘린더에 자동 표시
-  const autoTypes=['meeting','online','schedule'];
+  // activities 테이블의 미팅·전화·화상 타입을 캘린더에 자동 표시
+  const autoTypes=['meeting','call','online','schedule'];
   const autoActs=(allActivities||[])
     .filter(a=>autoTypes.includes(a.type) && a.date)
     .map(a=>{
@@ -24246,12 +24246,14 @@ async function saveSchedule(){
   }
   if(_schedEditId){
     const {user_id,user_name,role:_r,status,...patch}=payload;
-    await dbU('schedules',_schedEditId,patch);
+    const ok=await dbU('schedules',_schedEditId,patch);
+    if(!ok){ showToast('저장 실패 — schedules 테이블/컬럼을 확인하세요','error'); return; }
     const i=(allSchedules||[]).findIndex(x=>String(x.id)===String(_schedEditId));
     if(i>=0) allSchedules[i]={...allSchedules[i],...patch};
   }else{
     const row=await dbI('schedules',payload);
-    if(row) allSchedules.unshift(row);
+    if(!row){ showToast('저장 실패 — schedules 테이블에 scope·company_name 등 컬럼이 있는지 확인하세요','error'); return; }
+    allSchedules.unshift(row);
     if(payload.companions){ // 동행 요청 알림
       payload.companions.split(',').filter(Boolean).forEach(()=>{
         try{ addN('companion_req','동행 요청',`${curUser.name}: ${fmtD(date)} "${title}"`,null); }catch(e){}
