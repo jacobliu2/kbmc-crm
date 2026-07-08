@@ -6079,7 +6079,7 @@ async function globalSearch(q){
 async function gsOpen(id){
   document.getElementById('gs-input').value='';
   document.getElementById('gs-result').style.display='none';
-  const leads=await dbQ('leads'); const l=leads.find(x=>x.id===id); if(l)openLeadDetailModal(l);
+  const l=(allLeads||[]).find(x=>x.id===id)||(await dbQ('leads')).find(x=>x.id===id); if(l)openLeadDetailModal(l);
 }
 
 // ── 알림 ─────────────────────────────────────────────────
@@ -6282,7 +6282,7 @@ async function notifGo(ref){
     case 'na':
       // 활동/다음액션 → 해당 리드 상세
       if(nData){
-        const l=(await dbQ('leads')).find(x=>x.id===nData);
+        const l=(allLeads||[]).find(x=>x.id===nData)||(await dbQ('leads')).find(x=>x.id===nData);
         if(l) openLeadDetailModal(l);
       } else {
         showScreen('activity', document.querySelector('.nb[data-s="activity"]'));
@@ -6291,7 +6291,7 @@ async function notifGo(ref){
     case 'contract':
       // 계약 달성 → 해당 리드 상세
       if(nData){
-        const l=(await dbQ('leads')).find(x=>x.id===nData);
+        const l=(allLeads||[]).find(x=>x.id===nData)||(await dbQ('leads')).find(x=>x.id===nData);
         if(l) openLeadDetailModal(l);
       }
       break;
@@ -6341,7 +6341,7 @@ async function notifGo(ref){
     default:
       // 기존 방식: lead ID
       if(ref && ref.length>10){
-        const l=(await dbQ('leads')).find(x=>x.id===ref);
+        const l=(allLeads||[]).find(x=>x.id===ref)||(await dbQ('leads')).find(x=>x.id===ref);
         if(l){ openLeadDetailModal(l); break; }
       }
       break;
