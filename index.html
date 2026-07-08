@@ -10132,12 +10132,19 @@ async function deleteActivity(actId, leadId){
   // 삭제 감사 로그를 전용 테이블에 기록 (관리자 설정 > 활동 로그 관리에서 조회)
   try{
     const _ld=(allLeads||[]).find(x=>x.id===leadId)||(typeof _tmV2Data!=='undefined'?_tmV2Data.find(x=>x.id===leadId):null);
-    await dbI('activity_delete_logs',{
-      lead_id:leadId, company_name:_ld?.company_name||'',
-      deleted_content:(_delA?.content||'').slice(0,500), deleted_type:_delA?.type||'',
-      original_author:_delA?.author||'', deleted_by:curUser?.name||'', deleted_by_role:curUser?.role||''
-    });
-  }catch(e){}
+    if(typeof testMode==='undefined'||!testMode){
+      await fetch(SB_URL+'/rest/v1/activity_delete_logs',{
+        method:'POST',
+        headers:{...sbH(),'Prefer':'return=minimal'},
+        body:JSON.stringify({
+          id:uuid(), lead_id:leadId, company_name:_ld?.company_name||'',
+          deleted_content:(_delA?.content||'').slice(0,500), deleted_type:_delA?.type||'',
+          original_author:_delA?.author||'', deleted_by:curUser?.name||'', deleted_by_role:curUser?.role||'',
+          created_at:new Date().toISOString()
+        })
+      });
+    }
+  }catch(e){ console.warn('[삭제로그]',e); }
 
   if(!testMode){
     const ok=await sbDel('activities', actId);
