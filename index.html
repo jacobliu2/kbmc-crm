@@ -10044,6 +10044,7 @@ function openEditActivity(actId){
   const acts=allActivities||[];
   const a=acts.find(x=>x.id===actId);
   if(!a){showToast('활동기록을 찾을 수 없습니다.','error');return;}
+  if(curUser?.role==='tm' && !['대전센터','대전'].includes(String(a.author||'').trim())){ showToast('대전이 작성한 기록만 수정할 수 있습니다.','error'); return; }
 
   let ov=document.getElementById('ov-edit-activity');
   if(!ov){ov=document.createElement('div');ov.id='ov-edit-activity';ov.className='ov-bg';document.body.appendChild(ov);}
@@ -10105,12 +10106,20 @@ async function confirmEditActivity(){
     .filter(a=>a.lead_id===leadId&&a.type!=='status_change')
     .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
   _renderLDetailHistory(cachedActs, leadId);
-  if(curUser?.role==='tm' && typeof tmV2Render==='function') tmV2Render();
+  if(curUser?.role==='tm'){
+    if(typeof tmV2Render==='function') tmV2Render();
+    const _l=(allLeads||[]).find(x=>x.id===leadId)||(typeof _tmV2Data!=='undefined'?_tmV2Data.find(x=>x.id===leadId):null);
+    if(_l && typeof _renderTmCompanyHistory==='function' && document.getElementById('tm-company-history')) _renderTmCompanyHistory(leadId, _l);
+  }
 }
 
 async function deleteActivity(actId, leadId){
   if(curUser?.role!=='admin'&&curUser?.role!=='tm'){showToast('권한이 없습니다.','error');return;}
+  const _delA=(allActivities||[]).find(x=>x.id===actId);
+  if(curUser?.role==='tm' && !['대전센터','대전'].includes(String(_delA?.author||'').trim())){ showToast('대전이 작성한 기록만 삭제할 수 있습니다.','error'); return; }
   if(!confirm('이 활동기록을 삭제하시겠습니까?'))return;
+  // 삭제 흔적을 고객 히스토리에 남김 (감사 로그)
+  try{ await logActivity(leadId,'note',`[기록 삭제] "${(_delA?.content||'').slice(0,40)}" — 삭제자 ${curUser?.name||''}`,'',''); }catch(e){}
 
   if(!testMode){
     const ok=await sbDel('activities', actId);
@@ -10126,7 +10135,11 @@ async function deleteActivity(actId, leadId){
     .filter(a=>a.lead_id===leadId&&a.type!=='status_change')
     .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
   _renderLDetailHistory(cachedActs, leadId);
-  if(curUser?.role==='tm' && typeof tmV2Render==='function') tmV2Render();
+  if(curUser?.role==='tm'){
+    if(typeof tmV2Render==='function') tmV2Render();
+    const _l=(allLeads||[]).find(x=>x.id===leadId)||(typeof _tmV2Data!=='undefined'?_tmV2Data.find(x=>x.id===leadId):null);
+    if(_l && typeof _renderTmCompanyHistory==='function' && document.getElementById('tm-company-history')) _renderTmCompanyHistory(leadId, _l);
+  }
 }
 
 // 유영준 초도상담 완료 → 관리자 신규배정 풀로 이동
@@ -19982,7 +19995,11 @@ async function _renderTmCompanyHistory(lid, lead){
                 <span style="font-size:11px;font-weight:700;color:${authorColor}">${esc(a.author||'-')}</span>
                 ${isTmAct?'<span style="font-size:9px;font-weight:700;color:#fff;background:#00a86b;padding:1px 4px;border-radius:6px">TM</span>':''}
               </div>
-              <span style="font-size:10px;color:var(--gray-400)">${fmtActDateTime(a)}</span>
+              <div style="display:flex;align-items:center;gap:5px">
+                <span style="font-size:10px;color:var(--gray-400)">${fmtActDateTime(a)}</span>
+                ${(curUser?.role==='admin'||isTmAct)?`<button onclick="event.stopPropagation();openEditActivity('${a.id}')" style="padding:1px 6px;font-size:9px;font-weight:700;color:var(--blue);background:rgba(49,130,246,.08);border:1px solid rgba(49,130,246,.2);border-radius:4px;cursor:pointer;line-height:1.5">수정</button>
+                <button onclick="event.stopPropagation();deleteActivity('${a.id}','${lid}')" style="padding:1px 6px;font-size:9px;font-weight:700;color:var(--err);background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15);border-radius:4px;cursor:pointer;line-height:1.5">삭제</button>`:''}
+              </div>
             </div>
             <div style="font-size:12px;color:var(--gray-700);white-space:pre-wrap;word-break:break-all">${esc((a.content||'').slice(0,200))}</div>
             ${a.stage?`<span style="font-size:10px;color:var(--blue);margin-top:1px;display:inline-block">${esc(a.stage)}</span>`:''}
