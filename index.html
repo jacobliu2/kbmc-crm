@@ -4752,6 +4752,39 @@ function subscribeRealtime(){
     });
 }
 
+// ── Realtime 연결 반납 (커넥션 누수 방지) ──────────────
+// 탭 종료·화면 이탈 시 구독을 반납하지 않으면 DB 커넥션이 유령으로 남아 누적됨
+function unsubscribeRealtime(){
+  try{
+    if(_rtReconnectTimer){ clearTimeout(_rtReconnectTimer); _rtReconnectTimer=null; }
+    if(_sbClient && _realtimeChannel){
+      _sbClient.removeChannel(_realtimeChannel);
+      _realtimeChannel = null;
+    }
+  }catch(e){}
+}
+
+// 탭 닫기·새로고침·앱 종료 시 반납 (pagehide가 모바일에서 더 안정적)
+window.addEventListener('pagehide', unsubscribeRealtime);
+window.addEventListener('beforeunload', unsubscribeRealtime);
+
+// 백그라운드 전환 시 반납, 복귀 시 재구독 (PWA·폰 화면 꺼짐 대응)
+let _rtHideTimer = null;
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState === 'hidden'){
+    // 잠깐 가린 것과 실제 이탈을 구분: 60초 이상 숨겨지면 반납
+    if(_rtHideTimer) clearTimeout(_rtHideTimer);
+    _rtHideTimer = setTimeout(()=>{ _rtHideTimer=null; unsubscribeRealtime(); }, 60000);
+  } else {
+    if(_rtHideTimer){ clearTimeout(_rtHideTimer); _rtHideTimer=null; }
+    // 복귀 시 구독이 끊겨 있으면 재연결 + 놓친 배정 알림 확인
+    if(curUser && !_realtimeChannel){
+      try{ _rtReconnectCount = 0; subscribeRealtime(); }catch(e){}
+      try{ checkNewAssignments(); }catch(e){}
+    }
+  }
+});
+
 // ── Realtime 이벤트 핸들러 ──────────────────────────────
 let _rtDebounceTimer = null;
 function handleRealtimeChange(table, payload){
