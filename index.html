@@ -1174,7 +1174,7 @@ body.dark-mode *::-webkit-scrollbar-thumb:hover{background:rgba(180,208,232,.30)
         </div>
       </div>
       <div class="stat-grid" id="admin-stat-grid" style="grid-template-columns:repeat(5,1fr)">
-        <div class="stat-card click" onclick="filterByStatus('')"><div class="stat-label">전체 DB</div><div class="stat-val" id="s-total">0</div></div>
+        <div class="stat-card click" onclick="filterByStatus('')"><div class="stat-label">전체 DB <span style="font-size:9px;color:var(--gray-400)">(드랍 포함)</span></div><div class="stat-val" id="s-total">0</div></div>
         <div class="stat-card green click" onclick="fByStage('계약')"><div class="stat-label">계약</div><div class="stat-val" id="s-contract">0</div></div>
         <div class="stat-card blue click" onclick="filterByStatus('contacted')"><div class="stat-label">접촉</div><div class="stat-val" id="s-consulting">0</div></div>
         <div class="stat-card orange click" onclick="quickTab('unassigned',null)"><div class="stat-label">미배정</div><div class="stat-val" id="s-pending">0</div></div>
@@ -1306,7 +1306,7 @@ body.dark-mode *::-webkit-scrollbar-thumb:hover{background:rgba(180,208,232,.30)
       <div style="display:flex;gap:0;border-bottom:2px solid var(--gray-200);margin-bottom:16px">
         <button id="leads-subtab-active" onclick="switchLeadsSubTab('active',this)"
           style="padding:9px 18px;border:none;background:transparent;cursor:pointer;font-size:14px;font-weight:700;color:var(--navy);border-bottom:2px solid var(--navy);margin-bottom:-2px;font-family:inherit">
-          <svg class="li" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>전체 DB <span id="leads-subtab-active-cnt" style="font-size:11px;font-weight:400;color:var(--gray-400)"></span>
+          <svg class="li" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>활성 DB <span id="leads-subtab-active-cnt" style="font-size:11px;font-weight:400;color:var(--gray-400)"></span>
         </button>
         <button id="leads-subtab-drop" onclick="switchLeadsSubTab('drop',this)"
           style="padding:9px 18px;border:none;background:transparent;cursor:pointer;font-size:14px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">
@@ -1327,7 +1327,7 @@ body.dark-mode *::-webkit-scrollbar-thumb:hover{background:rgba(180,208,232,.30)
       <!-- 전체 DB 패널 -->
       <div id="leads-panel-active">
             <div class="page-header">
-        <div class="page-title" style="font-size:16px">전체 DB <sub id="leads-sub"></sub></div>
+        <div class="page-title" style="font-size:16px">활성 DB <sub id="leads-sub"></sub> <span style="font-size:11px;font-weight:400;color:var(--gray-400)">(드랍·재배정 대기 제외)</span></div>
         <div style="display:flex;gap:8px" id="leads-btn-area">
           <button class="btn btn-blue btn-sm" onclick="openAddLead()">+ 직접 등록</button>
           <label class="btn btn-outline btn-sm" id="btn-excel-upload-wrap" style="cursor:pointer"><svg class="li" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>엑셀 업로드<input type="file" accept=".xlsx,.xls" style="display:none" onchange="importExcel(event)" id="btn-excel-upload"></label>
@@ -6984,13 +6984,13 @@ async function loadAdmin(){
   (document.getElementById('s-contract')||{}).textContent=all.filter(l=>l.current_stage==='계약').length;
   (document.getElementById('s-consulting')||{}).textContent=all.filter(l=>l.status==='contacted').length;
   // 미배정: branch_name 없음 + yj/tm 이관·드랍·보류 제외
+  // (tm_hq_transferred=true = 대전→본사 이관완료 건은 '미배정 풀'이므로 포함)
   (document.getElementById('s-pending')||{}).textContent=all.filter(l=>
     (!l.branch_name||l.branch_name==='')
     &&!(l.yj_transferred===true||l.yj_transferred==='true')
     &&!(l.tm_transferred===true||l.tm_transferred==='true')
     &&!(l.yj_done===true||l.yj_done==='true')
     &&!(l.tm_done===true||l.tm_done==='true')
-    &&!(l.tm_hq_transferred===true||l.tm_hq_transferred==='true')
     &&l.status!=='drop'
     &&!['드랍','보류'].includes(l.current_stage||'')
   ).length;
@@ -8562,14 +8562,14 @@ function filterLeads(){
         &&!(l.yj_done===true||l.yj_done==='true')
       );
     } else {
-      // 관리자: 지점 기준 미배정 (드랍·보류·유영준이관·TM이관·본사이관완료 제외)
+      // 관리자: 지점 기준 미배정 (드랍·보류·유영준이관·TM진행중 제외)
+      // 본사이관완료(tm_hq_transferred)는 미배정 풀이므로 포함
       filtered=filtered.filter(l=>
         (!l.branch_name||l.branch_name==='')
         &&!['drop','deleted'].includes(l.status)
         &&!['드랍','보류'].includes(l.current_stage||'')
         &&!(l.yj_transferred===true||l.yj_transferred==='true')
         &&!(l.tm_transferred===true||l.tm_transferred==='true')
-        &&!(l.tm_hq_transferred===true||l.tm_hq_transferred==='true')
         &&!(l.yj_done===true||l.yj_done==='true')
       );
     }
