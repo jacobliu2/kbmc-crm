@@ -2371,6 +2371,14 @@ body.dark-mode *::-webkit-scrollbar-thumb:hover{background:rgba(180,208,232,.30)
           <span id="tm-tab-save-status" style="font-size:12px;color:var(--gray-400);margin-left:10px"></span>
         </div>
 
+        <!-- DB 커넥션 모니터링 -->
+        <div class="card" style="grid-column:1/-1">
+          <div class="section-title"><svg class="li" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>DB 커넥션 모니터링 <span style="font-size:11px;font-weight:400;color:var(--gray-400)">(연결 누수 감시)</span></div>
+          <div style="font-size:12px;color:var(--gray-500);margin-bottom:12px">서버 연결이 정리되지 않고 쌓이면 전 직원 로그인이 막힙니다. 유휴 시간에도 숫자가 높으면 누수 신호입니다.</div>
+          <div id="conn-mon-body"><div style="font-size:12px;color:var(--gray-400);padding:20px;text-align:center">설정 화면을 열면 자동으로 불러옵니다.</div></div>
+          <button class="btn btn-outline btn-sm" onclick="loadConnStats()" style="margin-top:10px"><svg class="li" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>새로고침</button>
+        </div>
+
         <!-- 활동 로그 관리 (삭제 감사) -->
         <div class="card" style="grid-column:1/-1">
           <div class="section-title"><svg class="li" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/></svg>활동 로그 관리 <span style="font-size:11px;font-weight:400;color:var(--gray-400)">(활동기록 삭제 이력)</span></div>
@@ -6383,6 +6391,7 @@ async function notifGo(ref){
 function checkAlerts(){
   try{updateNavRecallBadge();}catch(_){}
   if(!curUser) return; updateNBadge();
+  try{ checkConnHealth(); }catch(_){}
   // 관리자: 팀장 요청 badge
   if(curUser.role==='admin'){
     const pendingReqs=getLeaderReqs().filter(r=>r.status==='pending').length;
@@ -12201,11 +12210,148 @@ async function doExport(){
 }
 
 // ── 설정 ──────────────────────────────────────────────────
+// 커넥션 자동 감시: 관리자에게만, 30분 간격, 위험 시 종 알림 (터지기 전에 미리 알림)
+let _connChkAt = 0;
+async function checkConnHealth(){
+  if(!curUser || curUser.role!=='admin') return;
+  if(typeof testMode!=='undefined' && testMode) return;
+  const now = Date.now();
+  if(now - _connChkAt < 30*60*1000) return; // 30분에 1회만
+  _connChkAt = now;
+  try{
+    const r = await fetch(SB_URL+'/rest/v1/rpc/get_conn_stats',{method:'POST',headers:{...sbH(),'Prefer':'return=representation'},body:'{}'});
+    if(!r.ok) return;
+    const d = await r.json();
+    const appTotal = d.app_total||0, maxc = d.max_conn||60, stale = d.idle_stale||0;
+    // 경고 조건: ① 한계 근접(40+) ② 유령 연결 누적(10+) — 둘 중 하나만 걸려도 알림
+    const overload = appTotal >= 40;
+    const leaking  = stale >= 10;
+    if(!overload && !leaking) return;
+    // 같은 날 중복 경고 방지
+    const key = 'CONN_WARN_'+todayKst();
+    if(localStorage.getItem(key)) return;
+    localStorage.setItem(key,'1');
+    const msg = overload
+      ? `서버 연결이 ${appTotal}/${maxc}까지 찼습니다. 방치하면 전 직원 로그인이 막힐 수 있습니다.`
+      : `반납되지 않은 유령 연결이 ${stale}개 쌓였습니다. 지금은 여유가 있으나 누적되면 로그인이 막힙니다.`;
+    addN('warn','DB 커넥션 경고', msg+' 설정 > DB 커넥션 모니터링을 확인하십시오.','');
+    showToast(overload?`⚠ DB 커넥션 ${appTotal}/${maxc} — 설정에서 확인하세요`:`⚠ 유령 연결 ${stale}개 — 설정에서 확인하세요`,'error');
+  }catch(e){}
+}
+
 function loadSettings(){
   initTmDefaultTabUI();renderStagesList();renderNoticeList();loadSbUi();renderTabVisSettings();renderLeaderReqs();
   loadDeleteLogs();
+  loadConnStats();
   // Supabase에서 최신 accounts 로드 후 렌더
   loadAccsFromSB().then(()=>{ syncBranchTeamMap(); renderUserList(); });
+}
+
+// ── DB 커넥션 모니터링 (연결 누수 감시) ──
+async function loadConnStats(){
+  const el=document.getElementById('conn-mon-body');
+  if(!el) return;
+  if(typeof testMode!=='undefined'&&testMode){ el.innerHTML='<div style="font-size:12px;color:var(--gray-400);padding:20px;text-align:center">테스트 모드</div>'; return; }
+  el.innerHTML='<div style="font-size:12px;color:var(--gray-400);padding:20px;text-align:center">확인 중...</div>';
+  try{
+    const r=await fetch(SB_URL+'/rest/v1/rpc/get_conn_stats',{method:'POST',headers:{...sbH(),'Prefer':'return=representation'},body:'{}'});
+    if(!r.ok){ el.innerHTML='<div style="font-size:12px;color:var(--err);padding:16px;text-align:center">조회 실패 — get_conn_stats 함수를 먼저 생성하세요 (SQL 필요)</div>'; return; }
+    const d=await r.json();
+    const appTotal=d.app_total||0, idle=d.app_idle||0, active=d.app_active||0;
+    const maxc=d.max_conn||60, total=d.total||0;
+    const stale=d.idle_stale||0, idleMax=d.idle_max_sec||0, idleAvg=d.idle_avg_sec||0;
+
+    // ── 누수 판정 (핵심): 5분 넘게 방치된 유휴 연결이 진짜 유령
+    let verdict, vcol, vmsg;
+    if(stale>=10){ verdict='누수 확실'; vcol='var(--err)';
+      vmsg='5분 넘게 방치된 연결이 '+stale+'개입니다. 안전망을 빠져나간 유령 연결이 쌓이고 있습니다.'; }
+    else if(stale>=4){ verdict='누수 의심'; vcol='var(--warn)';
+      vmsg='오래 방치된 연결이 '+stale+'개 보입니다. 유휴 시간대에도 유지되는지 확인하십시오.'; }
+    else if(appTotal>=40){ verdict='연결 과다'; vcol='var(--err)';
+      vmsg='방치 연결은 적으나 총 연결이 한계에 근접했습니다. 실사용 부하를 확인하십시오.'; }
+    else { verdict='정상'; vcol='#10b981';
+      vmsg='연결이 정상적으로 반납되고 있습니다. 누수 징후가 없습니다.'; }
+
+    // 부하 판정 (한계 대비)
+    let load, lcol;
+    if(appTotal>=40){ load='위험'; lcol='var(--err)'; }
+    else if(appTotal>=25){ load='주의'; lcol='var(--warn)'; }
+    else { load='여유'; lcol='#10b981'; }
+    const pct=Math.min(100,Math.round(appTotal/maxc*100));
+
+    const fmtSec=s=>{ s=Math.round(s); if(s<60) return s+'초'; if(s<3600) return Math.floor(s/60)+'분 '+(s%60)+'초'; return Math.floor(s/3600)+'시간 '+Math.floor((s%3600)/60)+'분'; };
+    // 방치 시간이 5분(안전망)을 크게 넘으면 경고색
+    const maxCol = idleMax>=1800?'var(--err)':idleMax>=300?'var(--warn)':'var(--gray-700)';
+
+    const roles=(d.roles||[]).map(x=>`<tr>
+      <td style="padding:5px 8px;font-size:11px;color:var(--gray-700);${x.name==='authenticator'?'font-weight:800':''}">${esc(x.name||'')}${x.name==='authenticator'?' <span style="color:var(--blue);font-size:9px">← 우리 CRM</span>':''}</td>
+      <td style="padding:5px 8px;font-size:11px;color:var(--gray-500)">${esc(x.state||'-')}</td>
+      <td style="padding:5px 8px;font-size:11px;font-weight:700;text-align:right;color:var(--gray-800)">${x.cnt}</td></tr>`).join('');
+
+    el.innerHTML=`
+      <!-- 판정 -->
+      <div style="display:flex;align-items:flex-start;gap:10px;padding:12px;border-radius:8px;background:rgba(0,0,0,.02);border-left:3px solid ${vcol};margin-bottom:14px">
+        <span style="padding:3px 10px;border-radius:20px;font-size:11px;font-weight:800;color:#fff;background:${vcol};white-space:nowrap">${verdict}</span>
+        <span style="font-size:12px;color:var(--gray-700);line-height:1.5">${esc(vmsg)}</span>
+      </div>
+
+      <!-- 한계 대비 -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+        <span style="font-size:11px;color:var(--gray-500)">앱 연결 사용률</span>
+        <span style="font-size:11px;font-weight:700;color:${lcol}">${appTotal} / ${maxc} (${pct}%) · ${load}</span>
+      </div>
+      <div style="height:8px;background:var(--gray-100);border-radius:6px;overflow:hidden;margin-bottom:14px;position:relative">
+        <div style="height:100%;width:${pct}%;background:${lcol};transition:width .3s"></div>
+        <div style="position:absolute;left:66.6%;top:0;bottom:0;width:1px;background:var(--err);opacity:.5" title="경고선 40"></div>
+      </div>
+
+      <!-- 핵심 지표 -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:12px">
+        <div style="padding:10px;background:var(--gray-50);border-radius:8px">
+          <div style="font-size:10px;color:var(--gray-400);margin-bottom:2px">작업 중</div>
+          <div style="font-size:19px;font-weight:800;color:var(--navy)">${active}</div>
+          <div style="font-size:9px;color:var(--gray-400)">실제 일하는 연결</div>
+        </div>
+        <div style="padding:10px;background:var(--gray-50);border-radius:8px">
+          <div style="font-size:10px;color:var(--gray-400);margin-bottom:2px">유휴</div>
+          <div style="font-size:19px;font-weight:800;color:var(--gray-700)">${idle}</div>
+          <div style="font-size:9px;color:var(--gray-400)">쉬는 중 (정상일 수 있음)</div>
+        </div>
+        <div style="padding:10px;background:${stale>=4?'rgba(239,68,68,.06)':'var(--gray-50)'};border-radius:8px;${stale>=4?'border:1px solid rgba(239,68,68,.2)':''}">
+          <div style="font-size:10px;color:var(--gray-400);margin-bottom:2px">🔴 방치 5분+</div>
+          <div style="font-size:19px;font-weight:800;color:${stale>=4?'var(--err)':'var(--gray-700)'}">${stale}</div>
+          <div style="font-size:9px;color:var(--gray-400)">유령 연결 (핵심 지표)</div>
+        </div>
+        <div style="padding:10px;background:var(--gray-50);border-radius:8px">
+          <div style="font-size:10px;color:var(--gray-400);margin-bottom:2px">최장 방치</div>
+          <div style="font-size:19px;font-weight:800;color:${maxCol}">${fmtSec(idleMax)}</div>
+          <div style="font-size:9px;color:var(--gray-400)">평균 ${fmtSec(idleAvg)}</div>
+        </div>
+      </div>
+
+      <!-- 해석 가이드 -->
+      <div style="padding:10px;background:rgba(49,130,246,.04);border-radius:6px;font-size:11px;color:var(--gray-600);line-height:1.6;margin-bottom:12px">
+        <b style="color:var(--navy)">읽는 법</b> · 안전망(5분 자동 정리)이 걸려 있으므로, <b>「방치 5분+」이 0에 가까워야 정상</b>입니다.
+        이 값이 계속 높으면 안전망을 빠져나가는 연결이 있다는 뜻입니다.
+        「최장 방치」가 30분을 넘으면 유령이 굳어 있는 것입니다.
+      </div>
+
+      <!-- 롤별 분포 -->
+      <details style="margin-bottom:6px">
+        <summary style="font-size:11px;color:var(--gray-500);cursor:pointer;padding:4px 0">롤별 상세 분포 (${total}개 전체)</summary>
+        <table style="width:100%;border-collapse:collapse;margin-top:6px">
+          <tr style="border-bottom:1px solid var(--gray-100)">
+            <th style="padding:5px 8px;font-size:10px;color:var(--gray-400);text-align:left;font-weight:600">롤</th>
+            <th style="padding:5px 8px;font-size:10px;color:var(--gray-400);text-align:left;font-weight:600">상태</th>
+            <th style="padding:5px 8px;font-size:10px;color:var(--gray-400);text-align:right;font-weight:600">개수</th>
+          </tr>
+          ${roles}
+        </table>
+        <div style="font-size:10px;color:var(--gray-400);margin-top:6px">supabase_admin·pgbouncer 등은 Supabase 시스템 연결로, 우리가 만든 것이 아닙니다.</div>
+      </details>
+
+      <div style="font-size:10px;color:var(--gray-400)">확인 시각 ${new Date().toLocaleTimeString('ko-KR')}</div>`;
+  }catch(e){ el.innerHTML='<div style="font-size:12px;color:var(--err);padding:16px;text-align:center">조회 오류</div>'; }
 }
 
 // ── 활동 로그 관리 (삭제 감사) ──
