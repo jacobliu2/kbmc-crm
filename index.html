@@ -5525,14 +5525,44 @@ function loadSession(){ try{const d=JSON.parse(localStorage.getItem(SK)||'null')
 
 function setErr(el,msg){el.textContent=msg;el.style.display='block';}
 function doLogout(){
-  // Realtime 채널 해제
-  if(_sbClient && _realtimeChannel){
-    _sbClient.removeChannel(_realtimeChannel);
-    _realtimeChannel=null;
-  }
+  // Realtime 채널 해제 (커넥션 반납)
+  try{ unsubscribeRealtime(); }catch(e){}
+  stopIdleTimer();
   localStorage.removeItem(SK);curUser=null;
   document.getElementById('app').style.display='none';
   document.getElementById('login-screen').style.display='flex';
+}
+
+// ── 30분 무동작 자동 로그아웃 (보안 + 커넥션 반납) ──────────
+const IDLE_LIMIT_MS = 30*60*1000; // 30분
+let _idleTimer = null;
+let _idleLastAct = Date.now();
+
+function resetIdleTimer(){
+  _idleLastAct = Date.now();
+}
+function stopIdleTimer(){
+  if(_idleTimer){ clearInterval(_idleTimer); _idleTimer=null; }
+}
+function startIdleTimer(){
+  stopIdleTimer();
+  _idleLastAct = Date.now();
+  // 사용자 활동 감지 (한 번만 등록)
+  if(!window._idleBound){
+    window._idleBound = true;
+    ['click','keydown','touchstart','scroll','mousemove'].forEach(ev=>{
+      window.addEventListener(ev, resetIdleTimer, {passive:true});
+    });
+  }
+  // 1분마다 무동작 시간 확인
+  _idleTimer = setInterval(()=>{
+    if(!curUser){ stopIdleTimer(); return; }
+    if(Date.now() - _idleLastAct >= IDLE_LIMIT_MS){
+      stopIdleTimer();
+      try{ showToast('30분간 활동이 없어 자동 로그아웃되었습니다.','error'); }catch(e){}
+      doLogout();
+    }
+  }, 60000);
 }
 
 // ── 앱 시작 ──────────────────────────────────────────────
@@ -5606,6 +5636,7 @@ function startApp(){
   const first=(NAV_CFG[curUser.role]||[])[0];
   if(first) showScreen(first.id,nav.querySelector('.nb'));
   setInterval(checkAlerts,60000); checkAlerts(); setTimeout(function(){try{updateNavRecallBadge();}catch(_){}}, 2500);
+  try{ startIdleTimer(); }catch(_){}
   if(curUser?.role==='team')  // 5분마다 미기록 상태 갱신
   loadSbUi();
 
@@ -12261,10 +12292,13 @@ async function loadConnStats(){
     const maxc=d.max_conn||60, total=d.total||0;
     const stale=d.idle_stale||0, idleMax=d.idle_max_sec||0, idleAvg=d.idle_avg_sec||0;
 
-    // ── 누수 판정 (핵심): 5분 넘게 방치된 유휴 연결이 진짜 유령
+    // ── 누수 판정 (핵심): 5분 넘게 방치된 유휴 연결 + 최장 방치 시간
     let verdict, vcol, vmsg;
+    const hrs = Math.floor(idleMax/3600);
     if(stale>=10){ verdict='누수 확실'; vcol='var(--err)';
       vmsg='5분 넘게 방치된 연결이 '+stale+'개입니다. 안전망을 빠져나간 유령 연결이 쌓이고 있습니다.'; }
+    else if(idleMax>=3600){ verdict='유령 잔존'; vcol='var(--err)';
+      vmsg='안전망(5분)이 걸려 있는데도 '+hrs+'시간째 살아있는 연결이 있습니다. 안전망 적용 이전부터 남은 유령이니 수동 정리가 필요합니다.'; }
     else if(stale>=4){ verdict='누수 의심'; vcol='var(--warn)';
       vmsg='오래 방치된 연결이 '+stale+'개 보입니다. 유휴 시간대에도 유지되는지 확인하십시오.'; }
     else if(appTotal>=40){ verdict='연결 과다'; vcol='var(--err)';
