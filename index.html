@@ -8408,6 +8408,37 @@ function _djManageCount(){
   }).length;
 }
 // ── 빠른보기 배지: 미배정·재배정대기 건수 ──────────────
+// ── 고객정보 특수상태 배지: 왜 DB검색에 안 잡히는지 표시 ──
+function _leadStateBadges(lead){
+  if(!lead) return '';
+  const b=[];
+  const chip=(txt,bg,fg)=>`<span style="display:inline-block;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:800;background:${bg};color:${fg};white-space:nowrap">${txt}</span>`;
+  // 삭제
+  if(lead.status==='deleted') b.push(chip('삭제됨','rgba(107,114,128,.15)','#4b5563'));
+  // 드랍
+  if(lead.status==='drop'||lead.current_stage==='드랍') b.push(chip('드랍','rgba(239,68,68,.12)','#dc2626'));
+  if(lead.current_stage==='보류') b.push(chip('보류','rgba(245,158,11,.15)','#b45309'));
+  // 대전TM 관련
+  if(lead.tm_transferred===true||lead.tm_transferred==='true') b.push(chip('대전이관','rgba(16,185,129,.14)','#047857'));
+  if(lead.tm_hq_transferred===true||lead.tm_hq_transferred==='true') b.push(chip('대전→본사 이관완료','rgba(59,130,246,.12)','#1d4ed8'));
+  // 유영준 초도상담
+  if(lead.yj_transferred===true||lead.yj_transferred==='true') b.push(chip('초도상담 진행중','rgba(124,58,237,.12)','#6d28d9'));
+  if(lead.yj_done===true||lead.yj_done==='true') b.push(chip('초도상담 완료·재배정 대기','rgba(124,58,237,.12)','#6d28d9'));
+  // 회수 상태 (관리자 회수 판정 로직 재사용)
+  try{
+    if(typeof _rcCandidates==='function'&&typeof _rcJudge==='function'&&typeof _rcBuildLastActMapFromCache==='function'){
+      const cand=_rcCandidates().some(x=>String(x.id)===String(lead.id));
+      if(cand){
+        const lam=_rcBuildLastActMapFromCache();
+        const v=lam.get(String(lead.id));
+        if(_rcJudge(lead, v?.lastMs)) b.push(chip('회수대상','rgba(239,68,68,.14)','#b91c1c'));
+      }
+    }
+  }catch(e){}
+  if(!b.length) return '';
+  return `<div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">${b.join('')}</div>`;
+}
+
 function _refreshQuickBadges(){
   const base=(allLeads||[]).filter(l=>!['drop','deleted'].includes(l.status));
   const isBranch = curUser?.role==='branch';
@@ -9320,6 +9351,7 @@ function _renderLDetailInfo(lead){
     </div>
     <div style="padding:9px 14px;border-bottom:1px solid var(--gray-100);display:flex;gap:8px;align-items:center">
       <span style="font-size:11px;color:var(--gray-400);font-weight:500;min-width:72px;flex-shrink:0">진행단계</span>
+      ${_leadStateBadges(lead)}
       <select onchange="changeLeadStatus('${lead.id}',{stage:this.value,note:'단계 직접 변경'}).then(()=>{const l=allLeads?.find(x=>x.id==='${lead.id}')||myLeads?.find(x=>x.id==='${lead.id}');if(l)openPanel(l);})"
         style="padding:4px 8px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:12px;font-family:inherit;background:#fff">
         <option value="">선택</option>
@@ -9904,6 +9936,7 @@ function _renderActModalInfo(lead){
     <div style="padding:9px 14px;border-bottom:1px solid var(--gray-100);display:flex;gap:8px;align-items:center">
       <span style="font-size:11px;color:var(--gray-400);font-weight:500;min-width:72px;flex-shrink:0">진행단계</span>
       <span style="font-size:13px;color:var(--gray-800);font-weight:600">${esc(lead.current_stage||'—')}</span>
+      ${_leadStateBadges(lead)}
     </div>`;
   // 관리지점 행
   const _isTm=lead.branch_name==='대전'||lead.tm_transferred;
