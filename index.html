@@ -5566,9 +5566,10 @@ function getAccs(){
 async function loadAccsFromSB(){
   if(testMode) return getAccs();
   try{
-    // 비밀번호 제외 뷰(accounts_public) 우선 → 없으면 원본 accounts로 폴백
-    let rows=await sbGet('accounts_public?select=*&order=created_at.asc&limit=500');
-    if(!rows || !rows.length) rows=await sbGet('accounts?select=*&order=created_at.asc&limit=500');
+    // ★ accounts 원본을 읽어야 한다 (pw 컬럼이 로그인 검증에 필요)
+    //   accounts_public 뷰에는 pw가 없어, 그것을 읽으면 비밀번호 대조가 전부 실패한다.
+    //   → 로그인이 Edge Function으로 완전히 이전된 뒤에야 뷰로 전환할 것.
+    const rows=await sbGet('accounts?select=*&order=created_at.asc&limit=500');
     if(rows && rows.length>0){
       _accsCache=rows; // 메모리 캐시만 — localStorage 저장 안 함
       syncBranchTeamMap();
