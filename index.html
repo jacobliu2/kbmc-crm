@@ -3890,10 +3890,17 @@ const KR_HOLIDAYS_2025=[
   '2025-10-09','2025-12-25'
 ];
 const KR_HOLIDAYS_2026=[
-  '2026-01-01','2026-01-28','2026-01-29','2026-01-30',
-  '2026-03-01','2026-05-05','2026-06-06',
-  '2026-08-17','2026-09-24','2026-09-25','2026-09-26',
-  '2026-10-03','2026-10-09','2026-12-25'
+  '2026-01-01',                                          // 신정
+  '2026-02-16','2026-02-17','2026-02-18',                // 설 연휴 (설날 2/17)
+  '2026-03-01','2026-03-02',                             // 삼일절(일) + 대체공휴일(월)
+  '2026-05-05',                                          // 어린이날
+  '2026-05-24','2026-05-25',                             // 부처님오신날(일) + 대체공휴일(월)
+  '2026-06-06',                                          // 현충일(토, 대체 없음)
+  '2026-08-15','2026-08-17',                             // 광복절(토) + 대체공휴일(월)
+  '2026-09-24','2026-09-25','2026-09-26',                // 추석 연휴 (추석 9/25)
+  '2026-10-03','2026-10-05',                             // 개천절(토) + 대체공휴일(월)
+  '2026-10-09',                                          // 한글날
+  '2026-12-25'                                           // 성탄절
 ];
 const KR_HOLIDAYS=new Set([...KR_HOLIDAYS_2025,...KR_HOLIDAYS_2026]);
 function isHoliday(date){
@@ -5525,10 +5532,18 @@ function saveSession(u){localStorage.setItem(SK,JSON.stringify({u,exp:Date.now()
 function loadSession(){ try{const d=JSON.parse(localStorage.getItem(SK)||'null'); if(d?.u&&Date.now()<d.exp){curUser=d.u;return true;}}catch(e){} return false; }
 
 function setErr(el,msg){el.textContent=msg;el.style.display='block';}
+// ── 앱 타이머 관리 (재로그인 시 누적 방지) ──────────────
+let _appTimers = [];
+function clearAppTimers(){
+  try{ _appTimers.forEach(t=>clearInterval(t)); }catch(e){}
+  _appTimers = [];
+}
+
 function doLogout(){
   // Realtime 채널 해제 (커넥션 반납)
   try{ unsubscribeRealtime(); }catch(e){}
   stopIdleTimer();
+  clearAppTimers();          // ★ 주기 타이머 전부 정리 (누적 방지)
   localStorage.removeItem(SK);curUser=null;
   document.getElementById('app').style.display='none';
   document.getElementById('login-screen').style.display='flex';
@@ -5591,6 +5606,7 @@ function goHome(){
 }
 
 function startApp(){
+  clearAppTimers();    // ★ 재진입 시 기존 타이머 정리 (중복 실행 방지)
 
   syncBranchTeamMap(); // 사용자 목록 기반 동기화
   // Supabase Realtime 구독 시작
@@ -5636,7 +5652,7 @@ function startApp(){
   if(curUser?.role==='team'||curUser?.role==='branch') setTimeout(()=>showDailyBriefing(),3000); // 오늘의 브리핑
   const first=(NAV_CFG[curUser.role]||[])[0];
   if(first) showScreen(first.id,nav.querySelector('.nb'));
-  setInterval(checkAlerts,60000); checkAlerts(); setTimeout(function(){try{updateNavRecallBadge();}catch(_){}}, 2500);
+  _appTimers.push(setInterval(checkAlerts,60000)); checkAlerts(); setTimeout(function(){try{updateNavRecallBadge();}catch(_){}}, 2500);
   try{ startIdleTimer(); }catch(_){}
   if(curUser?.role==='team')  // 5분마다 미기록 상태 갱신
   loadSbUi();
@@ -5646,10 +5662,10 @@ function startApp(){
     refreshMessagesCache().catch(e=>console.warn('msg init load error',e));
     refreshAnnouncementsCache().catch(e=>console.warn('ann init load error',e));
   }, 2000);
-  setInterval(()=>{
+  _appTimers.push(setInterval(()=>{
     refreshMessagesCache().catch(()=>{});
     refreshAnnouncementsCache().catch(()=>{});
-  }, 60000);
+  }, 60000));
 
   // 최근 5분 이내 일괄 작업이 있으면 취소 배너 복원
   if(typeof _updateBulkUndoBanner==='function') _updateBulkUndoBanner();
@@ -20763,7 +20779,7 @@ function initData(){
   // 배포 환경(Supabase 모드)에서는 localStorage 초기 데이터 주입 완전 차단
   // 로컬 파일 모드(testMode)에서만 INITIAL_LEADS 사용
   if(!testMode) return;
-  if(allLeads||[].length>0) return;
+  if((allLeads||[]).length>0) return;
   if(window.INITIAL_LEADS?.length){
     ls('leads',window.INITIAL_LEADS);
     if(window.INITIAL_ACTIVITIES?.length)ls('activities',window.INITIAL_ACTIVITIES);
