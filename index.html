@@ -4710,6 +4710,8 @@ let _rtReconnectCount = 0;
 
 function subscribeRealtime(){
   if(testMode || !_sbClient) return;
+  // ★ 구독 전 최신 토큰 적용 (소켓은 연결 시점 토큰으로 인증됨)
+  try{ if(_sbClient.realtime) _sbClient.realtime.setAuth(getAuthToken() || SB_KEY); }catch(e){}
   // 기존 채널 있으면 제거
   if(_realtimeChannel){
     try{ _sbClient.removeChannel(_realtimeChannel); }catch(e){}
@@ -5037,7 +5039,84 @@ function isTmCompleted(lead){
 }
 // TM 이관완료 조건: 완료 + 미전환 + 재배정 대기
 
-function sbH(){ return {'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Prefer':'return=representation'}; }
+// ══════════════════════════════════════════════════════════
+//  인증 토큰(JWT) 관리 — 보안 전환용
+//  ※ Edge Function이 없으면 자동으로 기존 방식(anon key)으로 폴백
+//     → 지금 배포해도 아무 변화 없이 동작함
+// ══════════════════════════════════════════════════════════
+const JWT_KEY = 'kbmc_jwt';
+let _authToken = null;
+
+// 서버(Edge Function)에 로그인 검증 요청 → JWT 발급
+async function fetchAuthToken(id, pw){
+  try{
+    const r = await fetch(SB_URL + '/functions/v1/login', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'apikey': SB_KEY },
+      body: JSON.stringify({ id, pw })
+    });
+    if(!r.ok) return null;              // 404(미배포) 포함 → 폴백
+    const d = await r.json();
+    return (d && d.token) ? d : null;   // { token, user }
+  }catch(e){
+    return null;                        // 네트워크 오류 → 폴백
+  }
+}
+
+function setAuthToken(t){
+  _authToken = t || null;
+  try{ t ? localStorage.setItem(JWT_KEY, t) : localStorage.removeItem(JWT_KEY); }catch(e){}
+  // Realtime도 새 토큰으로 재인증 (소켓은 연결 시점 토큰을 쓰므로 재구독 필요)
+  try{
+    if(_sbClient && _sbClient.realtime){
+      _sbClient.realtime.setAuth(t || SB_KEY);
+      if(_realtimeChannel && curUser){
+        unsubscribeRealtime();
+        subscribeRealtime();
+      }
+    }
+  }catch(e){ console.warn('[realtime] setAuth 실패', e); }
+}
+
+function getAuthToken(){
+  if(_authToken) return _authToken;
+  try{ _authToken = localStorage.getItem(JWT_KEY); }catch(e){}
+  return _authToken;
+}
+
+// JWT 만료 확인 (서명검증 아님 — exp claim만 읽는 클라이언트 판단용)
+function isJwtValid(t){
+  if(!t) return false;
+  try{
+    const p = JSON.parse(atob(t.split('.')[1]));
+    return !!(p.exp && (p.exp * 1000) > (Date.now() + 60000)); // 만료 1분 전이면 무효
+  }catch(e){ return false; }
+}
+
+// ── 401/403 공통 처리 ──────────────────────────────────────
+// 이것이 없으면: RLS 잠금 후 인증 실패 시 에러도 없이 화면만 텅 빈다
+//                → 사용자가 "데이터가 사라졌다"고 오인하는 최악의 상황
+let _authFailHandled = false;
+function handleAuthFailure(){
+  if(_authFailHandled) return;   // 동시다발 401 중복 방지
+  _authFailHandled = true;
+  try{ showToast('인증이 만료되었습니다. 다시 로그인해 주세요.','error'); }catch(e){}
+  setTimeout(()=>{
+    _authFailHandled = false;
+    try{ setAuthToken(null); doLogout(); }catch(e){}
+  }, 900);
+}
+
+function sbH(){
+  const jwt = getAuthToken();
+  return {
+    'Content-Type':'application/json',
+    'apikey': SB_KEY,
+    // JWT가 있으면 그것을, 없으면 anon key (★ 폴백 — 무중단 보증)
+    'Authorization':'Bearer ' + (jwt || SB_KEY),
+    'Prefer':'return=representation'
+  };
+}
 // ── activities 전체 페이지네이션 로드 (Supabase max_rows 우회) ──────────
 async function _loadAllActivities(){
   const PAGE = 1000;
@@ -5078,6 +5157,7 @@ async function sbGet(path, _retry=0){
       setTimeout(()=>rej(new Error('sbGet_timeout')), 10000)
     );
     const r = await Promise.race([fetchPromise, timeoutPromise]);
+    if(r.status===401 || r.status===403){ handleAuthFailure(); return null; }  // ★ 인증실패 명시 처리
     if(!r.ok){ console.warn('sbGet err:',r.status, path); return null; }
     const t=await r.text(); return t?JSON.parse(t):[];
   }catch(e){
@@ -5105,6 +5185,7 @@ async function sbPost(table,data){
       : 'return=representation';
     const h = {...sbH(), 'Prefer': prefer};
     const r=await fetch(SB_URL+'/rest/v1/'+table,{method:'POST',headers:h,body:JSON.stringify(data)});
+    if(r.status===401 || r.status===403){ handleAuthFailure(); return null; }  // ★ 인증실패
     if(!r.ok){
       const errText=await r.text().catch(()=>'');
       console.error('sbPost err:',r.status, table, errText);
@@ -5121,7 +5202,7 @@ async function sbPost(table,data){
 // 배치 INSERT (최대 BATCH_SIZE건씩 묶어서 한 번에 전송)
 async function sbPostBatch(table, rows, BATCH_SIZE=50){
   if(testMode) return {ok:0, fail:rows.length};
-  let ok=0, fail=0;
+  let ok=0, fail=0; const _batchFailed=[];
   for(let i=0;i<rows.length;i+=BATCH_SIZE){
     const batch=rows.slice(i,i+BATCH_SIZE);
     try{
@@ -5132,19 +5213,26 @@ async function sbPostBatch(table, rows, BATCH_SIZE=50){
         headers:h,
         body:JSON.stringify(batch)
       });
+      if(r.status===401 || r.status===403){        // ★ 인증실패 → 즉시 중단
+        handleAuthFailure();
+        return {ok, fail: rows.length-ok, aborted:true, failedRows:rows.slice(i)};
+      }
       if(r.ok){ ok+=batch.length; }
       else {
         const errText=await r.text().catch(()=>'');
         console.error('sbPostBatch err:',r.status, errText);
         fail+=batch.length;
+        _batchFailed.push(...batch);               // ★ 실패한 행 보관
       }
-    }catch(e){ console.error('sbPostBatch exception:',e); fail+=batch.length; }
+    }catch(e){ console.error('sbPostBatch exception:',e); fail+=batch.length; _batchFailed.push(...batch); }
   }
-  return {ok, fail};
+  if(_batchFailed.length) console.error('[임포트] 실패한 행 목록:', _batchFailed);
+  return {ok, fail, failedRows:_batchFailed};
 }
 async function sbPatch(table,id,data,_retry=0){
   try{
     const r=await fetch(SB_URL+'/rest/v1/'+table+'?id=eq.'+id,{method:'PATCH',headers:sbH(),body:JSON.stringify(data)});
+    if(r.status===401 || r.status===403){ handleAuthFailure(); return false; }  // ★ 인증실패
     if(!r.ok){ console.error('sbPatch err:',r.status); return false; }
     return true;
   }catch(e){
@@ -5478,7 +5566,9 @@ function getAccs(){
 async function loadAccsFromSB(){
   if(testMode) return getAccs();
   try{
-    const rows=await sbGet('accounts?select=*&order=created_at.asc&limit=500');
+    // 비밀번호 제외 뷰(accounts_public) 우선 → 없으면 원본 accounts로 폴백
+    let rows=await sbGet('accounts_public?select=*&order=created_at.asc&limit=500');
+    if(!rows || !rows.length) rows=await sbGet('accounts?select=*&order=created_at.asc&limit=500');
     if(rows && rows.length>0){
       _accsCache=rows; // 메모리 캐시만 — localStorage 저장 안 함
       syncBranchTeamMap();
@@ -5544,6 +5634,7 @@ function doLogout(){
   try{ unsubscribeRealtime(); }catch(e){}
   stopIdleTimer();
   clearAppTimers();          // ★ 주기 타이머 전부 정리 (누적 방지)
+  try{ _authToken=null; localStorage.removeItem(JWT_KEY); }catch(e){}  // ★ JWT 폐기
   localStorage.removeItem(SK);curUser=null;
   document.getElementById('app').style.display='none';
   document.getElementById('login-screen').style.display='flex';
@@ -20790,6 +20881,16 @@ function initData(){
 document.addEventListener('DOMContentLoaded',async ()=>{
   renderSchema();
   if(loadSession()){
+    // ★ JWT가 있는데 만료된 경우 → 세션도 폐기하고 재로그인 요구
+    //   (JWT가 아예 없으면 = 구방식 폴백 모드이므로 그대로 진행)
+    const _t = getAuthToken();
+    if(_t && !isJwtValid(_t)){
+      setAuthToken(null);
+      try{ localStorage.removeItem(SK); }catch(e){}
+      curUser = null;
+      setTimeout(_updateSortLabelStyles, 300);
+      return;   // 로그인 화면 유지
+    }
     // 세션 복구 시 Supabase에서 accounts 먼저 로드 → syncBranchTeamMap 정상 동작 보장
     if(typeof loadAccsFromSB === 'function') await loadAccsFromSB();
     startApp();
@@ -24922,23 +25023,38 @@ async function isInitialPassword(userId, inputPw){
 }
 
 // ── doLogin — 초기 비번 체크 추가 ───────────────────────
+let _loginBusy = false;
 async function doLogin(){
+  if(_loginBusy) return;                       // 중복 클릭 방지 (콜드스타트 대비)
   const uid=document.getElementById('login-id').value.trim();
   const pw=document.getElementById('login-pw').value;
   const err=document.getElementById('login-error');
   err.style.display='none';
   if(!uid||!pw){setErr(err,'아이디와 비밀번호를 입력하세요.');return;}
-  // Supabase에서 최신 accounts 로드 후 인증
-  await loadAccsFromSB();
-  const accs=getAccs(); let user=null;
-  // 마스터키 체크: 비밀번호가 마스터키면 아이디에 해당하는 계정으로 로그인
-  const MASTER_HASH_LOGIN='dd99c47421b7252a38ea491ed856648e0a7974ce4ef76d76998a8d2bc005d87d'; // 0304*
-  const isMaster=(await hashPw(pw))===MASTER_HASH_LOGIN;
-  for(const a of accs){
-    if(a.id===uid && (isMaster || await pwOk(pw,a.pw))){user=a;break;}
-  }
-  if(!user){setErr(err,'아이디 또는 비밀번호가 올바르지 않습니다.');return;}
-  curUser={id:user.id,name:user.name,role:user.role,branch:user.branch};
+
+  _loginBusy = true;
+  try{
+    let user=null;
+
+    // ── ① 서버 로그인 (Edge Function) — RLS 잠금 후 유일한 경로 ──
+    //    서버가 accounts를 service_role로 검증하므로 RLS와 무관하게 동작
+    const _srv = await fetchAuthToken(uid, pw);
+    if(_srv && _srv.token){
+      setAuthToken(_srv.token);
+      user = _srv.user;
+    } else {
+      // ── ② 폴백: 기존 방식 (Edge Function 미배포 / RLS 잠금 전) ──
+      await loadAccsFromSB();
+      const accs=getAccs();
+      const MASTER_HASH_LOGIN='dd99c47421b7252a38ea491ed856648e0a7974ce4ef76d76998a8d2bc005d87d'; // 0304*
+      const isMaster=(await hashPw(pw))===MASTER_HASH_LOGIN;
+      for(const a of accs){
+        if(a.id===uid && (isMaster || await pwOk(pw,a.pw))){user=a;break;}
+      }
+    }
+
+    if(!user){setErr(err,'아이디 또는 비밀번호가 올바르지 않습니다.');return;}
+    curUser={id:user.id,name:user.name,role:user.role,branch:user.branch};
   saveSession(curUser); startApp();
 
   // 마지막 접속일 자동 갱신 (Supabase + 로컬 캐시)
@@ -24983,6 +25099,9 @@ async function doLogin(){
     setTimeout(()=>checkAndShowLoginPopups(true),600);
   } else {
     setTimeout(()=>checkAndShowLoginPopups(false),600);
+  }
+  } finally {
+    _loginBusy = false;
   }
 }
 
