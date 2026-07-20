@@ -21943,7 +21943,7 @@ function _rcJudge(lead, lastMs){
     const baseMs = lastMs!==undefined ? lastMs : assignedMs;
     const bd = bizElapsedDays(baseMs, NOW);
     if(bd>30) return {code:'C',weight:3,
-      text:`<svg class="li" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="1"/><path d="M9 7h.01M15 7h.01M9 11h.01M15 11h.01M9 15h2M13 15h2"/></svg> 마지막 기록 ${bd}영업일 경과 (기준 30일)`,bg:''};
+      text:`마지막 기록 ${bd}영업일 경과 (기준 30일)`,bg:''};
     return null;
   }
 
@@ -21954,7 +21954,7 @@ function _rcJudge(lead, lastMs){
       if(bizMs > H48){
         const h = Math.floor(bizMs/3600000);
         return {code:'A',weight:1,
-          text:`<svg class="li" viewBox="0 0 24 24" style="color:#e8870f"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h16.9a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg> 분배 후 영업 ${h}h 미기록 (기준: 48h, 주말·공휴일 제외)`,
+          text:`분배 후 영업 ${h}h 미기록 (기준: 48h, 주말·공휴일 제외)`,
           bg:'rgba(239,68,68,.07)'};
       }
     }
@@ -21965,7 +21965,7 @@ function _rcJudge(lead, lastMs){
   const bd = bizElapsedDays(lastMs, NOW);
   if(bd >= BD5){
     return {code:'B',weight:2,
-      text:`<svg class="li" viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L16 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg> 마지막 기록 ${bd}영업일 경과 (기준 5영업일)`,bg:''};
+      text:`마지막 기록 ${bd}영업일 경과 (기준 5영업일)`,bg:''};
   }
   return null;
 }
@@ -22277,6 +22277,39 @@ function _rcBuildPatch(reason, lead){
   return patch;
 }
 
+// ── 저장된 문자열에서 SVG 태그 제거 (구 데이터 표시 보정) ──
+function _stripSvg(s){
+  return String(s||'').replace(/<svg[\s\S]*?<\/svg>/gi,'').replace(/\s{2,}/g,' ').trim();
+}
+
+// ── 일괄 작업 진행률 오버레이 (범용) ──────────────────────────────
+function _bulkProgOpen(title, total){
+  let ov=document.getElementById('ov-bulk-prog');
+  if(!ov){ov=document.createElement('div');ov.id='ov-bulk-prog';ov.className='ov-bg';document.body.appendChild(ov);}
+  const pad=String(total).length;
+  ov.innerHTML=`<div class="ov-box" style="width:340px;max-width:92vw;padding:26px;text-align:center">
+    <div style="font-size:16px;font-weight:800;color:var(--navy);margin-bottom:16px">${esc(title)}</div>
+    <div style="font-size:28px;font-weight:800;color:#7c3aed;letter-spacing:1px;margin-bottom:14px;font-variant-numeric:tabular-nums">
+      <span id="bp-done">${'0'.padStart(pad,'0')}</span><span style="color:var(--gray-300);margin:0 6px">/</span><span>${total}</span>
+    </div>
+    <div style="height:8px;background:var(--gray-100);border-radius:6px;overflow:hidden">
+      <div id="bp-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#7c3aed,#a78bfa);transition:width .18s"></div>
+    </div>
+    <div id="bp-msg" style="font-size:11px;color:var(--gray-400);margin-top:14px">처리가 끝날 때까지 창을 닫지 마십시오</div>
+  </div>`;
+  ov.classList.add('open');
+}
+function _bulkProgUpdate(done, total, msg){
+  const pad=String(total).length;
+  const d=document.getElementById('bp-done'); if(d) d.textContent=String(done).padStart(pad,'0');
+  const bar=document.getElementById('bp-bar'); if(bar) bar.style.width=(total?Math.round(done/total*100):0)+'%';
+  if(msg){const m=document.getElementById('bp-msg'); if(m) m.textContent=msg;}
+}
+function _bulkProgClose(){
+  const ov=document.getElementById('ov-bulk-prog');
+  if(ov){ ov.classList.remove('open'); setTimeout(()=>{ov.remove();},200); }
+}
+
 // 대전 이관 패치 (회수목록 → 대전TM 최종 이관)
 function _rpBuildTransferPatch(reason, lead){
   const now = new Date().toISOString();
@@ -22573,7 +22606,7 @@ function rpRender(){
   const isAdmin = curUser?.role==='admin';
   const rows = list.map(l=>{
     const recallAt = l.auto_recall_at ? (typeof toKstDateTime==='function'?toKstDateTime(l.auto_recall_at):String(l.auto_recall_at).slice(0,16).replace('T',' ')) : '-';
-    const reason = l.auto_recall_reason || '-';
+    const reason = _stripSvg(l.auto_recall_reason) || '-';
     const teamInfo = l.team_name || '(미배정)';
     const checked = _rpSelected.has(l.id) ? 'checked' : '';
     return `<tr style="border-bottom:1px solid var(--gray-100)">
@@ -22639,7 +22672,8 @@ async function rpTransferOne(id){
   if(!confirm(`"${lead.company_name||''}" 을(를) 대전TM으로 이관하시겠습니까?\n\n이관 후에는 '대전이관 원복'에서 되돌릴 수 있습니다.`)) return;
   try{
     const patch=_rpBuildTransferPatch(lead.auto_recall_reason, lead);
-    await dbU('leads',id,patch);
+    const ok = await dbU('leads',id,patch);
+    if(!ok){ showToast('저장 실패 — 반영되지 않았습니다','error'); return; }
     await logActivity(id,'assign','회수목록 → 대전TM 최종 이관','assigned','');
     _rpPatchLocal(id, patch);
     _rpSelected.delete(id);
@@ -22657,7 +22691,8 @@ async function rpRevertOne(id){
   try{
     const now=new Date().toISOString();
     const patch={recall_pending:false, auto_recalled:false, auto_recall_reason:null, auto_recall_at:null, updated_at:now};
-    await dbU('leads',id,patch);
+    const ok = await dbU('leads',id,patch);
+    if(!ok){ showToast('저장 실패 — 반영되지 않았습니다','error'); return; }
     await logActivity(id,'assign',`↩ 회수목록 원복 → ${lead.team_name||'원래 팀장'} 복귀`,'assigned','');
     _rpPatchLocal(id, patch);
     _rpSelected.delete(id);
@@ -22681,28 +22716,42 @@ async function rpTransferSelected(){
     if(!confirm(`${ids.length}건을 대전TM으로 이관하시겠습니까?\n\n대상: ${preview}`)) return;
   }
 
-  const undoItems=[];
+  const undoItems=[]; const failed=[];
+  _bulkProgOpen('대전TM 이관중', ids.length);
   try{
-    for(const id of ids){
+    for(let i=0;i<ids.length;i++){
+      const id=ids[i];
       const lead=_rpFindLead(id);
-      if(lead){
-        undoItems.push({id, prev:{
-          branch_name:lead.branch_name, team_name:lead.team_name, team_names:lead.team_names,
-          status:lead.status, tm_transferred:lead.tm_transferred, recall_pending:lead.recall_pending,
-          auto_recalled:lead.auto_recalled, auto_recall_at:lead.auto_recall_at,
-          auto_recall_reason:lead.auto_recall_reason, collab_branches:lead.collab_branches, assigned_at:lead.assigned_at
-        }});
-      }
       const patch=_rpBuildTransferPatch(lead?.auto_recall_reason, lead);
-      await dbU('leads',id,patch);
-      await logActivity(id,'assign','일괄 회수목록 → 대전TM 최종 이관','assigned','');
-      _rpPatchLocal(id, patch);
+      const ok = await dbU('leads',id,patch);
+      if(!ok){
+        // ★ 저장 실패 → 로컬 반영하지 않음 (화면에 남겨 재시도 가능하게)
+        failed.push(lead?.company_name||id);
+      }else{
+        if(lead){
+          undoItems.push({id, prev:{
+            branch_name:lead.branch_name, team_name:lead.team_name, team_names:lead.team_names,
+            status:lead.status, tm_transferred:lead.tm_transferred, recall_pending:lead.recall_pending,
+            auto_recalled:lead.auto_recalled, auto_recall_at:lead.auto_recall_at,
+            auto_recall_reason:lead.auto_recall_reason, collab_branches:lead.collab_branches, assigned_at:lead.assigned_at
+          }});
+        }
+        await logActivity(id,'assign','일괄 회수목록 → 대전TM 최종 이관','assigned','');
+        _rpPatchLocal(id, patch);
+      }
+      _bulkProgUpdate(i+1, ids.length);
     }
     if(undoItems.length>0) recordBulkOp({actionLabel:'회수목록 → 대전TM 이관', items:undoItems, dbTable:'leads'});
     _rpSelected.clear();
-    showToast(ids.length+'건 대전TM 이관 완료','success');
+    _bulkProgClose();
+    if(failed.length){
+      console.warn('대전이관 실패 건:', failed);
+      showToast(`${ids.length-failed.length}건 완료 · ${failed.length}건 실패 (실패 건은 목록에 남습니다)`,'error');
+    }else{
+      showToast(ids.length+'건 대전TM 이관 완료','success');
+    }
     rpRender(); _updatePendingCount(); if(typeof filterLeads==='function') filterLeads();
-  }catch(e){console.error(e);showToast('오류: '+e.message,'error');}
+  }catch(e){_bulkProgClose();console.error(e);showToast('오류: '+e.message,'error');}
 }
 
 // ── 일괄 원복 (관리자만) ──
@@ -22720,27 +22769,40 @@ async function rpRevertSelected(){
     if(!confirm(`${ids.length}건의 회수를 취소하고 원래 팀장에게 되돌리시겠습니까?\n\n대상: ${preview}`)) return;
   }
 
-  const undoItems=[];
+  const undoItems=[]; const failed=[];
+  _bulkProgOpen('원복 처리중', ids.length);
   try{
     const now=new Date().toISOString();
-    for(const id of ids){
+    for(let i=0;i<ids.length;i++){
+      const id=ids[i];
       const lead=_rpFindLead(id);
-      if(lead){
-        undoItems.push({id, prev:{
-          recall_pending:lead.recall_pending, auto_recalled:lead.auto_recalled,
-          auto_recall_at:lead.auto_recall_at, auto_recall_reason:lead.auto_recall_reason
-        }});
-      }
       const patch={recall_pending:false, auto_recalled:false, auto_recall_reason:null, auto_recall_at:null, updated_at:now};
-      await dbU('leads',id,patch);
-      await logActivity(id,'assign',`↩ 일괄 회수목록 원복 → ${lead?.team_name||'원래 팀장'} 복귀`,'assigned','');
-      _rpPatchLocal(id, patch);
+      const ok = await dbU('leads',id,patch);
+      if(!ok){
+        failed.push(lead?.company_name||id);
+      }else{
+        if(lead){
+          undoItems.push({id, prev:{
+            recall_pending:lead.recall_pending, auto_recalled:lead.auto_recalled,
+            auto_recall_at:lead.auto_recall_at, auto_recall_reason:lead.auto_recall_reason
+          }});
+        }
+        await logActivity(id,'assign',`↩ 일괄 회수목록 원복 → ${lead?.team_name||'원래 팀장'} 복귀`,'assigned','');
+        _rpPatchLocal(id, patch);
+      }
+      _bulkProgUpdate(i+1, ids.length);
     }
     if(undoItems.length>0) recordBulkOp({actionLabel:'회수목록 원복', items:undoItems, dbTable:'leads'});
     _rpSelected.clear();
-    showToast(ids.length+'건 원복 완료','success');
+    _bulkProgClose();
+    if(failed.length){
+      console.warn('원복 실패 건:', failed);
+      showToast(`${ids.length-failed.length}건 완료 · ${failed.length}건 실패 (실패 건은 목록에 남습니다)`,'error');
+    }else{
+      showToast(ids.length+'건 원복 완료','success');
+    }
     rpRender(); _updatePendingCount(); if(typeof filterLeads==='function') filterLeads();
-  }catch(e){console.error(e);showToast('오류: '+e.message,'error');}
+  }catch(e){_bulkProgClose();console.error(e);showToast('오류: '+e.message,'error');}
 }
 
 // ── 회수목록 엑셀 ──
@@ -22809,7 +22871,7 @@ async function rcExportExcel(){
       fmtDt(t.applied_at||t.created_at),   // 신청일자
       fmtDt(t.assigned_at),                  // 배분일자
       fmtDt(lastActAt),                       // 마지막 기록일시
-      t._rcReason?.text||'',                  // 회수사유
+      _stripSvg(t._rcReason?.text)||'',        // 회수사유
       t.current_stage||''                     // 현재단계
     ];
   });
