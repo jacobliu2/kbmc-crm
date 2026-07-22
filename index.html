@@ -11252,6 +11252,7 @@ async function importTmExcel(event){
   // Supabase에서 전화번호 목록 직접 조회
   let _dbPhoneSet = new Set();
   let _dbNameSet  = new Set();
+  let _dbPhoneStatus = new Map();  // 전화번호 → {status, stage, name} (재콜 판정용)
   try{
     if(!testMode&&_excelPhones.length){
       // 전화번호 IN 쿼리 (100개씩)
@@ -11260,14 +11261,14 @@ async function importTmExcel(event){
         _chunks.push(_excelPhones.slice(ci,ci+100));
       for(const chunk of _chunks){
         const _q=chunk.map(p=>`"${p}"`).join(',');
-        const _r=await fetch(SB_URL+'/rest/v1/leads?select=phone,company_name&status=neq.deleted',{
+        const _r=await fetch(SB_URL+'/rest/v1/leads?select=phone,company_name,status,current_stage&status=neq.deleted',{
           headers:{...sbH(),'Range-Unit':'items','Range':'0-4999','Prefer':'count=none'}
         });
         if(_r.ok){
           const _rows=await _r.json().catch(()=>[]);
           (_rows||[]).forEach(l=>{
             const ph=String(l.phone||'').replace(/[^0-9]/g,'');
-            if(ph.length>=9) _dbPhoneSet.add(ph);
+            if(ph.length>=9){ _dbPhoneSet.add(ph); _dbPhoneStatus.set(ph, {status:l.status, stage:l.current_stage, name:l.company_name}); }
             const nm=String(l.company_name||'').trim();
             if(nm) _dbNameSet.add(nm);
           });
@@ -11279,7 +11280,7 @@ async function importTmExcel(event){
   // allLeads 캐시도 항상 병합 (대전TM은 allLeads 미로드 가능 → Supabase 조회와 합산)
   (allLeads||[]).forEach(l=>{
     const ph=String(l.phone||'').replace(/[^0-9]/g,'');
-    if(ph.length>=9) _dbPhoneSet.add(ph);
+    if(ph.length>=9){ _dbPhoneSet.add(ph); if(!_dbPhoneStatus.has(ph)) _dbPhoneStatus.set(ph, {status:l.status, stage:l.current_stage, name:l.company_name}); }
     const nm=String(l.company_name||'').trim();
     if(nm) _dbNameSet.add(nm);
   });
@@ -11314,8 +11315,11 @@ async function importTmExcel(event){
     if(ph.length>=9&&!_dbLeadMap.has(ph)) _dbLeadMap.set(ph, l);
   });
 
-  const _pendingPatch=[]; // 기존 lead에 대전TM 이관할 건들
+  const _pendingPatch=[]; // (미사용 - 재콜은 기존건 이관하지 않음)
+  const _blocked=[];      // ★ 진행중이라 재콜 차단된 건 (경고 표시용)
   const existSet=_dbPhoneSet; // 기존 변수명 유지
+  // 재콜 허용 상태: 드랍/삭제만 (나머지 진행중은 차단)
+  const _isRecallable=(st)=>{ const s=String(st||'').toLowerCase(); return s==='drop'||s==='dropped'||s==='deleted'||s===''; };
   for(let i=1;i<rows.length;i++){
     const row=rows[i];
     const map={};hdrs.forEach((h,j)=>{const k=hm[h.toLowerCase()];if(k)map[k]=row[j];else if(h)map[h]=row[j];});
@@ -11323,15 +11327,18 @@ async function importTmExcel(event){
     const ph=String(map.phone||'').trim().replace(/[^0-9]/g,'');
     const _phNorm=ph.replace(/[^0-9]/g,'');
 
-    // 기존 DB가 있으면 신규 생성 대신 기존 건을 대전TM으로 이관
-    if(_phNorm.length>=9&&_dbLeadMap.has(_phNorm)){
-      const existLead=_dbLeadMap.get(_phNorm);
-      // 이미 대전TM 이관 중인 건은 skip
-      if(existLead.tm_transferred===true||existLead.tm_transferred==='true'){dup++;continue;}
-      // 기존 건을 대전TM으로 이관 예약
-      _pendingPatch.push({id:existLead.id, company_name:existLead.company_name||co});
-      dup++;
-      continue;
+    // ★ 재콜 중복 판정: 전화번호가 이미 존재하면 상태 확인
+    if(_phNorm.length>=9&&_dbPhoneSet.has(_phNorm)){
+      const _info=_dbPhoneStatus.get(_phNorm);
+      const _st=_info?.status;
+      if(_isRecallable(_st)){
+        // 드랍/삭제 상태 → 재콜 대상. 신규로 등록 (아래로 진행)
+      }else{
+        // 진행중(배정~관리·보류 등) → 재콜 차단 + 경고 수집
+        _blocked.push({ company:co, phone:formatPhone(map.phone||''), exist_name:_info?.name||'', stage:_info?.stage||_st||'진행중' });
+        dup++;
+        continue;
+      }
     }
     if(_phNorm.length<9&&co&&_dbNameSet.has(co)){dup++;continue;}
     _pending.push({
@@ -11373,6 +11380,16 @@ async function importTmExcel(event){
   const _warnEl=document.getElementById('import-warn');
   if(!_sumEl||!_headEl||!_bodyEl){showToast('미리보기 UI 오류','error');return;}
   _sumEl.innerHTML=`<strong>${_pending.length}건</strong> 등록 예정 · <span style="color:#7c3aed">대전TM 자동배정</span>${dup?` · <span style="color:var(--gray-400)">중복제외 ${dup}건</span>`:''}  `;
+  // ★ 진행중이라 재콜 차단된 건 경고 (한 고객 중복 전화 방지)
+  if(_blocked&&_blocked.length){
+    const _list=_blocked.slice(0,15).map(b=>`<div style="font-size:11px;color:#9a3412;margin-top:3px;padding-left:2px">· ${esc(b.phone||'-')} <strong>${esc(b.company||'')}</strong> — 이미 진행중(${esc(String(b.stage||''))})${b.exist_name&&b.exist_name!==b.company?` · 기존: ${esc(b.exist_name)}`:''}</div>`).join('');
+    const _more=_blocked.length>15?`<div style="font-size:10px;color:#c2410c;margin-top:4px">…외 ${_blocked.length-15}건</div>`:'';
+    _sumEl.innerHTML += `<div style="margin-top:10px;padding:10px 12px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px">
+      <div style="font-size:12px;font-weight:800;color:#c2410c">⚠️ 재콜 차단 ${_blocked.length}건 — 이미 진행중인 고객입니다</div>
+      <div style="font-size:10px;color:#9a3412;margin:4px 0 6px">아래 건은 다른 담당이 진행중이라 재콜 대상에서 제외됩니다. (중복 전화로 고객 불신 방지)</div>
+      ${_list}${_more}
+    </div>`;
+  }
   const PCOLS=['company_name','contact_name','phone','region','consult_type'];
   _headEl.innerHTML='<tr>'+PCOLS.map(col=>`<th style="padding:8px 10px">${col}</th>`).join('')+'</tr>';
   _bodyEl.innerHTML=_pending.slice(0,20).map(r=>'<tr>'+PCOLS.map(col=>`<td style="padding:7px 10px;border-bottom:1px solid var(--gray-100)">${esc(r[col]||'-')}</td>`).join('')+'</tr>').join('');
@@ -11388,14 +11405,12 @@ const _TM_TAB_KR = {all:'관리DB', new:'신규배정', contacted:'통화완료'
 
 async function openTmExport(){
   if(!window.XLSX){await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
-  // 현재 탭 정보
-  const curTab = _tmMainTab || 'all';
-  const curTabKr = _TM_TAB_KR[curTab] || '현재탭';
-  // 현재 탭 필터 결과 (검색어·지점필터 반영)
-  const _s = (document.getElementById('tm-search')?.value||'').toLowerCase();
-  const _br = document.getElementById('tm-branch-filter')?.value || '';
-  const curData = _filterForTab(curTab, _s, _br);
-  const allData = tmLeads.filter(l=>!isTmCompleted(l));
+  // ★ 화면 탭과 동일한 _tmV2Filter 사용 (숫자 불일치 해소)
+  const curTab = _tmV2Tab || 'manage';
+  const _TMV2_TAB_KR = {manage:'관리DB', pending:'미배정', new:'신규이관', collab:'공동관리', contacted:'통화완료', happycall:'해피콜', drop:'드랍', hqtransfer:'본사이관완료', reminder:'리마인드'};
+  const curTabKr = _TMV2_TAB_KR[curTab] || '현재탭';
+  const curData = _tmV2Filter(curTab);              // 화면 목록과 100% 동일
+  const allData = _tmV2Filter('manage');            // 전체 = 관리DB 기준
   // 확인 모달: 전체 / 현재탭만 선택
   const choice = await new Promise(resolve=>{
     const ov=document.createElement('div');
@@ -11426,7 +11441,24 @@ async function openTmExport(){
   const data = choice==='cur' ? curData : allData;
   const scopeKr = choice==='cur' ? curTabKr : '전체';
   if(!data.length){showToast('내보낼 데이터가 없습니다.','error');return;}
-  const rows=[['회사명','신청자','연락처','지점','팀장','상태','TM결과','TM날짜','1차미팅일','TM내용','해피콜내용','분배날짜']];
+  // ★ 기업별 활동 히스토리 구성 (시간순, 작성자·내용)
+  const _actByLead = {};
+  (allActivities||[]).forEach(a=>{
+    if(!a.lead_id) return;
+    if(a.type==='assign'||a.type==='status_change') return;   // 배정·단계변경 로그 제외
+    (_actByLead[a.lead_id]=_actByLead[a.lead_id]||[]).push(a);
+  });
+  const _histText=(id)=>{
+    const arr=(_actByLead[id]||[]).slice().sort((x,y)=>String(x.created_at||x.date||'').localeCompare(String(y.created_at||y.date||'')));
+    if(!arr.length) return '';
+    return arr.map(a=>{
+      const d=String(a.date||a.created_at||'').slice(0,10);
+      const who=a.author||'';
+      const txt=_stripSvg(a.content||'').replace(/\s+/g,' ').trim();
+      return `[${d} ${who}] ${txt}`;
+    }).join(' / ');
+  };
+  const rows=[['회사명','신청자','연락처','지점','팀장','상태','TM결과','TM날짜','1차미팅일','TM내용','해피콜내용','분배날짜','기업 히스토리']];
   data.forEach(l=>rows.push([
     l.company_name||'', l.contact_name||'', l.phone||'',
     l.branch_name||'', l.team_name||'',
@@ -11434,11 +11466,12 @@ async function openTmExport(){
     _TM_STATUS_KR[l.tm_result]||l.tm_result||'',
     l.tm_date||'', l.tm_meeting||'',
     l.tm_content||'', l.tm_happycall||'',
-    (l.distributed_at||l.created_at||'').slice(0,10)
+    (l.distributed_at||l.created_at||'').slice(0,10),
+    _histText(l.id)
   ]));
   const wb=XLSX.utils.book_new();
   const ws=XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols']=[20,12,14,10,12,8,10,10,10,30,20,10].map(w=>({wch:w}));
+  ws['!cols']=[20,12,14,10,12,8,10,10,10,30,20,10,60].map(w=>({wch:w}));
   XLSX.utils.book_append_sheet(wb, ws, ('대전TM_'+scopeKr).slice(0,31));
   XLSX.writeFile(wb, `대전TM_${scopeKr}_${todayKst()}.xlsx`);
   showToast(`엑셀 다운로드 완료 — ${scopeKr} ${data.length}건`,'success');
@@ -19020,8 +19053,8 @@ function _tmV2Filter(tab){
       case 'collab':       return isCollab&&!isDrop&&!isHqTransferred&&!isReminderPending&&!isReminderDue;
       case 'contacted':    return isTmSolo&&isContacted&&!isHqTransferred&&!isReminderPending&&!isReminderDue;
       case 'happycall':    return isAnyTm&&hasHappycall&&!isDrop&&!isHqTransferred&&!isReminderPending&&!isReminderDue;
-      case 'drop':         return isAnyTm&&isDrop&&!isHqTransferred;
-      case 'hqtransfer':   return isHqTransferred; // 본사이관완료 — 모두 표시
+      case 'drop':         return isAnyTm&&isDrop;  // ★ 본사이관완료여도 드랍이면 드랍탭으로 통합
+      case 'hqtransfer':   return isHqTransferred&&!isDrop; // ★ 드랍된 건은 드랍탭으로 이동
       case 'reminder':     return isAnyTm&&isReminderDue&&!isDrop&&!isHqTransferred; // 도래한 리마인드만
       default:             return isAnyTm&&!isReminderPending;
     }
