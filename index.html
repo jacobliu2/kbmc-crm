@@ -6191,7 +6191,31 @@ async function globalSearch(q){
     const kw=q.toLowerCase().replace(/[-\s]/g,'');
     const isPhone=/^[0-9\-]+$/.test(q.trim());
 
-    const matched=leads.filter(l=>l.status!=='deleted'&&(
+    // ★ 권한 필터: 검색도 화면과 동일하게 자기 범위만 (전사 검색 차단)
+    const _role=curUser?.role;
+    const _canSeeAll=(_role==='admin'||_role==='dbmanager');
+    const _myTeams = (_role==='branch') ? new Set(TEAM_MAP[curUser.name]||[]) : null;
+    const _inScope=(l)=>{
+      if(_canSeeAll) return true;
+      if(_role==='team'){
+        if(l.team_name===curUser.name) return true;
+        try{ return JSON.parse(l.team_names||'[]').includes(curUser.name); }catch(e){ return false; }
+      }
+      if(_role==='branch'){
+        if(l.branch_name===curUser.name) return true;
+        try{ const arr=JSON.parse(l.team_names||'[]'); if(arr.some(t=>_myTeams.has(t))) return true; }catch(e){}
+        if(l.team_name){ const names=l.team_name.split(',').map(s=>s.trim()); if(names.some(nm=>_myTeams.has(nm))) return true; }
+        return false;
+      }
+      if(_role==='tm'){
+        // 대전TM: 대전 이관건(tm_transferred) 또는 대전 협업건(collab_branches)
+        if(l.tm_transferred===true||l.tm_transferred==='true') return true;
+        try{ const cb=JSON.parse(l.collab_branches||'[]'); return cb.includes('대전TM'); }catch(e){ return false; }
+      }
+      return false; // 그 외 역할은 검색 결과 없음
+    };
+
+    const matched=leads.filter(l=>l.status!=='deleted'&&_inScope(l)&&(
       (l.company_name||'').toLowerCase().includes(q.toLowerCase())||
       (l.phone||'').replace(/[^0-9]/g,'').includes(kw)||
       (l.contact_name||'').toLowerCase().includes(q.toLowerCase())||
