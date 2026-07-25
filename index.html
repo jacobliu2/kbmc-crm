@@ -11909,6 +11909,12 @@ function openExport(){
     }
     statSel.innerHTML=opts;
   }
+  // ★ 통계 내보내기는 전사 집계 → 관리자·DB관리자만. 그 외는 탭 숨김
+  const _statBtn=document.getElementById('exp-type-stat');
+  if(_statBtn){
+    const _canStat = (curUser?.role==='admin'||curUser?.role==='dbmanager');
+    _statBtn.style.display = _canStat ? '' : 'none';
+  }
   switchExpType('db');
   updateExpPreview();
   openM('modal-export');
@@ -11950,6 +11956,29 @@ async function getExpData(){
   const from=fv?new Date(fv):null,to=tv?new Date(tv+'T23:59:59'):null;
   const br=document.getElementById('exp-branch')?.value||'',st=document.getElementById('exp-status')?.value||'';
   let data=await dbQ('leads');data=data.filter(l=>l.status!=='deleted');
+  // ★ 권한 필터: 관리자만 전체, 그 외는 화면과 동일한 소속 범위로 제한 (전사 유출 방지)
+  const _role=curUser?.role;
+  if(_role!=='admin' && _role!=='dbmanager'){
+    if(_role==='team'){
+      // 팀장: 자기 담당(team_name 또는 team_names 포함)만
+      data=data.filter(l=>{
+        if(l.team_name===curUser.name) return true;
+        try{ return JSON.parse(l.team_names||'[]').includes(curUser.name); }catch(e){ return false; }
+      });
+    } else if(_role==='branch'){
+      // 지점장: 자기 지점 + 소속 팀만
+      const myTeams=new Set(TEAM_MAP[curUser.name]||[]);
+      data=data.filter(l=>{
+        if(l.branch_name===curUser.name) return true;
+        try{ const arr=JSON.parse(l.team_names||'[]'); if(arr.some(t=>myTeams.has(t))) return true; }catch(e){}
+        if(l.team_name){ const names=l.team_name.split(',').map(s=>s.trim()); if(names.some(nm=>myTeams.has(nm))) return true; }
+        return false;
+      });
+    } else {
+      // 그 외 역할(대전TM 등)은 내보내기 대상 없음 (안전 기본값)
+      data=[];
+    }
+  }
   if(from)data=data.filter(l=>new Date(l.distributed_at||l.created_at||0)>=from);
   if(to)data=data.filter(l=>new Date(l.distributed_at||l.created_at||0)<=to);
   if(br)data=data.filter(l=>l.branch_name===br);
@@ -11964,6 +11993,8 @@ function updateStatMonthVis(){
 }
 
 async function exportStatExcel(){
+  // ★ 이중 방어: 권한 없는 역할의 직접 호출 차단
+  if(curUser?.role!=='admin' && curUser?.role!=='dbmanager'){ showToast('권한이 없습니다','error'); return; }
   const period=document.getElementById('exp-stat-period')?.value||'month';
   const now=new Date();
   const kst=new Date(now.getTime()+9*3600*1000);
