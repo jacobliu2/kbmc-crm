@@ -5716,7 +5716,7 @@ function startApp(){
   document.getElementById('app').style.display='block';
   // Supabase notices 로드 (다른 사용자가 저장한 공지 수신)
   _sbLoadNotices().then(()=>{ if(typeof renderAdminNoticeList==='function') renderAdminNoticeList(); if(typeof updateKbriefDot==='function') updateKbriefDot(); });
-  if(curUser?.role==='team'||curUser?.role==='branch'){ if(typeof loadSchedules==='function') loadSchedules().then(()=>{ setTimeout(()=>{ try{ _todaySchedulePopup(); }catch(e){} }, 800); }); }
+  if(curUser?.role==='team'||curUser?.role==='branch'){ if(typeof loadSchedules==='function') loadSchedules().then(()=>{ setTimeout(()=>{ try{ _todaySchedulePopup(); }catch(e){} try{ startSchedNotifyTimer(); }catch(e){} }, 800); }); }
   // Supabase 프로필 데이터 로드 (goals, potentials, 1on1, contacts)
   if(!testMode){ (async()=>{
     const _keys=[
@@ -6411,6 +6411,14 @@ function toggleNotif(){
     <svg class="li" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>알림 센터 ${totalUnread>0?`<span style="color:var(--err);margin-left:4px">· ${totalUnread}건</span>`:''}
   </div>`;
 
+  // 일정 브라우저 알림 켜기 (권한 미허용 + 일정 쓰는 역할일 때만)
+  if(('Notification' in window) && Notification.permission!=='granted' && (curUser?.role==='team'||curUser?.role==='branch')){
+    html += `<div style="padding:10px 14px;background:#eff6ff;border-bottom:1px solid var(--gray-200);display:flex;align-items:center;gap:8px">
+      <div style="flex:1;font-size:11px;color:#1e40af;line-height:1.4">일정 시각에 브라우저 알림을 받으려면 켜주세요 <span style="color:var(--gray-400)">(CRM 탭이 열려 있을 때)</span></div>
+      <button onclick="requestNotifyPermission();toggleNotif();toggleNotif();" style="flex-shrink:0;padding:5px 10px;background:#3684FF;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">알림 켜기</button>
+    </div>`;
+  }
+
   // 섹션 A: 쪽지
   if(unreadMsgs.length>0){
     html += `<div style="padding:6px 14px;background:#f1f5f9;font-size:10px;font-weight:700;color:var(--gray-500)"><svg class="li" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>안 읽은 쪽지 (${unreadMsgs.length})</div>`;
@@ -6871,6 +6879,85 @@ function _todaySchedAck(){
   }catch(e){}
   const ov=document.getElementById('ov-today-sched');
   if(ov){ ov.classList.remove('open'); }
+}
+
+// ── 브라우저 푸시 알림 (탭 유지 중, 세션 살아있을 때만) ──────────
+const SCHED_NOTIFY_LEAD_MIN = 10;   // 미리 알림: 10분 전
+let _schedNotifyTimer = null;
+
+// 알림 권한 요청 (설정에서 호출 / 로그인 시 조용히 확인)
+function requestNotifyPermission(){
+  if(!('Notification' in window)){ showToast('이 브라우저는 알림을 지원하지 않습니다','error'); return; }
+  if(Notification.permission==='granted'){ showToast('이미 알림이 켜져 있습니다','success'); return; }
+  if(Notification.permission==='denied'){ showToast('브라우저 설정에서 알림이 차단되어 있습니다. 주소창 왼쪽 자물쇠에서 허용해 주세요','error'); return; }
+  Notification.requestPermission().then(p=>{
+    if(p==='granted') showToast('일정 알림이 켜졌습니다','success');
+    else showToast('알림이 허용되지 않았습니다','error');
+  });
+}
+
+// 오늘 일정 중 "지금 알릴 것"을 확인해 브라우저 알림 발송
+function _schedNotifyCheck(){
+  try{
+    if(!curUser) return;
+    if(!('Notification' in window) || Notification.permission!=='granted') return;
+    if(typeof allSchedules==='undefined' || !allSchedules) return;
+    const today=todayKst();
+    const mine=(allSchedules||[]).filter(s=>
+      s.status!=='deleted' && s.schedule_date===today && s.schedule_time &&
+      (String(s.user_id)===String(curUser.id) || s.user_name===curUser.name)
+    );
+    if(!mine.length) return;
+
+    const now=new Date();
+    const nowMin=now.getHours()*60+now.getMinutes();
+    // 이미 알린 기록 (localStorage, 부하 0) — "id:종류" 단위
+    const sentKey='kbmc_sched_notified_'+today;
+    let sent=[];
+    try{ sent=JSON.parse(localStorage.getItem(sentKey)||'[]'); }catch(e){ sent=[]; }
+
+    const _mins=(t)=>{ const m=String(t).match(/(\d{1,2}):(\d{2})/); return m?(+m[1])*60+(+m[2]):null; };
+    let changed=false;
+
+    mine.forEach(s=>{
+      const tm=_mins(s.schedule_time); if(tm===null) return;
+      const diff = tm - nowMin;  // 양수=미래, 0=지금, 음수=지남
+      // 미리 알림: 정확히 리드타임 구간(10~1분 전)에 진입했고 아직 안 보냄
+      const preKey=String(s.id)+':pre';
+      if(diff<=SCHED_NOTIFY_LEAD_MIN && diff>=1 && !sent.includes(preKey)){
+        _fireSchedNotify(`${SCHED_NOTIFY_LEAD_MIN>=diff?diff:SCHED_NOTIFY_LEAD_MIN}분 후 일정`, s);
+        sent.push(preKey); changed=true;
+      }
+      // 정각 알림: 0분(도달)~ -2분(살짝 지남) 구간, 아직 안 보냄
+      const nowKey=String(s.id)+':now';
+      if(diff<=0 && diff>=-2 && !sent.includes(nowKey)){
+        _fireSchedNotify('지금 일정 시각입니다', s);
+        sent.push(nowKey); changed=true;
+      }
+    });
+    if(changed){ try{ localStorage.setItem(sentKey, JSON.stringify(sent)); }catch(e){} }
+  }catch(e){ console.warn('일정 알림 확인 오류:', e); }
+}
+
+function _fireSchedNotify(prefix, s){
+  try{
+    const body=`${s.schedule_time||''} ${s.title||''}${s.company_name?'\n'+s.company_name:''}`.trim();
+    const n=new Notification('📅 '+prefix, { body, tag:'sched-'+s.id, requireInteraction:false });
+    n.onclick=function(){ window.focus(); try{ showScreen('activity', document.querySelector('.nb[data-s="activity"]')); }catch(e){} n.close(); };
+    // 화면 내 토스트도 병행 (알림 놓쳐도 보이게)
+    try{ showToast(`${prefix} — ${s.schedule_time||''} ${s.title||''}`,'success'); }catch(e){}
+  }catch(e){ console.warn('알림 발송 실패:', e); }
+}
+
+function startSchedNotifyTimer(){
+  stopSchedNotifyTimer();
+  if(!('Notification' in window)) return;
+  _schedNotifyCheck();  // 즉시 1회
+  _schedNotifyTimer = setInterval(_schedNotifyCheck, 60000);  // 1분마다
+  if(typeof _appTimers!=='undefined') _appTimers.push(_schedNotifyTimer);  // 로그아웃 시 정리
+}
+function stopSchedNotifyTimer(){
+  if(_schedNotifyTimer){ clearInterval(_schedNotifyTimer); _schedNotifyTimer=null; }
 }
 
 function _checkBackupReminder(){
