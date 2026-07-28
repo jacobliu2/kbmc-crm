@@ -4370,15 +4370,7 @@ function _renderMcGrid(gridId, items, emptyMsg, isPotential){
         ${contractElapsedHtml}
       </div>
     </div>`;
-  });
-  const _TOP=10;
-  let _html=_bars.slice(0,_TOP).join('');
-  if(_bars.length>_TOP){
-    const _moreN=_bars.length-_TOP;
-    _html+=`<div id="team-act-more" style="display:none;flex-direction:column;gap:5px;margin-top:5px">${_bars.slice(_TOP).join('')}</div>`+
-      `<button onclick="_toggleTeamActMore(this)" data-more="+${_moreN}명 더보기 \u25be" style="margin-top:9px;background:var(--gray-50);border:1px solid var(--gray-200);border-radius:8px;padding:7px;font-size:11px;font-weight:600;color:var(--gray-600);cursor:pointer;width:100%">+${_moreN}명 더보기 \u25be</button>`;
-  }
-  teamEl.innerHTML=_html;
+  }).join('');
 }
 function _toggleTeamActMore(btn){
   const m=document.getElementById('team-act-more'); if(!m) return;
@@ -8517,7 +8509,15 @@ function renderTeamActChart(){
       </div>
       ${x.cnt===0?`<span style="font-size:10px;color:var(--gray-300);min-width:24px">0</span>`:`<span style="font-size:10px;color:var(--gray-500);min-width:24px;font-weight:600">${x.cnt}</span>`}
     </div>`;
-  }).join('');
+  });
+  const _TOP=10;
+  let _html=_bars.slice(0,_TOP).join('');
+  if(_bars.length>_TOP){
+    const _moreN=_bars.length-_TOP;
+    _html+=`<div id="team-act-more" style="display:none;flex-direction:column;gap:5px;margin-top:5px">${_bars.slice(_TOP).join('')}</div>`+
+      `<button onclick="_toggleTeamActMore(this)" data-more="+${_moreN}명 더보기 \u25be" style="margin-top:9px;background:var(--gray-50);border:1px solid var(--gray-200);border-radius:8px;padding:7px;font-size:11px;font-weight:600;color:var(--gray-600);cursor:pointer;width:100%">+${_moreN}명 더보기 \u25be</button>`;
+  }
+  teamEl.innerHTML=_html;
 }
 
 function openGoalM(type,name){
