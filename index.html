@@ -3025,7 +3025,15 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
         <input type="text" id="act-proposal" placeholder="예: DX바우처, 스마트공장, ISO인증 등">
       </div>
       <div class="fg" style="margin-bottom:14px"><label>다음 액션 (선택)</label>
-        <input type="text" id="act-next" placeholder="예: 3/28 오후 2시 미팅 예정">
+        <input type="text" id="act-next" placeholder="예: 재통화 / 방문상담 / 계약서 발송">
+        <div style="display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap">
+          <input type="date" id="act-next-date" style="flex:1;min-width:130px;padding:8px 10px;border:1px solid var(--gray-200);border-radius:var(--r-sm);font-family:inherit;font-size:13px">
+          <input type="time" id="act-next-time" style="width:110px;padding:8px 10px;border:1px solid var(--gray-200);border-radius:var(--r-sm);font-family:inherit;font-size:13px">
+        </div>
+        <label style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:12px;color:var(--gray-600);cursor:pointer;font-weight:400">
+          <input type="checkbox" id="act-next-cal" checked style="width:15px;height:15px;cursor:pointer">
+          내 캘린더에 개인일정으로 추가
+        </label>
       </div>
       <!-- 협업 요청 (팀장 전용) -->
       <div id="act-collab-wrap" style="display:none;margin-bottom:14px;padding:12px 14px;background:rgba(49,130,246,.04);border:1px solid rgba(49,130,246,.2);border-radius:var(--r-sm)">
@@ -5708,7 +5716,7 @@ function startApp(){
   document.getElementById('app').style.display='block';
   // Supabase notices 로드 (다른 사용자가 저장한 공지 수신)
   _sbLoadNotices().then(()=>{ if(typeof renderAdminNoticeList==='function') renderAdminNoticeList(); if(typeof updateKbriefDot==='function') updateKbriefDot(); });
-  if(curUser?.role==='team'||curUser?.role==='branch'){ if(typeof loadSchedules==='function') loadSchedules(); }
+  if(curUser?.role==='team'||curUser?.role==='branch'){ if(typeof loadSchedules==='function') loadSchedules().then(()=>{ setTimeout(()=>{ try{ _todaySchedulePopup(); }catch(e){} }, 800); }); }
   // Supabase 프로필 데이터 로드 (goals, potentials, 1on1, contacts)
   if(!testMode){ (async()=>{
     const _keys=[
@@ -6789,6 +6797,82 @@ function _showDailyRecallToast(){
 
 // ── 주간 백업 권장 알림 (관리자 전용, 매주 월요일 1회) ──────────────────
 const _BACKUP_REMIND_KEY = 'kbmc_backup_remind';
+function _todaySchedulePopup(){
+  try{
+    if(!curUser) return;
+    if(typeof allSchedules==='undefined' || !allSchedules) return;
+    const today=todayKst();
+    // 내 오늘 일정 (개인일정 + 본인 작성)
+    const mine=(allSchedules||[]).filter(s=>
+      s.status!=='deleted' &&
+      s.schedule_date===today &&
+      (String(s.user_id)===String(curUser.id) || s.user_name===curUser.name)
+    );
+    if(!mine.length) return;
+    // 오늘 이미 확인 누른 일정 id (localStorage, 부하 0)
+    const ackKey='kbmc_sched_ack_'+today;
+    let acked=[];
+    try{ acked=JSON.parse(localStorage.getItem(ackKey)||'[]'); }catch(e){ acked=[]; }
+    const pending=mine.filter(s=>!acked.includes(String(s.id)));
+    if(!pending.length) return;  // 다 확인함 → 안 띄움
+
+    // 시각 정렬
+    pending.sort((a,b)=>String(a.schedule_time||'99:99').localeCompare(String(b.schedule_time||'99:99')));
+    const now=new Date();
+    const _mins=(t)=>{ if(!t) return null; const m=String(t).match(/(\d{1,2}):(\d{2})/); if(!m) return null; return (+m[1])*60+(+m[2]); };
+    const nowMin=now.getHours()*60+now.getMinutes();
+
+    const rows=pending.map(s=>{
+      const tm=_mins(s.schedule_time);
+      const imminent = (tm!==null) && (tm-nowMin<=60) && (tm-nowMin>=1);  // 60~1분 전
+      const past = (tm!==null) && (tm-nowMin<0);
+      const tag = imminent?'<span style="font-size:10px;font-weight:800;color:#fff;background:#dc2626;border-radius:6px;padding:1px 6px;margin-left:6px">곧 시작</span>'
+                 : past?'<span style="font-size:10px;color:var(--gray-400);margin-left:6px">지남</span>':'';
+      return `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid ${imminent?'#fecaca':'var(--gray-150)'};border-radius:10px;background:${imminent?'#fef2f2':'#fff'};margin-bottom:8px">
+        <div style="font-size:15px;font-weight:800;color:${imminent?'#dc2626':'var(--navy)'};min-width:52px;font-variant-numeric:tabular-nums">${esc(s.schedule_time||'—')}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700;color:var(--navy)">${esc(s.title||'(제목 없음)')}${tag}</div>
+          ${s.company_name?`<div style="font-size:11px;color:var(--gray-500);margin-top:1px">${esc(s.company_name)}</div>`:''}
+        </div>
+      </div>`;
+    }).join('');
+
+    let ov=document.getElementById('ov-today-sched');
+    if(!ov){ ov=document.createElement('div'); ov.id='ov-today-sched'; ov.className='ov-bg'; document.body.appendChild(ov); }
+    ov.innerHTML=`<div class="ov-box" style="width:380px;max-width:92vw;padding:22px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <svg class="li" viewBox="0 0 24 24" style="color:#3684FF;width:20px;height:20px"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        <span style="font-size:16px;font-weight:800;color:var(--navy)">오늘의 일정 ${pending.length}건</span>
+      </div>
+      <div style="font-size:11px;color:var(--gray-400);margin-bottom:14px">${fmtD(today)}</div>
+      <div style="max-height:50vh;overflow-y:auto">${rows}</div>
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <button class="btn btn-outline" style="flex:1" onclick="_todaySchedRemindLater()">나중에</button>
+        <button class="btn btn-primary" style="flex:1" onclick="_todaySchedAck()">확인 (오늘 안 보기)</button>
+      </div>
+    </div>`;
+    ov.classList.add('open');
+    window._todaySchedPendingIds=pending.map(s=>String(s.id));
+    window._todaySchedAckKey=ackKey;
+  }catch(e){ console.warn('일정 팝업 오류:',e); }
+}
+function _todaySchedRemindLater(){
+  const ov=document.getElementById('ov-today-sched');
+  if(ov){ ov.classList.remove('open'); }  // 확인 기록 안 남김 → 다음 접속 때 또 뜸
+}
+function _todaySchedAck(){
+  try{
+    const key=window._todaySchedAckKey, ids=window._todaySchedPendingIds||[];
+    if(key){
+      let acked=[]; try{ acked=JSON.parse(localStorage.getItem(key)||'[]'); }catch(e){}
+      ids.forEach(id=>{ if(!acked.includes(id)) acked.push(id); });
+      localStorage.setItem(key, JSON.stringify(acked));
+    }
+  }catch(e){}
+  const ov=document.getElementById('ov-today-sched');
+  if(ov){ ov.classList.remove('open'); }
+}
+
 function _checkBackupReminder(){
   if(curUser?.role !== 'admin') return;
   const now = new Date();
@@ -9854,6 +9938,9 @@ function openActM(lid,cname){
   const cdInput=document.getElementById('act-contract-date');
   if(cdInput) cdInput.value='';
   (document.getElementById('act-next')||{}).value='';
+  (document.getElementById('act-next-date')||{}).value='';
+  (document.getElementById('act-next-time')||{}).value='';
+  { const _c=document.getElementById('act-next-cal'); if(_c) _c.checked=true; }
   // 제안부분 — 기존 저장값 표시
   const proposalEl=document.getElementById('act-proposal');
   if(proposalEl){
@@ -10888,6 +10975,9 @@ async function saveActivity(){
   }
   const stage=window._curActStage||document.getElementById('act-stage').value;
   const nextAct=document.getElementById('act-next').value.trim();
+  const nextDate=(document.getElementById('act-next-date')?.value||'').trim();
+  const nextTime=(document.getElementById('act-next-time')?.value||'').trim();
+  const nextToCal=document.getElementById('act-next-cal')?.checked;
   const isDropStage=(window._curActStage==='드랍'||curActStatus==='drop');
   const isHoldStage=(window._curActStage==='보류');
 
@@ -11020,10 +11110,26 @@ async function saveActivity(){
       ||todayKst();
     await dbU('leads',lid,{contract_date:contractDate});
   }
-  if(nextAct){
+  if(nextAct||nextDate){
     const nas=allNextActions?.length?allNextActions:allNextActions||[];
-    nas.unshift({id:uuid(),lead_id:lid,lead_name:allLeads.find(l=>l.id===lid)?.company_name||'',action_type:'팔로업',memo:nextAct,due_date:'',due_time:'',remind_days:1,status:'예정',team_leader:curUser.name,created_at:new Date().toISOString()});
+    const _leadName=allLeads.find(l=>l.id===lid)?.company_name||'';
+    nas.unshift({id:uuid(),lead_id:lid,lead_name:_leadName,action_type:'팔로업',memo:nextAct||'후속 조치',due_date:nextDate,due_time:nextTime,remind_days:1,status:'예정',team_leader:curUser.name,created_at:new Date().toISOString()});
     ls('next_actions',nas);
+    // ★ 날짜 지정 + 체크 시 개인일정 자동등록
+    if(nextDate && nextToCal){
+      try{
+        const _schedPayload={
+          user_id:curUser.id, user_name:curUser.name, role:curUser.role,
+          branch_name: (curUser.role==='team' ? (curUser.branch||'') : (curUser.name||'')),
+          title:(nextAct?nextAct+' — ':'')+_leadName, schedule_date:nextDate, schedule_time:nextTime,
+          category:'work', memo:'다음 액션 자동등록',
+          scope:'personal', target_roles:'', target_branches:'',
+          company_name:_leadName, companions:'', status:'active'
+        };
+        const _srow=await dbI('schedules',_schedPayload);
+        if(_srow && typeof allSchedules!=='undefined'){ (allSchedules=allSchedules||[]).unshift(_srow); }
+      }catch(e){ console.warn('개인일정 자동등록 실패:',e); }
+    }
   }
   closeM('modal-activity'); showToast('활동 기록 저장','success');
   // 본인이 저장한 활동기록은 알림 불필요 (내가 한 일이므로)
