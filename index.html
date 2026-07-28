@@ -2627,10 +2627,26 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
         <span><span style="font-size:16px;margin-right:8px"><svg class="li" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></span><b>쪽지</b> <span style="color:var(--gray-400);font-size:12px">새 1:1 쪽지</span></span>
         <input type="checkbox" id="np-memo" style="width:18px;height:18px;cursor:pointer">
       </label>
-      <label class="np-row" style="display:flex;align-items:center;justify-content:space-between;padding:12px 4px;cursor:pointer">
+      <label class="np-row" style="display:flex;align-items:center;justify-content:space-between;padding:12px 4px;border-bottom:1px solid var(--gray-100);cursor:pointer">
         <span><span style="font-size:16px;margin-right:8px"><svg class="li" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg></span><b>오늘의 브리핑</b> <span style="color:var(--gray-400);font-size:12px">로그인 후 요약 팝업 (팀장·지점장)</span></span>
         <input type="checkbox" id="np-briefing" style="width:18px;height:18px;cursor:pointer">
       </label>
+      <label class="np-row" style="display:flex;align-items:center;justify-content:space-between;padding:12px 4px;cursor:pointer">
+        <span><span style="font-size:16px;margin-right:8px"><svg class="li" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M12 14v3M10.5 15.5h3"/></svg></span><b>일정 알림</b> <span style="color:var(--gray-400);font-size:12px">다음 액션·미팅 시각 (CRM 켜둔 동안)</span></span>
+        <input type="checkbox" id="np-schedule" onchange="_toggleSchedLeadUI()" style="width:18px;height:18px;cursor:pointer">
+      </label>
+    </div>
+    <!-- 일정 알림 시점 선택 (일정 알림 켰을 때만) -->
+    <div id="np-sched-lead-wrap" style="display:none;margin:8px 4px 0;padding:12px 14px;background:#eff6ff;border:1px solid var(--blue-100);border-radius:10px">
+      <div style="font-size:12px;font-weight:700;color:#1e40af;margin-bottom:9px">알림 시점 <span style="font-weight:400;color:var(--gray-400)">(복수 선택 가능)</span></div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:5px 10px;background:#fff;border:1px solid var(--gray-200);border-radius:8px"><input type="checkbox" class="np-lead-cb" value="0" style="cursor:pointer">정각</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:5px 10px;background:#fff;border:1px solid var(--gray-200);border-radius:8px"><input type="checkbox" class="np-lead-cb" value="5" style="cursor:pointer">5분 전</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:5px 10px;background:#fff;border:1px solid var(--gray-200);border-radius:8px"><input type="checkbox" class="np-lead-cb" value="10" style="cursor:pointer">10분 전</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:5px 10px;background:#fff;border:1px solid var(--gray-200);border-radius:8px"><input type="checkbox" class="np-lead-cb" value="30" style="cursor:pointer">30분 전</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:5px 10px;background:#fff;border:1px solid var(--gray-200);border-radius:8px"><input type="checkbox" class="np-lead-cb" value="60" style="cursor:pointer">1시간 전</label>
+      </div>
+      <div style="font-size:11px;color:var(--gray-400);margin-top:8px">CRM 탭이 열려 있고 로그인 상태일 때만 알림이 표시됩니다.</div>
     </div>
     <div style="font-size:11px;font-weight:700;color:var(--gray-400);letter-spacing:.3px;margin:18px 4px 4px;text-transform:uppercase">항상 받는 알림 · 끄기 불가</div>
     <div style="display:flex;flex-direction:column;gap:2px">
@@ -6902,6 +6918,12 @@ function _schedNotifyCheck(){
     if(!curUser) return;
     if(!('Notification' in window) || Notification.permission!=='granted') return;
     if(typeof allSchedules==='undefined' || !allSchedules) return;
+    // ★ 사용자 설정 반영: 일정 알림 on/off + 시점(schedLead)
+    const _prefs = (typeof _getMyNotifPrefs==='function') ? _getMyNotifPrefs() : {schedule:true, schedLead:[10,0]};
+    if(_prefs.schedule===false) return;  // 일정 알림 꺼짐
+    const leads = Array.isArray(_prefs.schedLead) ? _prefs.schedLead : [10,0];
+    if(!leads.length) return;
+
     const today=todayKst();
     const mine=(allSchedules||[]).filter(s=>
       s.status!=='deleted' && s.schedule_date===today && s.schedule_time &&
@@ -6911,7 +6933,6 @@ function _schedNotifyCheck(){
 
     const now=new Date();
     const nowMin=now.getHours()*60+now.getMinutes();
-    // 이미 알린 기록 (localStorage, 부하 0) — "id:종류" 단위
     const sentKey='kbmc_sched_notified_'+today;
     let sent=[];
     try{ sent=JSON.parse(localStorage.getItem(sentKey)||'[]'); }catch(e){ sent=[]; }
@@ -6922,18 +6943,18 @@ function _schedNotifyCheck(){
     mine.forEach(s=>{
       const tm=_mins(s.schedule_time); if(tm===null) return;
       const diff = tm - nowMin;  // 양수=미래, 0=지금, 음수=지남
-      // 미리 알림: 정확히 리드타임 구간(10~1분 전)에 진입했고 아직 안 보냄
-      const preKey=String(s.id)+':pre';
-      if(diff<=SCHED_NOTIFY_LEAD_MIN && diff>=1 && !sent.includes(preKey)){
-        _fireSchedNotify(`${SCHED_NOTIFY_LEAD_MIN>=diff?diff:SCHED_NOTIFY_LEAD_MIN}분 후 일정`, s);
-        sent.push(preKey); changed=true;
-      }
-      // 정각 알림: 0분(도달)~ -2분(살짝 지남) 구간, 아직 안 보냄
-      const nowKey=String(s.id)+':now';
-      if(diff<=0 && diff>=-2 && !sent.includes(nowKey)){
-        _fireSchedNotify('지금 일정 시각입니다', s);
-        sent.push(nowKey); changed=true;
-      }
+      leads.forEach(L=>{
+        const lead=parseInt(L,10); if(isNaN(lead)) return;
+        const key=String(s.id)+':'+lead;
+        if(sent.includes(key)) return;
+        if(lead===0){
+          // 정각: 도달~2분 지남 구간
+          if(diff<=0 && diff>=-2){ _fireSchedNotify('지금 일정 시각입니다', s); sent.push(key); changed=true; }
+        }else{
+          // 미리: 해당 분 전 도달 시점(그 분~1분 전 사이 진입)
+          if(diff<=lead && diff>=1){ _fireSchedNotify(lead+'분 후 일정', s); sent.push(key); changed=true; }
+        }
+      });
     });
     if(changed){ try{ localStorage.setItem(sentKey, JSON.stringify(sent)); }catch(e){} }
   }catch(e){ console.warn('일정 알림 확인 오류:', e); }
@@ -27378,17 +27399,28 @@ function showShortcutsHelp(){
 </script>
 <script>
 // ── 알림 설정 (4종: 회수/계약/팀활동/쪽지) ──
-function _defaultNotifPrefs(){ return { recall:true, contract:true, team:false, memo:true, briefing:true, push:false }; }
+function _defaultNotifPrefs(){ return { recall:true, contract:true, team:false, memo:true, briefing:true, push:false, schedule:true, schedLead:[10,0] }; }
 function _getMyNotifPrefs(){
   let p = (typeof curUser!=='undefined' && curUser && curUser.notif_prefs) || null;
   if (typeof p === 'string'){ try{ p = JSON.parse(p); }catch(_){ p = null; } }
   return Object.assign(_defaultNotifPrefs(), p || {});
+}
+function _toggleSchedLeadUI(){
+  const on = document.getElementById('np-schedule')?.checked;
+  const wrap = document.getElementById('np-sched-lead-wrap');
+  if(wrap) wrap.style.display = on ? 'block' : 'none';
 }
 function openNotifPrefs(){
   const p = _getMyNotifPrefs();
   const set = (id,v)=>{ const el=document.getElementById(id); if(el) el.checked=!!v; };
   set('np-recall',p.recall); set('np-contract',p.contract); set('np-team',p.team); set('np-memo',p.memo);
   set('np-briefing',p.briefing!==false); set('np-push',p.push===true);
+  set('np-schedule',p.schedule!==false);
+  { // 시점 체크박스 복원
+    const lead = Array.isArray(p.schedLead)?p.schedLead.map(String):['10','0'];
+    document.querySelectorAll('.np-lead-cb').forEach(cb=>{ cb.checked=lead.includes(String(cb.value)); });
+    _toggleSchedLeadUI();
+  }
   const hint = document.getElementById('np-hint'); let msg='';
   if (!('Notification' in window) || !('serviceWorker' in navigator)){
     msg = '이 브라우저(또는 화면)에서는 푸시 알림을 받을 수 없습니다. iPhone은 먼저 홈 화면에 추가해 주세요.';
@@ -27402,7 +27434,8 @@ function openNotifPrefs(){
 }
 async function saveNotifPrefs(){
   const get = (id)=>{ const el=document.getElementById(id); return el?el.checked:false; };
-  const prefs = { recall:get('np-recall'), contract:get('np-contract'), team:get('np-team'), memo:get('np-memo'), briefing:get('np-briefing'), push:get('np-push') };
+  const _lead = [...document.querySelectorAll('.np-lead-cb:checked')].map(cb=>parseInt(cb.value,10));
+  const prefs = { recall:get('np-recall'), contract:get('np-contract'), team:get('np-team'), memo:get('np-memo'), briefing:get('np-briefing'), push:get('np-push'), schedule:get('np-schedule'), schedLead:(_lead.length?_lead:[10,0]) };
   // 핸드폰 알림(푸시)을 켰으면 권한 요청 + 구독
   try{
     if (prefs.push && typeof window.kbmcEnablePush === 'function' && ('Notification' in window) && Notification.permission !== 'denied'){
