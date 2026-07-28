@@ -159,7 +159,7 @@ nav::-webkit-scrollbar{display:none}
 }
 #user-name{font-size:13px;font-weight:500;color:var(--gray-800)}
 #user-dropdown{
-  display:none;position:absolute;top:calc(100%+4px);right:0;
+  display:none;position:absolute;top:calc(100% + 4px);right:0;
   width:192px;background:var(--white);
   border:1px solid var(--gray-200);
   border-radius:var(--r);box-shadow:var(--sh-up);
@@ -1115,13 +1115,13 @@ body.dark-mode *::-webkit-scrollbar-thumb:hover{background:rgba(180,208,232,.30)
           oninput="globalSearch(this.value)"
           style="width:240px;padding:6px 14px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:20px;font-size:13px;font-family:inherit;color:var(--gray-900)"
           onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--gray-200)'">
-        <div id="gs-result" style="display:none;position:absolute;top:calc(100%+4px);left:0;width:360px;background:#fff;border:1px solid var(--gray-200);border-radius:var(--r);box-shadow:var(--sh-up);z-index:999;max-height:360px;overflow-y:auto"></div>
+        <div id="gs-result" style="display:none;position:absolute;top:calc(100% + 4px);left:0;width:360px;background:#fff;border:1px solid var(--gray-200);border-radius:var(--r);box-shadow:var(--sh-up);z-index:999;max-height:360px;overflow-y:auto"></div>
       </div>
       <!-- 알림 -->
       <div style="position:relative;margin-right:4px;">
         <button id="notif-btn" onclick="toggleNotif()" style="width:34px;height:34px;border-radius:8px;border:none;background:transparent;cursor:pointer;position:relative;color:var(--gray-600);display:flex;align-items:center;justify-content:center;transition:all .15s" title="알림" onmouseover="this.style.background='var(--gray-100)';this.style.color='var(--gray-900)'" onmouseout="this.style.background='transparent';this.style.color='var(--gray-600)'"><svg viewBox="0 0 24 24" width="18" height="18" style="stroke:currentColor;stroke-width:1.7;fill:none;stroke-linecap:round;stroke-linejoin:round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></button>
-        <span id="notif-badge" style="display:none;position:absolute;top:2px;right:2px;width:16px;height:16px;border-radius:50%;background:var(--err);color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;"></span>
-        <div id="notif-panel" style="display:none;position:absolute;top:calc(100%+4px);right:0;width:320px;background:#fff;border:1px solid var(--gray-200);border-radius:var(--r);box-shadow:var(--sh-up);z-index:999;max-height:400px;overflow-y:auto"></div>
+        <span id="notif-badge" style="display:none;position:absolute;top:2px;right:2px;width:16px;height:16px;border-radius:50%;background:var(--err);color:#fff;font-size:9px;font-weight:700;align-items:center;justify-content:center;"></span>
+        <div id="notif-panel" style="display:none;position:absolute;top:calc(100% + 4px);right:0;width:320px;background:#fff;border:1px solid var(--gray-200);border-radius:var(--r);box-shadow:var(--sh-up);z-index:999;max-height:400px;overflow-y:auto"></div>
       </div>
       <!-- 쪽지함 -->
       <div style="position:relative;margin-right:4px;">
@@ -27344,10 +27344,20 @@ function showShortcutsHelp(){
     }catch(e){ console.warn('[push] 구독 저장 실패', e); }
   }
 
+  // 서비스워커가 등록되지 않은 환경(sw.js 404 등)에서 ready가 영영 pending 되는 것을 차단
+  function _swReadyOrNull(ms){
+    if (!('serviceWorker' in navigator)) return Promise.resolve(null);
+    return Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise(function(res){ setTimeout(function(){ res(null); }, ms || 5000); })
+    ]).catch(function(){ return null; });
+  }
+
   async function subscribeNow(){
     if (!pushSupported()) return false;
     try{
-      var reg = await navigator.serviceWorker.ready;
+      var reg = await _swReadyOrNull(5000);
+      if (!reg){ console.warn('[push] 서비스워커 미준비 — /sw.js, /manifest.json 배포 여부를 확인하십시오'); return false; }
       var sub = await reg.pushManager.getSubscription();
       if (!sub){
         sub = await reg.pushManager.subscribe({
@@ -27365,12 +27375,14 @@ function showShortcutsHelp(){
     if (pushBanner) pushBanner.style.display = 'none';
   };
   window.kbmcEnablePush = async function(){
-    if (!pushSupported()){ alert('이 브라우저(또는 화면)에서는 알림을 받을 수 없습니다. iPhone은 먼저 홈 화면에 추가해 주세요.'); return; }
+    if (!pushSupported()){ alert('이 브라우저(또는 화면)에서는 알림을 받을 수 없습니다. iPhone은 먼저 홈 화면에 추가해 주세요.'); return false; }
+    var _ok = false;
     try{
       var perm = await Notification.requestPermission();
-      if (perm === 'granted') await subscribeNow();
+      if (perm === 'granted') _ok = await subscribeNow();
     }catch(_){}
     window.pwaPushDismiss();
+    return _ok;
   };
 
   function dismissedPush(){ try{ return localStorage.getItem(PUSH_DISMISS_KEY) === '1'; }catch(_){ return false; } }
@@ -27437,10 +27449,18 @@ async function saveNotifPrefs(){
   const get = (id)=>{ const el=document.getElementById(id); return el?el.checked:false; };
   const _lead = [...document.querySelectorAll('.np-lead-cb:checked')].map(cb=>parseInt(cb.value,10));
   const prefs = { recall:get('np-recall'), contract:get('np-contract'), team:get('np-team'), memo:get('np-memo'), briefing:get('np-briefing'), push:get('np-push'), schedule:get('np-schedule'), schedLead:(_lead.length?_lead:[10,0]) };
-  // 핸드폰 알림(푸시)을 켰으면 권한 요청 + 구독
+  // 핸드폰 알림(푸시): 권한요청/구독은 저장 흐름과 분리한다.
+  // (await 하면 서비스워커 미등록 시 여기서 멈춰 저장·모달닫기까지 도달하지 못함)
   try{
     if (prefs.push && typeof window.kbmcEnablePush === 'function' && ('Notification' in window) && Notification.permission !== 'denied'){
-      await window.kbmcEnablePush();
+      Promise.race([
+        window.kbmcEnablePush(),
+        new Promise(function(res){ setTimeout(function(){ res('timeout'); }, 8000); })
+      ]).then(function(_r){
+        if (_r !== true && typeof showToast === 'function'){
+          showToast('설정은 저장됐습니다. 다만 핸드폰 알림 등록은 실패했습니다 (알림 권한 또는 서비스워커 확인)','error');
+        }
+      }).catch(function(){});
     }
   }catch(_){}
   try{ if (typeof curUser!=='undefined' && curUser) curUser.notif_prefs = prefs; }catch(_){}
