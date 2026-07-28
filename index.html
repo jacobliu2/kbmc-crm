@@ -27452,21 +27452,28 @@ async function saveNotifPrefs(){
     }
   }catch(_){}
   // 서버 저장 (last_login_at과 동일한 REST PATCH 패턴)
+  let _serverOk = true; let _errMsg = '';
   try{
     if (typeof testMode==='undefined' || !testMode){
       const r = await fetch(SB_URL+'/rest/v1/accounts?id=eq.'+encodeURIComponent(curUser.id), {
         method:'PATCH', headers: sbH(), body: JSON.stringify({ notif_prefs: prefs })
       });
       if (!r.ok){
+        _serverOk = false;
         const t = await r.text().catch(()=> '');
-        if (t.includes('notif_prefs') || t.includes('column')){
-          console.warn('💡 Supabase에 notif_prefs 컬럼이 없습니다. 실행: ALTER TABLE accounts ADD COLUMN IF NOT EXISTS notif_prefs jsonb;');
+        if (t.includes('notif_prefs') || t.includes('column') || r.status===400){
+          _errMsg = 'DB에 notif_prefs 컬럼이 없습니다 (관리자 SQL 필요)';
+        } else {
+          _errMsg = '서버 저장 실패 (코드 '+r.status+')';
         }
       }
     }
-  }catch(e){ console.warn('알림설정 저장 실패', e); }
+  }catch(e){ _serverOk = false; _errMsg = '네트워크 오류: '+(e&&e.message||''); }
   if (typeof closeM === 'function') closeM('modal-notif-prefs');
-  if (typeof showToast === 'function') showToast('알림 설정이 저장되었습니다','success');
+  if (typeof showToast === 'function'){
+    if (_serverOk) showToast('알림 설정이 저장되었습니다','success');
+    else showToast('저장 실패 — '+_errMsg, 'error');
+  }
 }
 </script>
 </body>
