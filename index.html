@@ -3971,17 +3971,8 @@ function bizElapsedDays(fromMs, toMs){
 
 // leads-todo-widget 전용 래퍼
 function _todoWidgetId(id){return 'leads-todo-widget-'+id;}
-function closeTodoFormL(){var f=document.getElementById(_todoWidgetId('todo-add-form'));if(f)f.style.display='none';}
-function saveTodoL(){
-  var text=document.getElementById(_todoWidgetId('todo-input-text'))?.value.trim();
-  if(!text){showToast('할 일을 입력하세요','error');return;}
-  var due=document.getElementById(_todoWidgetId('todo-input-due'))?.value||'';
-  var todos=getTodos();
-  todos.unshift({id:uuid(),text,due_date:due,done:false,created_at:new Date().toISOString()});
-  saveTodos(todos);
-  closeTodoFormL();
-  renderTodayTodo('leads-todo-widget');
-}
+function closeTodoFormL(){ closeTodoForm('leads-todo-widget-'); }
+function saveTodoL(){ saveTodo('leads-todo-widget-'); }
 
 
 
@@ -6941,8 +6932,8 @@ function _schedNotifyCheck(){
         const key=String(s.id)+':'+lead;
         if(sent.includes(key)) return;
         if(lead===0){
-          // 정각: 도달~2분 지남 구간
-          if(diff<=0 && diff>=-2){ _fireSchedNotify('지금 일정 시각입니다', s); sent.push(key); changed=true; }
+          // 정각: 도달~10분 지남 구간 (백그라운드에서 타이머가 밀려 놓친 건을 늦게라도 복구)
+          if(diff<=0 && diff>=-10){ _fireSchedNotify('지금 일정 시각입니다', s); sent.push(key); changed=true; }
         }else{
           // 미리: 해당 분 전 도달 시점(그 분~1분 전 사이 진입)
           if(diff<=lead && diff>=1){ _fireSchedNotify(lead+'분 후 일정', s); sent.push(key); changed=true; }
@@ -6953,13 +6944,30 @@ function _schedNotifyCheck(){
   }catch(e){ console.warn('일정 알림 확인 오류:', e); }
 }
 
-function _fireSchedNotify(prefix, s){
+// 알림 발송 경로
+//  1순위 ServiceWorkerRegistration.showNotification() — 웹앱/모바일 포함 전 환경 지원
+//  2순위 new Notification() — PC 브라우저 탭 전용 폴백
+//  (안드로이드 크롬은 new Notification() 을 Illegal constructor 로 차단하므로 1순위가 필수)
+async function _fireSchedNotify(prefix, s){
+  const title='\uD83D\uDCC5 '+prefix;
+  const body=`${s.schedule_time||''} ${s.title||''}${s.company_name?'\n'+s.company_name:''}`.trim();
+  // 화면 내 토스트는 항상 병행 (알림이 실패해도 보이게)
+  try{ showToast(`${prefix} — ${s.schedule_time||''} ${s.title||''}`,'success'); }catch(e){}
+  if(!('Notification' in window) || Notification.permission!=='granted') return;
+  const opts={ body, tag:'sched-'+s.id, requireInteraction:false,
+               icon:'/icon-192.png', badge:'/icon-192.png', data:{ url:'/' } };
   try{
-    const body=`${s.schedule_time||''} ${s.title||''}${s.company_name?'\n'+s.company_name:''}`.trim();
-    const n=new Notification('📅 '+prefix, { body, tag:'sched-'+s.id, requireInteraction:false });
+    if('serviceWorker' in navigator && typeof window._swReadyOrNull==='function'){
+      const reg = await window._swReadyOrNull(3000);
+      if(reg && typeof reg.showNotification==='function'){
+        await reg.showNotification(title, opts);
+        return;
+      }
+    }
+  }catch(e){ console.warn('SW 알림 실패, 폴백 시도:', e); }
+  try{
+    const n=new Notification(title, opts);
     n.onclick=function(){ window.focus(); try{ showScreen('activity', document.querySelector('.nb[data-s="activity"]')); }catch(e){} n.close(); };
-    // 화면 내 토스트도 병행 (알림 놓쳐도 보이게)
-    try{ showToast(`${prefix} — ${s.schedule_time||''} ${s.title||''}`,'success'); }catch(e){}
   }catch(e){ console.warn('알림 발송 실패:', e); }
 }
 
@@ -6967,8 +6975,17 @@ function startSchedNotifyTimer(){
   stopSchedNotifyTimer();
   if(!('Notification' in window)) return;
   _schedNotifyCheck();  // 즉시 1회
-  _schedNotifyTimer = setInterval(_schedNotifyCheck, 60000);  // 1분마다
+  _schedNotifyTimer = setInterval(_schedNotifyCheck, 30000);  // 30초마다
   if(typeof _appTimers!=='undefined') _appTimers.push(_schedNotifyTimer);  // 로그아웃 시 정리
+  // 백그라운드에서는 브라우저가 타이머를 늦춘다. 화면 복귀 시 즉시 재확인해 놓친 건을 잡는다.
+  if(!window._schedVisBound){
+    window._schedVisBound = true;
+    document.addEventListener('visibilitychange', function(){
+      if(document.visibilityState==='visible' && _schedNotifyTimer){
+        try{ _schedNotifyCheck(); }catch(e){}
+      }
+    });
+  }
 }
 function stopSchedNotifyTimer(){
   if(_schedNotifyTimer){ clearInterval(_schedNotifyTimer); _schedNotifyTimer=null; }
@@ -10577,13 +10594,13 @@ function renderTodayTodo(targetId){
     const done=t.done||false;
     const overdue=t.due_date&&t.due_date<today&&!done;
     const elapsed=overdue?daysElapsed(t.due_date):0;
-    return`<div id="todo-row-${t.id}" style="display:flex;align-items:center;gap:8px;padding:7px 10px;
+    return`<div id="${_pfx}todo-row-${t.id}" style="display:flex;align-items:center;gap:8px;padding:7px 10px;
       background:${done?'transparent':overdue?'rgba(239,68,68,.06)':'rgba(37,99,235,.04)'};
       border-radius:6px;border-left:3px solid ${done?'var(--gray-200)':overdue?'var(--err)':'var(--blue)'};
       opacity:${done?.6:1};transition:all .2s">
-      <input type="checkbox" ${done?'checked':''} onchange="toggleTodo('${t.id}',this.checked)"
+      <input type="checkbox" ${done?'checked':''} onchange="toggleTodo('${t.id}',this.checked,'${_pfx}')"
         style="accent-color:var(--blue);width:15px;height:15px;cursor:pointer;flex-shrink:0">
-      <div style="flex:1;min-width:0" ondblclick="editTodo('${t.id}')">
+      <div style="flex:1;min-width:0" ondblclick="editTodo('${t.id}','${_pfx}')">
         <div style="font-size:12px;font-weight:600;
           color:${done?'var(--gray-400)':'var(--gray-800)'};
           ${done?'text-decoration:line-through':''}">
@@ -10594,7 +10611,7 @@ function renderTodayTodo(targetId){
           ${t.due_date}${overdue?` · <strong>+${elapsed}일 경과</strong>`:''}
         </div>`:''}
       </div>
-      <button onclick="deleteTodo('${t.id}')" style="background:none;border:none;color:var(--gray-300);
+      <button onclick="deleteTodo('${t.id}','${_pfx}')" style="background:none;border:none;color:var(--gray-300);
         cursor:pointer;font-size:12px;padding:2px 4px;flex-shrink:0" title="삭제"><svg class="li" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     </div>`;
   }
@@ -10700,7 +10717,7 @@ function renderTodayTodo(targetId){
       </div>
       <div style="display:flex;align-items:center;gap:6px">
         <span style="font-size:11px;color:var(--gray-400)">${today}</span>
-        <button onclick="openAddTodo()" title="할 일 추가"
+        <button onclick="openAddTodo('${_pfx}')" title="할 일 추가"
           style="width:24px;height:24px;border-radius:50%;background:var(--blue);color:#fff;border:none;
           cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;
           line-height:1;padding:0;flex-shrink:0">+</button>
@@ -10711,11 +10728,11 @@ function renderTodayTodo(targetId){
       <input type="text" id="${_pfx}todo-input-text" placeholder="할 일 입력..."
         style="width:100%;padding:7px 10px;border:1.5px solid var(--gray-200);border-radius:6px;
         font-size:13px;font-family:inherit;margin-bottom:6px;box-sizing:border-box"
-        onkeydown="if(event.key==='Enter')(_pfx?saveTodoL():saveTodo());if(event.key==='Escape')(_pfx?closeTodoFormL():closeTodoForm())">
+        onkeydown="if(event.key==='Enter')saveTodo('${_pfx}');if(event.key==='Escape')closeTodoForm('${_pfx}')">
       <div style="display:flex;gap:6px;align-items:center">
         <input type="date" id="${_pfx}todo-input-due" style="flex:1;padding:6px 8px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:12px;font-family:inherit">
-        <button class="btn btn-primary btn-xs" onclick="saveTodo()">추가</button>
-        <button class="btn btn-outline btn-xs" onclick="closeTodoForm()">취소</button>
+        <button class="btn btn-primary btn-xs" onclick="saveTodo('${_pfx}')">추가</button>
+        <button class="btn btn-outline btn-xs" onclick="closeTodoForm('${_pfx}')">취소</button>
       </div>
     </div>
     <!-- 시스템 알림 -->
@@ -10906,38 +10923,45 @@ function getTodoKey(){return 'kbmc_todo_'+(curUser?.name||'');}
 function getTodos(){try{return JSON.parse(localStorage.getItem(getTodoKey())||'[]');}catch(e){return[];}}
 function saveTodos(arr){localStorage.setItem(getTodoKey(),JSON.stringify(arr));}
 
-function openAddTodo(){
-  const form=document.getElementById('todo-add-form'); if(!form) return;
+// TODO 위젯은 여러 화면에 동시 렌더된다(today/act/leads).
+// 각 위젯의 요소 id 는 prefix 로 구분되므로 조작 함수에 반드시 prefix 를 넘긴다.
+function _todoTarget(pfx){ return pfx ? pfx.slice(0,-1) : 'today-todo-widget'; }
+function openAddTodo(pfx){
+  pfx = pfx || '';
+  const form=document.getElementById(pfx+'todo-add-form'); if(!form) return;
   form.style.display='';
-  const inp=document.getElementById('todo-input-text');
+  const inp=document.getElementById(pfx+'todo-input-text');
   if(inp){inp.value='';inp.focus();}
-  const due=document.getElementById('todo-input-due');
+  const due=document.getElementById(pfx+'todo-input-due');
   if(due) due.value=todayKst();
 }
-function closeTodoForm(){
-  const form=document.getElementById('todo-add-form'); if(form) form.style.display='none';
+function closeTodoForm(pfx){
+  pfx = pfx || '';
+  const form=document.getElementById(pfx+'todo-add-form'); if(form) form.style.display='none';
 }
-function saveTodo(){
-  const text=document.getElementById('todo-input-text')?.value.trim();
+function saveTodo(pfx){
+  pfx = pfx || '';
+  const text=document.getElementById(pfx+'todo-input-text')?.value.trim();
   if(!text){showToast('할 일을 입력하세요','error');return;}
-  const due=document.getElementById('todo-input-due')?.value||'';
+  const due=document.getElementById(pfx+'todo-input-due')?.value||'';
   const todos=getTodos();
   todos.unshift({id:uuid(),text,due_date:due,done:false,created_at:new Date().toISOString()});
   saveTodos(todos);
-  closeTodoForm();
-  renderTodayTodo();
+  closeTodoForm(pfx);
+  renderTodayTodo(_todoTarget(pfx));
 }
-function toggleTodo(id, done){
+function toggleTodo(id, done, pfx){
   const todos=getTodos();
   const t=todos.find(x=>x.id===id);
   if(t) t.done=done;
   saveTodos(todos);
-  renderTodayTodo();
+  renderTodayTodo(_todoTarget(pfx||''));
 }
-function editTodo(id){
+function editTodo(id, pfx){
+  pfx = pfx || '';
   const todos=getTodos();
   const t=todos.find(x=>x.id===id); if(!t) return;
-  const row=document.getElementById('todo-row-'+id); if(!row) return;
+  const row=document.getElementById(pfx+'todo-row-'+id); if(!row) return;
 
   // 인라인 편집 UI로 교체
   row.innerHTML=`
@@ -10945,18 +10969,19 @@ function editTodo(id){
       <input type="text" id="edit-todo-text-${id}" value="${t.text.replace(/"/g,'&quot;')}"
         style="width:100%;padding:5px 8px;border:1.5px solid var(--blue);border-radius:6px;
         font-size:12px;font-family:inherit;box-sizing:border-box"
-        onkeydown="if(event.key==='Enter')saveEditTodo('${id}');if(event.key==='Escape')renderTodayTodo()">
+        onkeydown="if(event.key==='Enter')saveEditTodo('${id}','${pfx}');if(event.key==='Escape')renderTodayTodo('${_todoTarget(pfx)}')">
       <div style="display:flex;gap:6px;align-items:center">
         <input type="date" id="edit-todo-due-${id}" value="${t.due_date||''}"
           style="flex:1;padding:4px 8px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:11px;font-family:inherit">
-        <button class="btn btn-primary btn-xs" onclick="saveEditTodo('${id}')">저장</button>
-        <button class="btn btn-outline btn-xs" onclick="renderTodayTodo()">취소</button>
+        <button class="btn btn-primary btn-xs" onclick="saveEditTodo('${id}','${pfx}')">저장</button>
+        <button class="btn btn-outline btn-xs" onclick="renderTodayTodo('${_todoTarget(pfx)}')">취소</button>
       </div>
     </div>`;
   document.getElementById('edit-todo-text-'+id)?.focus();
 }
 
-function saveEditTodo(id){
+function saveEditTodo(id, pfx){
+  pfx = pfx || '';
   const text=document.getElementById('edit-todo-text-'+id)?.value.trim();
   if(!text){showToast('내용을 입력하세요','error');return;}
   const due=document.getElementById('edit-todo-due-'+id)?.value||'';
@@ -10964,13 +10989,13 @@ function saveEditTodo(id){
   const t=todos.find(x=>x.id===id);
   if(t){t.text=text;t.due_date=due;}
   saveTodos(todos);
-  renderTodayTodo();
+  renderTodayTodo(_todoTarget(pfx));
   showToast('수정됐어요','success');
 }
 
-function deleteTodo(id){
+function deleteTodo(id, pfx){
   saveTodos(getTodos().filter(x=>x.id!==id));
-  renderTodayTodo();
+  renderTodayTodo(_todoTarget(pfx||''));
 }
 
 function pickStage(el, stage){
@@ -27345,6 +27370,7 @@ function showShortcutsHelp(){
   }
 
   // 서비스워커가 등록되지 않은 환경(sw.js 404 등)에서 ready가 영영 pending 되는 것을 차단
+  window._swReadyOrNull = _swReadyOrNull;
   function _swReadyOrNull(ms){
     if (!('serviceWorker' in navigator)) return Promise.resolve(null);
     return Promise.race([
