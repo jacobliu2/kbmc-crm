@@ -25550,8 +25550,11 @@ async function doLogin(){
     }
 
     if(!user){setErr(err,'아이디 또는 비밀번호가 올바르지 않습니다.');return;}
-    curUser={id:user.id,name:user.name,role:user.role,branch:user.branch};
+    curUser={id:user.id,name:user.name,role:user.role,branch:user.branch,
+             notif_prefs:(user.notif_prefs!==undefined?user.notif_prefs:null)};
   saveSession(curUser); startApp();
+  // Edge Function 로그인 응답에 notif_prefs 가 없을 수 있으므로 서버에서 한 번 보충한다.
+  if(curUser.notif_prefs==null) _refreshMyNotifPrefs();
 
   // 마지막 접속일 자동 갱신 (Supabase + 로컬 캐시)
   // dbU는 updated_at을 강제 추가하므로 sbPatch 직접 호출
@@ -27533,6 +27536,20 @@ function showShortcutsHelp(){
 <script>
 // ── 알림 설정 (4종: 회수/계약/팀활동/쪽지) ──
 function _defaultNotifPrefs(){ return { recall:true, contract:true, team:false, memo:true, briefing:true, push:false, schedule:true, schedLead:[10,0] }; }
+// 서버(accounts)에서 내 notif_prefs 를 다시 읽어 curUser/세션에 반영
+async function _refreshMyNotifPrefs(){
+  try{
+    if (typeof testMode!=='undefined' && testMode) return;
+    if (typeof curUser==='undefined' || !curUser || !curUser.id) return;
+    const r = await fetch(SB_URL+'/rest/v1/accounts?select=notif_prefs&id=eq.'+encodeURIComponent(curUser.id), { headers: sbH() });
+    if (!r.ok) return;
+    const rows = await r.json();
+    if (Array.isArray(rows) && rows.length){
+      curUser.notif_prefs = rows[0].notif_prefs || null;
+      if (typeof saveSession==='function') saveSession(curUser);
+    }
+  }catch(_){}
+}
 function _getMyNotifPrefs(){
   let p = (typeof curUser!=='undefined' && curUser && curUser.notif_prefs) || null;
   if (typeof p === 'string'){ try{ p = JSON.parse(p); }catch(_){ p = null; } }
@@ -27544,6 +27561,17 @@ function _toggleSchedLeadUI(){
   if(wrap) wrap.style.display = on ? 'block' : 'none';
 }
 function openNotifPrefs(){
+  // 서버 최신값을 비동기로 받아와 반영(도착하면 체크박스 갱신)
+  try{
+    _refreshMyNotifPrefs().then(function(){
+      const el=document.getElementById('modal-notif-prefs');
+      if(el && el.classList.contains('open')) _applyNotifPrefsToUI();
+    });
+  }catch(_){}
+  _applyNotifPrefsToUI();
+  if (typeof openM === 'function') openM('modal-notif-prefs');
+}
+function _applyNotifPrefsToUI(){
   const p = _getMyNotifPrefs();
   const set = (id,v)=>{ const el=document.getElementById(id); if(el) el.checked=!!v; };
   set('np-recall',p.recall); set('np-contract',p.contract); set('np-team',p.team); set('np-memo',p.memo);
@@ -27563,7 +27591,6 @@ function openNotifPrefs(){
     msg = '저장 시 알림 권한을 요청합니다. 허용해야 실제로 알림이 전송됩니다.';
   }
   if (hint){ if(msg){ hint.textContent=msg; hint.style.display='block'; } else { hint.style.display='none'; } }
-  if (typeof openM === 'function') openM('modal-notif-prefs');
 }
 async function saveNotifPrefs(){
   const get = (id)=>{ const el=document.getElementById(id); return el?el.checked:false; };
@@ -27583,7 +27610,13 @@ async function saveNotifPrefs(){
       }).catch(function(){});
     }
   }catch(_){}
-  try{ if (typeof curUser!=='undefined' && curUser) curUser.notif_prefs = prefs; }catch(_){}
+  try{
+    if (typeof curUser!=='undefined' && curUser){
+      curUser.notif_prefs = prefs;
+      // 세션에도 반영해야 새로고침/재접속 시 유지된다
+      if (typeof saveSession==='function') saveSession(curUser);
+    }
+  }catch(_){}
   // 로컬 캐시 갱신
   try{
     if (typeof getAccs==='function' && typeof saveAccs==='function' && curUser){
