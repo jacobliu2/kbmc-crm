@@ -2768,9 +2768,17 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
     </div>
     <!-- 대전TM 섹션 -->
     <div id="dist-section-daejeon" style="display:none">
-      <div style="padding:14px;background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.2);border-radius:var(--r-sm);font-size:13px;color:var(--gray-700)">
-        <svg class="li" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.6A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.4 2.1L8 9.6a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.4c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2z"/></svg>선택한 DB를 <strong>대전TM센터</strong>로 이관합니다.<br>
-        <span style="font-size:11px;color:var(--gray-400)">TM센터 1차 통화 → 팀장 배정으로 이어집니다</span>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <label style="display:flex;align-items:flex-start;gap:10px;padding:11px 14px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);cursor:pointer" onclick="selectDaejeonType('add')">
+          <input type="radio" name="daejeon-type" value="add" checked style="accent-color:var(--navy);margin-top:2px">
+          <div><div style="font-size:13px;font-weight:700"><svg class="li" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.6A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.4 2.1L8 9.6a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.4c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2z"/></svg>대전 추가관리</div>
+          <div style="font-size:11px;color:var(--gray-400);margin-top:2px">기존 담당 팀장을 그대로 두고 대전TM이 함께 관리합니다.<br>TM센터 1차 통화 → 팀장 배정으로 이어지는 기존 방식입니다.</div></div>
+        </label>
+        <label style="display:flex;align-items:flex-start;gap:10px;padding:11px 14px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);cursor:pointer" onclick="selectDaejeonType('full')">
+          <input type="radio" name="daejeon-type" value="full" style="accent-color:var(--navy);margin-top:2px">
+          <div><div style="font-size:13px;font-weight:700"><svg class="li" viewBox="0 0 24 24"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>대전으로 완전이관</div>
+          <div style="font-size:11px;color:var(--gray-400);margin-top:2px">지점·팀장·협업지점을 모두 해제하고 대전TM 단독 담당으로 바꿉니다.<br>퇴사 팀장 DB 정리용. 회수를 거치지 않고 한 번에 처리되며, <strong>대전이관 원복</strong>으로 되돌릴 수 있습니다.</div></div>
+        </label>
       </div>
     </div>
     <!-- 회수 섹션 -->
@@ -21384,9 +21392,21 @@ function clearTeamCard(){
   _selTeam='';
 }
 function selectRecallType(type){ _recallType=type; }
+// 대전 이관 방식: 'add'=추가관리(기존) / 'full'=완전이관(지점·팀장 해제)
+let _daejeonType='add';
+function selectDaejeonType(type){
+  _daejeonType = (type==='full') ? 'full' : 'add';
+  const cb=document.getElementById('dist-confirm-btn');
+  if(cb && _distMode==='daejeon') cb.textContent = (_daejeonType==='full') ? '완전이관 확정' : '추가관리 확정';
+}
 
 function pickDistMode(mode, btn){
   _distMode=mode; _selBranch=''; _selTeam='';
+  if(mode==='daejeon'){
+    _daejeonType='add';
+    const _r=document.querySelector('input[name="daejeon-type"][value="add"]');
+    if(_r) _r.checked=true;
+  }
   // 탭 스타일
   document.querySelectorAll('.dist-tab').forEach(b=>{
     b.style.fontWeight='600'; b.style.color='var(--gray-500)'; b.style.borderBottom='2px solid transparent';
@@ -21398,7 +21418,7 @@ function pickDistMode(mode, btn){
     if(el) el.style.display=(sec===mode?'':'none');
   });
   const cb=document.getElementById('dist-confirm-btn');
-  if(cb) cb.textContent=mode==='recall'?'회수 확정':mode==='daejeon'?'이관 확정':mode==='happycall'?'해피콜 이관':mode==='team_transfer'?'팀장 이관':mode==='reminder'?'리마인드 이관':'배정 확정';
+  if(cb) cb.textContent=mode==='recall'?'회수 확정':mode==='daejeon'?(_daejeonType==='full'?'완전이관 확정':'추가관리 확정'):mode==='happycall'?'해피콜 이관':mode==='team_transfer'?'팀장 이관':mode==='reminder'?'리마인드 이관':'배정 확정';
 }
 
 // 리마인드 날짜 프리셋 (월 단위)
@@ -21436,6 +21456,7 @@ function openDistribute(){
   (document.getElementById('dist-sub')||{}).textContent=`선택 ${selIds.size}건`;
   // 초기화
   _selBranch=''; _selTeam=''; _recallType='team_only'; _distMode='branch';
+  _daejeonType='add';
   if(typeof _selTeams!=='undefined') _selTeams.clear();
   _tmCollabSelected=false;
   const _tmCard=document.getElementById('dist-tm-collab-card');
@@ -24011,21 +24032,50 @@ async function confirmDistribute(){
   }
 
   // ── 대전TM 이관 ──────────────────────────────────
+  //  add : 추가관리 — 기존 담당 유지(team_names 보존). 기존 방식 그대로.
+  //  full: 완전이관 — 지점·팀장·협업 전부 해제 후 대전 단독.
+  //        검증된 _rpBuildTransferPatch() 를 재사용한다(원복 가능).
   if(_distMode==='daejeon'){
+    const _isFull = (_daejeonType==='full');
+    if(_isFull){
+      const _msg = ids.length+'건을 대전TM 단독 담당으로 완전이관합니다.\n\n'
+                 + '· 지점·팀장·협업지점이 모두 해제됩니다\n'
+                 + '· 회수를 거치지 않고 즉시 처리됩니다\n'
+                 + "· '대전이관 원복'으로 되돌릴 수 있습니다\n\n진행하시겠습니까?";
+      if(!confirm(_msg)) return;
+    }
     closeOv('ov-distribute'); clearSel();
     await Promise.all(ids.flatMap(id=>{
       const _r=_buildRedistUpdate(id);
       const _now=new Date().toISOString();
       const _lead = (allLeads||[]).find(r=>r.id===id);
-      let djData={branch_name:'대전',team_name:'대전센터',tm_transferred:true,tm_transferred_at:_now,assigned_at:_now,distributed_at:_r.distributed_at};      if(allLeads){const i=allLeads.findIndex(r=>r.id===id);if(i>=0)allLeads[i]={...allLeads[i],...djData};}
+      let djData, _logMsg;
+      if(_isFull){
+        djData = _rpBuildTransferPatch(
+          note ? ('완전이관 - '+note) : '대전 완전이관 (DB배정 모달)', _lead);
+        djData.tm_transferred_at = _now;
+        djData.distributed_at    = _r.distributed_at;
+        _logMsg = '대전TM 완전이관 (지점·팀장 해제)'+(note?' ('+note+')':'');
+      } else {
+        djData = {branch_name:'대전',team_name:'대전센터',tm_transferred:true,
+                  tm_transferred_at:_now,assigned_at:_now,distributed_at:_r.distributed_at};
+        _logMsg = '대전TM센터 추가관리'+(note?' ('+note+')':'');
+      }
+      if(allLeads){const i=allLeads.findIndex(r=>r.id===id);if(i>=0)allLeads[i]={...allLeads[i],...djData};}
+      if(typeof _allLeadsRaw!=='undefined' && _allLeadsRaw){
+        const ri=_allLeadsRaw.findIndex(r=>r.id===id);
+        if(ri>=0)_allLeadsRaw[ri]={..._allLeadsRaw[ri],...djData};
+      }
       return [
         dbU('leads',id,djData),
-        logActivity(id,'assign','대전TM센터 이관'+(note?' ('+note+')':''),'',''),
+        logActivity(id,'assign',_logMsg,'',''),
         _logRedist(id, _r.prevDist, _r.distributed_at)
       ];
     }));
-    showToast(`${ids.length}건 대전TM 이관 완료`,'success');
-    filterLeads(); updateLeadsSubTabCounts(); return;
+    showToast(`${ids.length}건 대전TM ${_isFull?'완전이관':'추가관리'} 완료`,'success');
+    filterLeads(); updateLeadsSubTabCounts();
+    if(typeof _updatePendingCount==='function') _updatePendingCount();
+    return;
   }
 
   // ── 해피콜 이관 ──────────────────────────────────
