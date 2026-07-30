@@ -3072,6 +3072,19 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
 
     <!-- ③ 히스토리 탭 -->
     <div id="act-tab-panel-history" style="display:none;flex:1;overflow-y:auto;padding:16px 24px">
+      <!-- 활동 기록 / 시스템 이력 구분 -->
+      <div style="display:flex;gap:6px;margin-bottom:12px;flex-shrink:0">
+        <button id="ahseg-real" onclick="setActHistMode('real')"
+          style="flex:1;padding:7px 10px;font-size:12px;font-weight:700;border-radius:6px;cursor:pointer;font-family:inherit;
+          background:var(--navy);color:#fff;border:1.5px solid var(--navy)">
+          <svg class="li" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          활동 기록<span id="ahcnt-real" style="opacity:.75;margin-left:3px"></span></button>
+        <button id="ahseg-sys" onclick="setActHistMode('sys')"
+          style="flex:1;padding:7px 10px;font-size:12px;font-weight:500;border-radius:6px;cursor:pointer;font-family:inherit;
+          background:var(--gray-50);color:var(--gray-500);border:1.5px solid var(--gray-200)">
+          <svg class="li" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2 2 2 0 1 1-4 0 1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 4.6 15a2 2 0 1 1 0-4 1.7 1.7 0 0 0 1.2-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 11 4.6a2 2 0 1 1 4 0 1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1A1.7 1.7 0 0 0 19.4 11a2 2 0 1 1 0 4z"/></svg>
+          시스템 이력<span id="ahcnt-sys" style="opacity:.75;margin-left:3px"></span></button>
+      </div>
       <div id="act-modal-history-body" style="display:flex;flex-direction:column;gap:0"></div>
     </div>
 
@@ -10207,10 +10220,11 @@ function openActM(lid,cname){
 // 히스토리 탭을 바로 열어주는 함수 (진행내용 셀 클릭 시)
 function openActMHistory(lid, cname){
   openActM(lid, cname);
-  // 모달 열린 후 히스토리 탭으로 전환
+  // 모달 열린 후 히스토리 탭으로 전환 (기본 구분은 '활동 기록')
   setTimeout(()=>{
     const histBtn = document.getElementById('act-tab-history');
     if(histBtn) switchActModalTab('history', histBtn);
+    if(typeof setActHistMode==='function') setActHistMode('real');
   }, 80);
 }
 
@@ -10242,6 +10256,7 @@ function switchActModalTab(tab, btn){
   if(form) form.style.display = tab==='form'?'':'none';
   if(info) info.style.display = tab==='info'?'':'none';
   if(hist) hist.style.display = tab==='history'?'':'none';
+  if(tab==='history' && !window._actHistMode) window._actHistMode='real';
   // 입력 외 탭(고객정보·히스토리)에서는 저장 버튼 숨김
   if(footer){
     const saveBtn=footer.querySelector('[onclick="saveActivity()"]');
@@ -10334,17 +10349,39 @@ function _renderActModalInfo(lead){
     (lead.proposal?row('제안부분', lead.proposal):'');
 }
 
+// 히스토리 구분: 'real'=담당자가 작성한 활동 / 'sys'=시스템 이력
+function setActHistMode(mode){
+  window._actHistMode = (mode==='sys') ? 'sys' : 'real';
+  const on = { bg:'var(--navy)', fg:'#fff', bd:'var(--navy)', w:'700' };
+  const off= { bg:'var(--gray-50)', fg:'var(--gray-500)', bd:'var(--gray-200)', w:'500' };
+  [['ahseg-real','real'],['ahseg-sys','sys']].forEach(function(p){
+    const b=document.getElementById(p[0]); if(!b) return;
+    const st=(window._actHistMode===p[1])?on:off;
+    b.style.background=st.bg; b.style.color=st.fg;
+    b.style.border='1.5px solid '+st.bd; b.style.fontWeight=st.w;
+  });
+  const lid=document.getElementById('act-lead-id')?.value;
+  if(lid) _renderActModalHistory(lid);
+}
+
 function _renderActModalHistory(leadId){
   const el=document.getElementById('act-modal-history-body'); if(!el) return;
-  // assign 포함 (단계변경 status_change만 제외)
-  let acts=(allActivities||[])
-    .filter(a=>a.lead_id===leadId && a.type!=='status_change')
+  const _mode = window._actHistMode==='sys' ? 'sys' : 'real';
+  const _mine=(allActivities||[]).filter(a=>a.lead_id===leadId);
+  // 구분별 건수 표시
+  const _cReal=_mine.filter(a=>!_isSysActLog(a)).length;
+  const _cSys =_mine.filter(a=>_isSysActLog(a)).length;
+  const _er=document.getElementById('ahcnt-real'); if(_er) _er.textContent=_cReal?('('+_cReal+')'):'';
+  const _es=document.getElementById('ahcnt-sys');  if(_es) _es.textContent=_cSys?('('+_cSys+')'):'';
+  // 시스템 이력에는 단계변경(status_change)도 포함해 보여준다
+  let acts=_mine
+    .filter(a=> _mode==='sys' ? _isSysActLog(a) : (!_isSysActLog(a) && a.type!=='status_change'))
     .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
   // 유입 가상 이벤트 추가 — 리드 정보에서 동적 생성
   const _lead = (allLeads||[]).find(l=>l.id===leadId) || (myLeads||[]).find(l=>l.id===leadId);
   const _inflow = _buildInflowVirtualAct(_lead);
-  if(_inflow){
-    // 최신이 위로 오는 정렬이므로 유입은 맨 아래에 추가
+  if(_inflow && _mode==='sys'){
+    // 유입은 시스템 이력. 최신이 위로 오는 정렬이므로 맨 아래에 추가
     acts = [...acts, _inflow];
   }
   const ICON={call:'<svg class="li" viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L16 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>',meeting:'<svg class="li" viewBox="0 0 24 24"><path d="M7 4 3 8l4 4M3 8h13M17 20l4-4-4-4M21 16H8"/></svg>',email:'<svg class="li" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>',online:'<svg class="li" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>',note:'<svg class="li" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',proposal:'<svg class="li" viewBox="0 0 24 24"><rect x="8" y="3" width="8" height="4" rx="1"/><path d="M16 5h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2"/></svg>',contract:'<svg class="li" viewBox="0 0 24 24"><path d="M2 22l5-13 8 8z"/><path d="M14 7l2-2M18 9l2-2M15 12l3 1M11 4l1 2"/></svg>',internal:'<svg class="li" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="1"/><path d="M9 7h.01M15 7h.01M9 11h.01M15 11h.01M9 15h2M13 15h2"/></svg>',other:'<svg class="li" viewBox="0 0 24 24"><path d="M12 17v5M9 3h6l-1 6 3 3H7l3-3z"/></svg>',status_change:'<svg class="li" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>'};
@@ -10360,7 +10397,7 @@ function _renderActModalHistory(leadId){
         <svg class="li" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> 활동 추가
       </button>
     </div>
-    <div style="text-align:center;padding:24px 16px;font-size:13px;color:var(--gray-300)">활동 기록이 없습니다</div>`;
+    <div style="text-align:center;padding:24px 16px;font-size:13px;color:var(--gray-300)">${_mode==='sys'?'시스템 이력이 없습니다':'활동 기록이 없습니다'}</div>`;
     return;
   }
   // 상단 추가 버튼 (항상 표시)
@@ -22298,7 +22335,7 @@ async function _rcFetchLastActs(leadIds){
 // fallback: RPC 미등록 시 소청크 직접 조회
 async function _rcFetchLastActsFallback(leadIds){
   const map  = new Map();
-  const REAL = new Set(['call','meeting','online','proposal','contract','email','note']); // 실접촉 타입
+  const REAL = new Set(['call','meeting','online','proposal','contract','email']); // 실접촉 타입 (서버 RPC get_last_real_activity 와 동일 기준. note=메모는 제외)
   const CHUNK = 10;
   for(let i=0; i<leadIds.length; i+=CHUNK){
     const chunk = leadIds.slice(i,i+CHUNK);
@@ -22332,7 +22369,7 @@ async function _rcFetchLastActsFallback(leadIds){
 // testMode용 — localStorage activities에서 맵 구성
 function _rcBuildLastActMapFromCache(){
   // 허용 기반 필터 (SKIP이 아닌 REAL 화이트리스트)
-  const REAL = new Set(['call','meeting','online','proposal','contract','email','note']); // 실접촉 타입
+  const REAL = new Set(['call','meeting','online','proposal','contract','email']); // 실접촉 타입 (서버 RPC get_last_real_activity 와 동일 기준. note=메모는 제외)
   const map  = new Map();
   const acts = (Array.isArray(allActivities)&&allActivities.length>0)
     ? allActivities : lg('activities');
@@ -23887,6 +23924,22 @@ async function distToYJ(){
   filterLeads(); updateLeadsSubTabCounts();
 }
 
+// ── 시스템 로그 판별 ───────────────────────────────────────────
+// 영업활동이 아닌 자동 이력(배정/단계변경/재배정 등). 화면 '진행내용'과
+// 활동 카운트에서 제외한다. 과거 데이터는 type='note'로 남아 있으므로
+// content 패턴도 함께 본다.
+function _isSysActLog(a){
+  if(!a) return true;
+  const t=String(a.type||'').trim();
+  // 배정·이관·회수·단계변경·재배정 = 전부 시스템이 남긴 이력
+  if(t==='assign'||t==='status_change'||t==='system') return true;
+  // 과거 데이터는 type='note'로 기록됐으므로 내용 패턴으로 판별
+  const c=String(a.content||'').trim();
+  if(/^\[(재배정|분배날짜 수정|일괄 작업 취소)\]/.test(c)) return true;
+  if(c.indexOf('\u21a9')===0) return true;  // ↩ 원복/취소 계열
+  return false;
+}
+
 // ── 재배정 판정 + distributed_at 갱신 헬퍼 ────────────────────
 // 배정 로직을 통해 생성되는 모든 건에 대해 distributed_at을 현재 시점으로 갱신하고
 // 기존 분배일과 다르면 활동로그 자동 생성.
@@ -23905,10 +23958,11 @@ function _buildRedistUpdate(lid){
 }
 
 // 재배정 로그 기록 — dbU 호출 이후에 호출
+// type='system' : 영업활동이 아닌 시스템 이력이므로 활동 판정·표시에서 제외된다.
 async function _logRedist(lid, prevDist, today){
   if(!prevDist || prevDist === today) return;
   try{
-    await logActivity(lid, 'note', `[재배정] 분배날짜 ${prevDist} → ${today}`, '', '');
+    await logActivity(lid, 'system', `[재배정] 분배날짜 ${prevDist} → ${today}`, '', '');
   }catch(e){ console.warn('_logRedist fail', e); }
 }
 
@@ -26159,9 +26213,9 @@ function renderLeadsTable(){
   if(!tbody) return;
   if(!page.length){tbody.innerHTML=`<tr><td colspan="${colspan}" class="empty">데이터 없음</td></tr>`;renderPaging();updateAbar();return;}
 
-  // acts: {leadId: {latest: act, count: N}} — 실 활동기록만 (배정·단계변경 제외)
+  // acts: {leadId: {latest: act, count: N}} — 실 활동기록만 (시스템 로그 전부 제외)
   const acts={};
-  (allActivities||[]).filter(a=>!['assign','status_change'].includes(a.type)).forEach(a=>{
+  (allActivities||[]).filter(a=>!_isSysActLog(a)).forEach(a=>{
     if(!acts[a.lead_id]) acts[a.lead_id]={latest:null, count:0};
     acts[a.lead_id].count++;
     if(!acts[a.lead_id].latest||new Date(a.created_at)>new Date(acts[a.lead_id].latest.created_at))
@@ -26281,9 +26335,9 @@ function renderMyLeadsTable(){
   const start=(myPage-1)*PG2, page=data.slice(start,start+PG2);
   const today=todayKst();
   const nas=allNextActions?.length?allNextActions:allNextActions||[];
-  // acts: {leadId: {latest: act, count: N}} — 최신 1건 + 전체 건수
+  // acts: {leadId: {latest: act, count: N}} — 최신 1건 + 전체 건수 (시스템 로그 제외)
   const acts={};
-  (allActivities||[]).filter(a=>a.type!=='assign').forEach(a=>{
+  (allActivities||[]).filter(a=>!_isSysActLog(a)).forEach(a=>{
     if(!acts[a.lead_id]) acts[a.lead_id]={latest:null, count:0};
     acts[a.lead_id].count++;
     if(!acts[a.lead_id].latest||new Date(a.created_at)>new Date(acts[a.lead_id].latest.created_at))
