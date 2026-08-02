@@ -1063,6 +1063,15 @@ body.dark-mode *::-webkit-scrollbar-thumb:hover{background:rgba(180,208,232,.30)
 @media(prefers-reduced-motion:reduce){
   *{animation-duration:.01ms!important;transition-duration:.01ms!important}
 }
+
+/* ── 리쿠르팅 모듈 전용 ─────────────────────────────── */
+#screen-recruit .fl,.modal-overlay .fl{display:block;font-size:11px;font-weight:700;color:var(--gray-500);margin-bottom:4px}
+#screen-recruit .fi,.modal-overlay .fi{width:100%;padding:8px 11px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit;background:#fff;box-sizing:border-box}
+#screen-recruit .fi:focus,.modal-overlay .fi:focus{outline:none;border-color:var(--navy)}
+.rc-stat{flex:1;min-width:88px;padding:10px 12px;border-radius:var(--r-sm);border:1.5px solid var(--gray-200);cursor:pointer;transition:all .15s}
+.rc-stat:hover{border-color:var(--navy)}
+.rc-stat.on{border-color:var(--navy);background:rgba(30,41,82,.04)}
+.rc-sb{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700}
 </style>
 </head>
 <body>
@@ -1787,6 +1796,105 @@ body.dark-mode *::-webkit-scrollbar-thumb:hover{background:rgba(180,208,232,.30)
     </div
 
 <!-- ── 고객(담당자) 등록/수정 모달 ── -->
+
+<!-- ══ 리쿠르팅 (영업조직 확장) ══════════════════════════════ -->
+<div id="screen-recruit" class="screen">
+  <div class="card" style="margin-bottom:14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+      <div>
+        <div style="font-size:17px;font-weight:800">팀장 리쿠르팅</div>
+        <div id="rc-sub" style="font-size:12px;color:var(--gray-500);margin-top:2px"></div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-outline btn-sm" onclick="rcOpenForm()">+ 후보 등록</button>
+        <button id="rc-btn-upload" class="btn btn-outline btn-sm" onclick="document.getElementById('rc-file').click()">엑셀 업로드</button>
+        <button id="rc-btn-tpl" class="btn btn-outline btn-sm" onclick="rcDownloadTemplate()">양식</button>
+        <button class="btn btn-outline btn-sm" onclick="rcExport()">내보내기</button>
+        <input type="file" id="rc-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="rcUpload(this)">
+      </div>
+    </div>
+    <div id="rc-stats" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+      <input id="rc-search" placeholder="이름·연락처 검색" oninput="rcRender()"
+        style="flex:1;min-width:160px;padding:8px 12px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit">
+      <select id="rc-stage" onchange="rcRender()" style="padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit">
+        <option value="">전체 단계</option>
+        <option>신규</option><option>접촉</option><option>면담</option>
+        <option>처우협의</option><option>영입</option><option>이탈</option>
+      </select>
+      <select id="rc-branch" onchange="rcRender()" style="display:none;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit"></select>
+    </div>
+    <div id="rc-body"></div>
+  </div>
+</div>
+
+<!-- 후보 등록/수정 -->
+<div class="modal-overlay" id="modal-rc-form">
+  <div class="modal" style="width:520px;max-width:96vw">
+    <div class="modal-head"><div class="modal-title" id="rc-form-title">후보 등록</div>
+      <button class="modal-x" onclick="closeM('modal-rc-form')">&times;</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="rc-f-id">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><label class="fl">이름 *</label><input id="rc-f-name" class="fi"></div>
+        <div><label class="fl">연락처 *</label><input id="rc-f-phone" class="fi" placeholder="010-0000-0000"></div>
+        <div><label class="fl">출생연도</label><input id="rc-f-birth" class="fi" placeholder="1985"></div>
+        <div><label class="fl">성별</label><select id="rc-f-gender" class="fi"><option value="">-</option><option>남</option><option>여</option></select></div>
+        <div><label class="fl">거주지역</label><input id="rc-f-region" class="fi"></div>
+        <div><label class="fl">현직/최근직</label><input id="rc-f-job" class="fi"></div>
+        <div style="grid-column:1/-1"><label class="fl">이메일</label><input id="rc-f-email" class="fi"></div>
+        <div style="grid-column:1/-1"><label class="fl">경력사항</label><input id="rc-f-career" class="fi"></div>
+        <div><label class="fl">유입경로</label><select id="rc-f-source" class="fi"><option>meta</option><option>소개</option><option>직접등록</option><option>기타</option></select></div>
+        <div><label class="fl">광고명</label><input id="rc-f-ad" class="fi"></div>
+        <div id="rc-f-branch-wrap" style="grid-column:1/-1"><label class="fl">담당 지점장</label><select id="rc-f-branch" class="fi"></select></div>
+        <div style="grid-column:1/-1"><label class="fl">메모</label><textarea id="rc-f-memo" class="fi" style="min-height:60px;resize:vertical"></textarea></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeM('modal-rc-form')">취소</button>
+      <button class="btn btn-primary" onclick="rcSaveForm()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 후보 상세 -->
+<div class="modal-overlay" id="modal-rc-detail">
+  <div class="modal" style="width:600px;max-width:96vw">
+    <div class="modal-head"><div class="modal-title" id="rc-d-title">후보 상세</div>
+      <button class="modal-x" onclick="closeM('modal-rc-detail')">&times;</button></div>
+    <div class="modal-body" id="rc-d-body" style="max-height:70vh;overflow-y:auto"></div>
+  </div>
+</div>
+
+<!-- 영입 확정 (계정 자동생성) -->
+<div class="modal-overlay" id="modal-rc-hire">
+  <div class="modal" style="width:440px;max-width:96vw">
+    <div class="modal-head"><div class="modal-title">영입 확정 — 팀장 계정 생성</div>
+      <button class="modal-x" onclick="closeM('modal-rc-hire')">&times;</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="rc-h-cid">
+      <div style="padding:11px 14px;background:rgba(0,192,115,.07);border:1px solid rgba(0,192,115,.2);border-radius:var(--r-sm);font-size:12px;color:var(--gray-700);margin-bottom:12px">
+        확정하면 <strong>팀장 계정이 즉시 생성</strong>되어 로그인할 수 있습니다.<br>
+        초기 비밀번호는 <strong>1234</strong> 입니다.
+      </div>
+      <div style="display:grid;gap:10px">
+        <div><label class="fl">이름</label><input id="rc-h-name" class="fi" readonly style="background:var(--gray-50)"></div>
+        <div><label class="fl">로그인 아이디 *</label><input id="rc-h-uid" class="fi" placeholder="영문·숫자">
+          <div id="rc-h-uid-msg" style="font-size:11px;margin-top:3px"></div></div>
+        <div><label class="fl">소속 지점</label><select id="rc-h-branch" class="fi"></select></div>
+        <div><label class="fl">입사일</label><input type="date" id="rc-h-date" class="fi"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeM('modal-rc-hire')">취소</button>
+      <button class="btn btn-primary" onclick="rcConfirmHire()">영입 확정</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-contact">
   <div class="modal" style="width:580px;max-height:90vh;overflow-y:auto">
     <div class="mh">
@@ -5704,9 +5812,9 @@ function startIdleTimer(){
 
 // ── 앱 시작 ──────────────────────────────────────────────
 const NAV_CFG = {
-  admin:[{id:'admin',l:'<svg class="li" viewBox="0 0 24 24"><path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="6"/><rect x="12" y="7" width="3" height="10"/><rect x="17" y="13" width="3" height="4"/></svg>대시보드'},{id:'leads',l:'<svg class="li" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>DB관리'},{id:'stage-dashboard',l:'<svg class="li" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>단계별 현황'},{id:'insights',l:'<svg class="li" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l3-3 3 3 5-5"/></svg>인사이트'},{id:'dj-status',l:'<svg class="li" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.6A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.4 2.1L8 9.6a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.4c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2z"/></svg>대전 업무현황'},{id:'users',l:'<svg class="li" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13A4 4 0 0 1 16 11"/></svg>사용자 관리'},{id:'activity',l:'<svg class="li" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>캘린더'},{id:'settings',l:'<svg class="li" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.8 1.2V21a2 2 0 0 1-4 0v-.1A1.6 1.6 0 0 0 8 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.2-2.8H2a2 2 0 0 1 0-4h.1A1.6 1.6 0 0 0 4.6 8a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 8 4.6a1.6 1.6 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.6 1.6 0 0 0 2.8 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.8H22a2 2 0 0 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>설정'}],
+  admin:[{id:'admin',l:'<svg class="li" viewBox="0 0 24 24"><path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="6"/><rect x="12" y="7" width="3" height="10"/><rect x="17" y="13" width="3" height="4"/></svg>대시보드'},{id:'leads',l:'<svg class="li" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>DB관리'},{id:'stage-dashboard',l:'<svg class="li" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>단계별 현황'},{id:'insights',l:'<svg class="li" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l3-3 3 3 5-5"/></svg>인사이트'},{id:'dj-status',l:'<svg class="li" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.6A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.4 2.1L8 9.6a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.4c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2z"/></svg>대전 업무현황'},{id:'recruit',l:'<svg class="li" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>리쿠르팅'},{id:'users',l:'<svg class="li" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13A4 4 0 0 1 16 11"/></svg>사용자 관리'},{id:'activity',l:'<svg class="li" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>캘린더'},{id:'settings',l:'<svg class="li" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.8 1.2V21a2 2 0 0 1-4 0v-.1A1.6 1.6 0 0 0 8 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.2-2.8H2a2 2 0 0 1 0-4h.1A1.6 1.6 0 0 0 4.6 8a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 8 4.6a1.6 1.6 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.6 1.6 0 0 0 2.8 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.8H22a2 2 0 0 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>설정'}],
   dbmanager:[{id:'leads',l:'<svg class="li" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>DB관리'},{id:'activity',l:'<svg class="li" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>캘린더'},{id:'notices',l:'<svg class="li" viewBox="0 0 24 24"><path d="M3 11v3a1 1 0 0 0 1 1h2l4 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15 8a4 4 0 0 1 0 8M18 5a8 8 0 0 1 0 14"/></svg>공지함'}],
-  branch:[{id:'branch',l:'<svg class="li" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M16 6h.01M8 10h.01M16 10h.01M8 14h.01M16 14h.01"/></svg>지점관리'},{id:'leads',l:'<svg class="li" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>DB관리'},{id:'stage-dashboard',l:'<svg class="li" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>단계별 현황'},{id:'my-clients',l:'<svg class="li" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 0 12 0V3H6z"/><path d="M6 5H3v2a3 3 0 0 0 3 3M18 5h3v2a3 3 0 0 1-3 3M9 21h6M12 17v4"/></svg>고객관리'},{id:'activity',l:'<svg class="li" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>캘린더'},{id:'notices',l:'<svg class="li" viewBox="0 0 24 24"><path d="M3 11v3a1 1 0 0 0 1 1h2l4 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15 8a4 4 0 0 1 0 8M18 5a8 8 0 0 1 0 14"/></svg>공지함'}],
+  branch:[{id:'branch',l:'<svg class="li" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M16 6h.01M8 10h.01M16 10h.01M8 14h.01M16 14h.01"/></svg>지점관리'},{id:'leads',l:'<svg class="li" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>DB관리'},{id:'stage-dashboard',l:'<svg class="li" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>단계별 현황'},{id:'my-clients',l:'<svg class="li" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 0 12 0V3H6z"/><path d="M6 5H3v2a3 3 0 0 0 3 3M18 5h3v2a3 3 0 0 1-3 3M9 21h6M12 17v4"/></svg>고객관리'},{id:'recruit',l:'<svg class="li" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>리쿠르팅'},{id:'activity',l:'<svg class="li" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>캘린더'},{id:'notices',l:'<svg class="li" viewBox="0 0 24 24"><path d="M3 11v3a1 1 0 0 0 1 1h2l4 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15 8a4 4 0 0 1 0 8M18 5a8 8 0 0 1 0 14"/></svg>공지함'}],
   team:[{id:'leads',l:'<svg class="li" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>DB관리'},{id:'stage-dashboard',l:'<svg class="li" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>단계별 현황'},{id:'my-clients',l:'<svg class="li" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 0 12 0V3H6z"/><path d="M6 5H3v2a3 3 0 0 0 3 3M18 5h3v2a3 3 0 0 1-3 3M9 21h6M12 17v4"/></svg>고객관리'},{id:'activity',l:'<svg class="li" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>캘린더'},{id:'notices',l:'<svg class="li" viewBox="0 0 24 24"><path d="M3 11v3a1 1 0 0 0 1 1h2l4 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15 8a4 4 0 0 1 0 8M18 5a8 8 0 0 1 0 14"/></svg>공지함'}],
   tm:[{id:'tm-panel',l:'<svg class="li" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.6A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.4 2.1L8 9.6a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.4c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2z"/></svg>관리 DB'},{id:'notices',l:'<svg class="li" viewBox="0 0 24 24"><path d="M3 11v3a1 1 0 0 0 1 1h2l4 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15 8a4 4 0 0 1 0 8M18 5a8 8 0 0 1 0 14"/></svg>공지함'}],
 };
@@ -5798,9 +5906,9 @@ function startApp(){
 function showScreen(id, btn){
   // 역할별 접근 가능 화면 화이트리스트
   const ALLOWED = {
-    admin:     ['admin','insights','leads','stage-dashboard','dj-status','users','activity','settings','messages'],
+    admin:     ['admin','insights','leads','stage-dashboard','dj-status','users','activity','settings','messages','recruit'],
     dbmanager: ['leads','activity','notices','messages'],
-    branch:    ['branch','leads','stage-dashboard','my-clients','activity','notices','messages'],
+    branch:    ['branch','leads','stage-dashboard','my-clients','activity','notices','messages','recruit'],
     team:      ['leads','stage-dashboard','my-leads','my-clients','activity','notices','messages'],
     tm:        ['tm-panel','notices','messages'],
   };
@@ -5815,6 +5923,9 @@ function showScreen(id, btn){
   if(btn)btn?.classList.add('active');
   else{const b=document.querySelector(`.nb[data-s="${id}"]`);if(b)b.classList.add('active');}
   closePanel();
+
+  // 리쿠르팅 화면 진입 시 로드
+  if(id==='recruit'){ try{ initRecruit(); }catch(e){ console.warn(e); } }
 
   // admin 화면 진입 시 저장된 기간 복원
   if(id==='admin'){
@@ -17486,6 +17597,463 @@ function openEditUser(uid){
   (document.getElementById('uf-pw')||{}).value='';
   openM('modal-user');
 }
+
+// ══════════════════════════════════════════════════════════════
+//  리쿠르팅 모듈 (영업조직 확장 — 팀장 후보 관리)
+//  · candidates 테이블 사용. leads 와 완전 분리 → 회수판정·대시보드 무영향
+//  · 지점장은 본인 담당 후보만 조회 (branch_name 일치)
+//  · 관리자는 전체 조회 + 지점장 배정
+//  · 영입 확정 시 accounts 에 팀장 계정 자동 생성
+// ══════════════════════════════════════════════════════════════
+let allCandidates = [];
+const RC_STAGES = ['신규','접촉','면담','처우협의','영입','이탈'];
+const RC_COLOR  = {'신규':'#64748b','접촉':'#2563eb','면담':'#7c3aed',
+                   '처우협의':'#e8870f','영입':'var(--ok)','이탈':'var(--gray-300)'};
+
+function rcIsAdmin(){ return curUser?.role==='admin'; }
+function rcCanUse(){ return curUser?.role==='admin' || curUser?.role==='branch'; }
+
+// 지점장은 본인 담당분만. 관리자는 전체.
+function rcMine(){
+  const all = (allCandidates||[]).filter(c=>c && c.status!=='deleted');
+  if(rcIsAdmin()) return all;
+  return all.filter(c=>c.branch_name===curUser?.name);
+}
+
+function rcBranchList(){
+  try{ return (getAccs()||[]).filter(a=>a.role==='branch').map(a=>a.name); }
+  catch(e){ return []; }
+}
+
+async function loadCandidates(){
+  if(!rcCanUse()) return;
+  try{
+    if(typeof testMode!=='undefined' && testMode){
+      allCandidates = lg('candidates')||[]; return;
+    }
+    // Range 페이지네이션 — 1,000행 한도 회피
+    let out=[], from=0;
+    for(let p=0;p<20;p++){
+      const rows = await sbGet(`candidates?select=*&status=neq.deleted&order=created_at.desc&limit=1000&offset=${from}`);
+      if(!Array.isArray(rows)||!rows.length) break;
+      out = out.concat(rows);
+      if(rows.length<1000) break;
+      from += 1000;
+    }
+    allCandidates = out;
+  }catch(e){ console.warn('loadCandidates', e); allCandidates=[]; }
+}
+
+// ── 통계 카드 ─────────────────────────────────────────────
+let _rcStageFilter = '';
+function rcRenderStats(){
+  const el=document.getElementById('rc-stats'); if(!el) return;
+  const rows=rcMine();
+  const cnt={}; RC_STAGES.forEach(s=>cnt[s]=0);
+  rows.forEach(c=>{ const st=c.stage||'신규'; if(cnt[st]!==undefined) cnt[st]++; });
+  el.innerHTML = `<div class="rc-stat ${_rcStageFilter===''?'on':''}" onclick="rcPickStage('')">
+      <div style="font-size:11px;color:var(--gray-500);font-weight:700">전체</div>
+      <div style="font-size:19px;font-weight:800">${rows.length}</div></div>` +
+    RC_STAGES.map(s=>`<div class="rc-stat ${_rcStageFilter===s?'on':''}" onclick="rcPickStage('${s}')">
+      <div style="font-size:11px;color:${RC_COLOR[s]};font-weight:700">${s}</div>
+      <div style="font-size:19px;font-weight:800">${cnt[s]}</div></div>`).join('');
+  const sub=document.getElementById('rc-sub');
+  if(sub) sub.textContent = rcIsAdmin()
+    ? `전사 ${rows.length}명 · Meta 광고 유입 후보 관리`
+    : `${curUser?.name||''} 지점 담당 ${rows.length}명`;
+}
+function rcPickStage(s){
+  _rcStageFilter=s;
+  const sel=document.getElementById('rc-stage'); if(sel) sel.value=s;
+  rcRenderStats(); rcRender();
+}
+
+// ── 목록 ─────────────────────────────────────────────────
+function rcRender(){
+  const el=document.getElementById('rc-body'); if(!el) return;
+  // 관리자 전용 지점 필터 노출
+  const bsel=document.getElementById('rc-branch');
+  if(bsel){
+    if(rcIsAdmin()){
+      if(!bsel.dataset.built){
+        bsel.innerHTML='<option value="">전체 지점</option><option value="__none__">미배정</option>'+
+          rcBranchList().map(n=>`<option>${esc(n)}</option>`).join('');
+        bsel.dataset.built='1';
+      }
+      bsel.style.display='';
+    } else bsel.style.display='none';
+  }
+
+  const q=(document.getElementById('rc-search')?.value||'').toLowerCase().trim();
+  const stg=document.getElementById('rc-stage')?.value||'';
+  const br=(rcIsAdmin()&&bsel)?bsel.value:'';
+  _rcStageFilter=stg;
+
+  let rows=rcMine();
+  if(stg) rows=rows.filter(c=>(c.stage||'신규')===stg);
+  if(br==='__none__') rows=rows.filter(c=>!c.branch_name);
+  else if(br) rows=rows.filter(c=>c.branch_name===br);
+  if(q) rows=rows.filter(c=>
+    (c.name||'').toLowerCase().includes(q) ||
+    String(c.phone||'').replace(/-/g,'').includes(q.replace(/-/g,'')));
+
+  rows.sort((a,b)=> new Date(b.inflow_at||b.created_at||0) - new Date(a.inflow_at||a.created_at||0));
+
+  if(!rows.length){
+    el.innerHTML=`<div style="text-align:center;padding:40px 16px;color:var(--gray-300);font-size:13px">
+      해당 조건의 후보가 없습니다</div>`;
+    return;
+  }
+
+  el.innerHTML=`<div class="tbl-wrap"><table style="font-size:12.5px;width:100%">
+    <thead><tr>
+      <th style="padding:9px 12px;text-align:left">이름</th>
+      <th style="padding:9px 10px;text-align:left">연락처</th>
+      <th style="padding:9px 10px;text-align:left">지역</th>
+      <th style="padding:9px 10px;text-align:left">현직</th>
+      ${rcIsAdmin()?'<th style="padding:9px 10px;text-align:left">담당 지점장</th>':''}
+      <th style="padding:9px 10px;text-align:left">단계</th>
+      <th style="padding:9px 10px;text-align:left">신청일</th>
+      <th style="padding:9px 10px;text-align:left">메모</th>
+    </tr></thead><tbody>${rows.map(c=>{
+      const st=c.stage||'신규';
+      return `<tr style="cursor:pointer" onclick="rcOpenDetail('${c.id}')">
+        <td style="padding:9px 12px;font-weight:700">${esc(c.name||'-')}</td>
+        <td style="padding:9px 10px">${esc(typeof formatPhone==='function'?formatPhone(c.phone||''):(c.phone||''))}</td>
+        <td style="padding:9px 10px;color:var(--gray-500)">${esc(c.region||'-')}</td>
+        <td style="padding:9px 10px;color:var(--gray-500)">${esc(c.current_job||'-')}</td>
+        ${rcIsAdmin()?`<td style="padding:9px 10px">${c.branch_name?esc(c.branch_name):'<span style="color:var(--err);font-size:11px;font-weight:700">미배정</span>'}</td>`:''}
+        <td style="padding:9px 10px"><span class="rc-sb" style="background:${RC_COLOR[st]}1a;color:${RC_COLOR[st]}">${st}</span></td>
+        <td style="padding:9px 10px;color:var(--gray-400);font-size:11.5px">${(c.inflow_at||c.created_at||'').slice(0,10)}</td>
+        <td style="padding:9px 10px;color:var(--gray-500);font-size:11.5px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc((c.memo||'').slice(0,40))}</td>
+      </tr>`;}).join('')}</tbody></table></div>`;
+}
+
+// ── 등록/수정 폼 ─────────────────────────────────────────
+function rcOpenForm(id){
+  const c = id ? (allCandidates||[]).find(x=>x.id===id) : null;
+  document.getElementById('rc-form-title').textContent = c?'후보 수정':'후보 등록';
+  const set=(k,v)=>{const e=document.getElementById(k); if(e) e.value=v||'';};
+  set('rc-f-id', c?.id); set('rc-f-name', c?.name); set('rc-f-phone', c?.phone);
+  set('rc-f-birth', c?.birth_year); set('rc-f-gender', c?.gender);
+  set('rc-f-region', c?.region); set('rc-f-job', c?.current_job);
+  set('rc-f-email', c?.email); set('rc-f-career', c?.career);
+  set('rc-f-source', c?.source||'meta'); set('rc-f-ad', c?.ad_name);
+  set('rc-f-memo', c?.memo);
+
+  const bw=document.getElementById('rc-f-branch-wrap');
+  const bs=document.getElementById('rc-f-branch');
+  if(rcIsAdmin()){
+    if(bw) bw.style.display='';
+    if(bs) bs.innerHTML='<option value="">미배정</option>'+rcBranchList().map(n=>`<option>${esc(n)}</option>`).join('');
+    if(bs) bs.value=c?.branch_name||'';
+  } else {
+    if(bw) bw.style.display='none';  // 지점장은 본인 담당으로 자동 배정
+  }
+  openM('modal-rc-form');
+}
+
+async function rcSaveForm(){
+  const g=(k)=>document.getElementById(k)?.value.trim()||'';
+  const id=g('rc-f-id'), name=g('rc-f-name'), phone=g('rc-f-phone');
+  if(!name){ showToast('이름을 입력하세요','error'); return; }
+  if(!phone){ showToast('연락처를 입력하세요','error'); return; }
+
+  // 중복 검사 (활성 후보 전체)
+  const norm=(p)=>String(p||'').replace(/[^0-9]/g,'');
+  const dup=(allCandidates||[]).find(c=>c.id!==id && c.status!=='deleted' && norm(c.phone)===norm(phone));
+  if(dup){ showToast(`이미 등록된 번호입니다 (${dup.name} · ${dup.stage||'신규'})`,'error'); return; }
+
+  const data={
+    name, phone, email:g('rc-f-email'), birth_year:g('rc-f-birth'),
+    gender:g('rc-f-gender'), region:g('rc-f-region'), career:g('rc-f-career'),
+    current_job:g('rc-f-job'), source:g('rc-f-source'), ad_name:g('rc-f-ad'),
+    memo:g('rc-f-memo')
+  };
+  if(rcIsAdmin()) data.branch_name=g('rc-f-branch');
+
+  try{
+    if(id){
+      const ok=await dbU('candidates',id,data);
+      if(!ok){ showToast('저장 실패 — 반영되지 않았습니다','error'); return; }
+      const i=allCandidates.findIndex(c=>c.id===id);
+      if(i>=0) allCandidates[i]={...allCandidates[i],...data};
+      showToast('수정 완료','success');
+    } else {
+      data.stage='신규'; data.status='active';
+      data.inflow_at=new Date().toISOString();
+      if(!rcIsAdmin()){ data.branch_name=curUser?.name||''; data.assigned_at=new Date().toISOString(); }
+      else if(data.branch_name) data.assigned_at=new Date().toISOString();
+      const row=await dbI('candidates',data);
+      if(!row){ showToast('저장 실패 — 반영되지 않았습니다','error'); return; }
+      allCandidates.unshift(row);
+      showToast('후보 등록 완료','success');
+    }
+    closeM('modal-rc-form'); rcRenderStats(); rcRender();
+  }catch(e){ console.warn(e); showToast('저장 중 오류가 발생했습니다','error'); }
+}
+
+// ── 상세 ─────────────────────────────────────────────────
+let _rcDetailId='';
+function rcOpenDetail(id){
+  const c=(allCandidates||[]).find(x=>x.id===id); if(!c) return;
+  _rcDetailId=id;
+  document.getElementById('rc-d-title').textContent=`${c.name||''} · ${c.stage||'신규'}`;
+  const row=(l,v)=>`<div style="display:flex;padding:6px 0;border-bottom:1px solid var(--gray-100)">
+    <div style="width:88px;flex-shrink:0;font-size:11.5px;color:var(--gray-500);font-weight:700">${l}</div>
+    <div style="flex:1;font-size:13px">${v||'-'}</div></div>`;
+  const acts=(allActivities||[]).filter(a=>a.candidate_id===id)
+    .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+
+  document.getElementById('rc-d-body').innerHTML=`
+    ${row('연락처', esc(typeof formatPhone==='function'?formatPhone(c.phone||''):(c.phone||'')))}
+    ${row('이메일', esc(c.email))}
+    ${row('출생연도', esc(c.birth_year))}
+    ${row('성별', esc(c.gender))}
+    ${row('거주지역', esc(c.region))}
+    ${row('현직/최근직', esc(c.current_job))}
+    ${row('경력사항', esc(c.career))}
+    ${row('유입경로', esc(c.source)+(c.ad_name?' · '+esc(c.ad_name):''))}
+    ${row('담당 지점장', c.branch_name?esc(c.branch_name):'<span style="color:var(--err);font-weight:700">미배정</span>')}
+    ${row('신청일', (c.inflow_at||c.created_at||'').slice(0,16).replace('T',' '))}
+    ${c.hired_at?row('입사일', c.hired_at):''}
+    ${c.drop_reason?row('이탈사유', esc(c.drop_reason)):''}
+
+    <div style="margin-top:14px">
+      <label class="fl">진행 단계</label>
+      <div style="display:flex;gap:5px;flex-wrap:wrap">
+        ${RC_STAGES.map(s=>`<button onclick="rcSetStage('${id}','${s}')"
+          style="padding:6px 12px;font-size:12px;font-weight:700;border-radius:6px;cursor:pointer;font-family:inherit;
+          border:1.5px solid ${(c.stage||'신규')===s?RC_COLOR[s]:'var(--gray-200)'};
+          background:${(c.stage||'신규')===s?RC_COLOR[s]:'#fff'};
+          color:${(c.stage||'신규')===s?'#fff':'var(--gray-500)'}">${s}</button>`).join('')}
+      </div>
+    </div>
+
+    <div style="margin-top:14px">
+      <label class="fl">활동 기록 추가</label>
+      <div style="display:flex;gap:6px">
+        <select id="rc-a-type" class="fi" style="width:96px;flex-shrink:0">
+          <option>전화</option><option>면담</option><option>문자</option><option>메모</option>
+        </select>
+        <input id="rc-a-text" class="fi" placeholder="내용" onkeydown="if(event.key==='Enter')rcAddAct('${id}')">
+        <button class="btn btn-primary btn-sm" style="flex-shrink:0" onclick="rcAddAct('${id}')">기록</button>
+      </div>
+    </div>
+
+    <div style="margin-top:12px">
+      ${acts.length?acts.map(a=>`<div style="padding:7px 10px;background:var(--gray-50);border-radius:6px;margin-bottom:5px">
+        <div style="font-size:11px;color:var(--gray-400)">${esc(a.type||'')} · ${esc(a.user_name||'')} · ${(a.created_at||'').slice(0,16).replace('T',' ')}</div>
+        <div style="font-size:12.5px;margin-top:2px">${esc(a.content||'')}</div></div>`).join('')
+        :'<div style="font-size:12px;color:var(--gray-300);text-align:center;padding:12px">활동 기록이 없습니다</div>'}
+    </div>
+
+    <div style="display:flex;gap:6px;margin-top:16px;flex-wrap:wrap">
+      <button class="btn btn-outline btn-sm" onclick="closeM('modal-rc-detail');rcOpenForm('${id}')">정보 수정</button>
+      ${(c.stage!=='영입')?`<button class="btn btn-primary btn-sm" onclick="rcOpenHire('${id}')">영입 확정</button>`:''}
+      ${rcIsAdmin()?`<button class="btn btn-outline btn-sm" style="color:var(--err);border-color:var(--err)" onclick="rcSoftDelete('${id}')">삭제</button>`:''}
+    </div>`;
+  openM('modal-rc-detail');
+}
+
+async function rcSetStage(id, stage){
+  const c=(allCandidates||[]).find(x=>x.id===id); if(!c) return;
+  if(stage==='영입'){ rcOpenHire(id); return; }
+  let patch={stage};
+  if(stage==='이탈'){
+    const r=prompt('이탈 사유를 입력하세요'); if(r===null) return;
+    patch.drop_reason=r||'';
+  }
+  const ok=await dbU('candidates',id,patch);
+  if(!ok){ showToast('저장 실패 — 반영되지 않았습니다','error'); return; }
+  const i=allCandidates.findIndex(x=>x.id===id);
+  if(i>=0) allCandidates[i]={...allCandidates[i],...patch};
+  await rcLog(id, 'system', `단계 변경 → ${stage}`+(patch.drop_reason?` (${patch.drop_reason})`:''));
+  showToast(`${stage} 단계로 변경`,'success');
+  rcOpenDetail(id); rcRenderStats(); rcRender();
+}
+
+async function rcLog(cid, type, content){
+  try{
+    await dbI('activities',{
+      candidate_id:cid, lead_id:null, type, content,
+      user_name:curUser?.name||'', user_role:curUser?.role||''
+    });
+  }catch(e){ console.warn('rcLog', e); }
+}
+
+async function rcAddAct(id){
+  const t=document.getElementById('rc-a-type')?.value||'메모';
+  const v=document.getElementById('rc-a-text')?.value.trim()||'';
+  if(!v){ showToast('내용을 입력하세요','error'); return; }
+  await rcLog(id, t, v);
+  // 신규 상태에서 첫 접촉 기록이면 접촉 단계로 자동 이동
+  const c=(allCandidates||[]).find(x=>x.id===id);
+  if(c && (c.stage||'신규')==='신규' && ['전화','면담','문자'].includes(t)){
+    await dbU('candidates',id,{stage:'접촉'});
+    const i=allCandidates.findIndex(x=>x.id===id);
+    if(i>=0) allCandidates[i].stage='접촉';
+  }
+  showToast('기록 완료','success');
+  rcOpenDetail(id); rcRenderStats(); rcRender();
+}
+
+async function rcSoftDelete(id){
+  if(!rcIsAdmin()){ showToast('관리자만 가능합니다','error'); return; }
+  if(!confirm('이 후보를 삭제하시겠습니까?\n(기록은 보존되며 목록에서만 숨겨집니다)')) return;
+  const ok=await dbU('candidates',id,{status:'deleted'});
+  if(!ok){ showToast('삭제 실패','error'); return; }
+  const i=allCandidates.findIndex(x=>x.id===id);
+  if(i>=0) allCandidates[i].status='deleted';
+  closeM('modal-rc-detail'); showToast('삭제 완료','success');
+  rcRenderStats(); rcRender();
+}
+
+// ── 영입 확정 → 팀장 계정 자동 생성 ──────────────────────
+function rcOpenHire(id){
+  const c=(allCandidates||[]).find(x=>x.id===id); if(!c) return;
+  document.getElementById('rc-h-cid').value=id;
+  document.getElementById('rc-h-name').value=c.name||'';
+  document.getElementById('rc-h-date').value=todayKst();
+  const uid=document.getElementById('rc-h-uid'); if(uid){ uid.value=''; uid.oninput=rcCheckUid; }
+  document.getElementById('rc-h-uid-msg').textContent='';
+  const bs=document.getElementById('rc-h-branch');
+  if(bs){
+    bs.innerHTML=rcBranchList().map(n=>`<option>${esc(n)}</option>`).join('');
+    bs.value=c.branch_name||rcBranchList()[0]||'';
+    bs.disabled = !rcIsAdmin();   // 지점장은 본인 지점 고정
+  }
+  closeM('modal-rc-detail');
+  openM('modal-rc-hire');
+}
+
+function rcCheckUid(){
+  const v=document.getElementById('rc-h-uid')?.value.trim()||'';
+  const m=document.getElementById('rc-h-uid-msg'); if(!m) return;
+  if(!v){ m.textContent=''; return; }
+  const exists=(getAccs()||[]).some(a=>a.id===v);
+  m.textContent = exists ? '이미 사용 중인 아이디입니다' : '사용 가능합니다';
+  m.style.color = exists ? 'var(--err)' : 'var(--ok)';
+}
+
+async function rcConfirmHire(){
+  const cid=document.getElementById('rc-h-cid')?.value||'';
+  const uid=document.getElementById('rc-h-uid')?.value.trim()||'';
+  const branch=document.getElementById('rc-h-branch')?.value||'';
+  const hdate=document.getElementById('rc-h-date')?.value||todayKst();
+  const c=(allCandidates||[]).find(x=>x.id===cid);
+  if(!c){ showToast('대상을 찾을 수 없습니다','error'); return; }
+  if(!uid){ showToast('로그인 아이디를 입력하세요','error'); return; }
+  if(!/^[A-Za-z0-9_.-]+$/.test(uid)){ showToast('아이디는 영문·숫자만 가능합니다','error'); return; }
+
+  const accs=getAccs()||[];
+  if(accs.some(a=>a.id===uid)){ showToast('이미 사용 중인 아이디입니다','error'); return; }
+  if(accs.some(a=>a.name===c.name && a.role==='team')){
+    if(!confirm(`"${c.name}" 이름의 팀장 계정이 이미 있습니다.\n그래도 새로 만드시겠습니까?`)) return;
+  }
+  if(!confirm(`"${c.name}" 님을 ${branch} 지점 팀장으로 영입 확정합니다.\n\n· 로그인 아이디: ${uid}\n· 초기 비밀번호: 1234\n\n진행하시겠습니까?`)) return;
+
+  try{
+    // ① 계정 생성 (기존 saveUser 와 동일 절차 재사용)
+    const hashed=await hashPw('1234');
+    const accRow={id:uid, name:c.name, role:'team', branch,
+                  pw:hashed, created_at:new Date().toISOString(), updated_at:new Date().toISOString()};
+    accs.push(accRow); saveAccs(accs);
+    if(typeof testMode==='undefined' || !testMode){
+      const ok=await sbUpsertAccount(accRow);
+      if(!ok){
+        showToast('계정 생성 실패 — Supabase 동기화 오류. 영입 처리를 중단합니다','error');
+        const bi=accs.findIndex(a=>a.id===uid); if(bi>=0){ accs.splice(bi,1); saveAccs(accs); }
+        return;
+      }
+    }
+    // ② 후보 상태 갱신
+    const patch={stage:'영입', hired_at:hdate, account_id:uid, branch_name:branch};
+    const ok2=await dbU('candidates',cid,patch);
+    if(!ok2) showToast('계정은 생성됐으나 후보 상태 저장에 실패했습니다','warn');
+    const i=allCandidates.findIndex(x=>x.id===cid);
+    if(i>=0) allCandidates[i]={...allCandidates[i],...patch};
+
+    await rcLog(cid,'system',`영입 확정 — ${branch} 지점 팀장 계정 생성 (${uid})`);
+    closeM('modal-rc-hire');
+    showToast(`영입 확정 · 팀장 계정 생성 완료 (아이디 ${uid} / 초기 비번 1234)`,'success');
+    rcRenderStats(); rcRender();
+  }catch(e){ console.warn(e); showToast('처리 중 오류가 발생했습니다','error'); }
+}
+
+// ── 엑셀 ─────────────────────────────────────────────────
+const RC_COLS=['이름','연락처','출생연도','성별','거주지역','현직','경력사항','이메일','광고명','신청일시','메모'];
+
+function rcDownloadTemplate(){
+  try{
+    const ws=XLSX.utils.aoa_to_sheet([RC_COLS,
+      ['홍길동','010-1234-5678','1985','남','서울 강남','보험설계사','5년','hong@ex.com','8월_팀장모집','2026-08-01 10:00','']]);
+    const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'후보');
+    XLSX.writeFile(wb,'리쿠르팅_업로드양식.xlsx');
+  }catch(e){ showToast('양식 생성 실패','error'); }
+}
+
+async function rcUpload(input){
+  const f=input.files?.[0]; if(!f) return;
+  input.value='';
+  try{
+    const buf=await f.arrayBuffer();
+    const wb=XLSX.read(buf,{type:'array'});
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
+    if(!rows.length){ showToast('데이터가 없습니다','error'); return; }
+
+    const norm=(p)=>String(p||'').replace(/[^0-9]/g,'');
+    const exist=new Set((allCandidates||[]).filter(c=>c.status!=='deleted').map(c=>norm(c.phone)));
+    let added=0, dup=0, bad=0;
+
+    for(const r of rows){
+      const name=String(r['이름']||'').trim();
+      const phone=String(r['연락처']||'').trim();
+      if(!name||!phone){ bad++; continue; }
+      const np=norm(phone);
+      if(exist.has(np)){ dup++; continue; }
+      const row=await dbI('candidates',{
+        name, phone,
+        birth_year:String(r['출생연도']||'').trim(),
+        gender:String(r['성별']||'').trim(),
+        region:String(r['거주지역']||'').trim(),
+        current_job:String(r['현직']||'').trim(),
+        career:String(r['경력사항']||'').trim(),
+        email:String(r['이메일']||'').trim(),
+        ad_name:String(r['광고명']||'').trim(),
+        memo:String(r['메모']||'').trim(),
+        source:'meta', stage:'신규', status:'active',
+        inflow_at:(String(r['신청일시']||'').trim()||new Date().toISOString())
+      });
+      if(row){ allCandidates.unshift(row); exist.add(np); added++; }
+    }
+    showToast(`업로드 완료 — 신규 ${added}건 / 중복 ${dup}건 / 오류 ${bad}건`,'success');
+    rcRenderStats(); rcRender();
+  }catch(e){ console.warn(e); showToast('업로드 실패 — 양식을 확인하세요','error'); }
+}
+
+function rcExport(){
+  try{
+    const rows=rcMine();
+    const aoa=[[...RC_COLS,'담당 지점장','단계','입사일']].concat(rows.map(c=>[
+      c.name||'', c.phone||'', c.birth_year||'', c.gender||'', c.region||'',
+      c.current_job||'', c.career||'', c.email||'', c.ad_name||'',
+      (c.inflow_at||c.created_at||'').slice(0,16).replace('T',' '), c.memo||'',
+      c.branch_name||'', c.stage||'신규', c.hired_at||''
+    ]));
+    const ws=XLSX.utils.aoa_to_sheet(aoa);
+    const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'리쿠르팅');
+    XLSX.writeFile(wb,`리쿠르팅_${todayKst()}.xlsx`);
+  }catch(e){ showToast('내보내기 실패','error'); }
+}
+
+// ── 진입 ─────────────────────────────────────────────────
+async function initRecruit(){
+  if(!rcCanUse()) return;
+  if(!allCandidates.length) await loadCandidates();
+  rcRenderStats(); rcRender();
+}
+
 async function saveUser(){
   const eid   = document.getElementById('uf-edit-id')?.value||'';
   const id    = document.getElementById('uf-id')?.value.trim()||'';
