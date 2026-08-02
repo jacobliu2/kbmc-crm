@@ -1803,94 +1803,94 @@ body.dark-mode *::-webkit-scrollbar-thumb:hover{background:rgba(180,208,232,.30)
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px">
       <div>
         <div style="font-size:17px;font-weight:800">팀장 리쿠르팅</div>
-        <div id="rc-sub" style="font-size:12px;color:var(--gray-500);margin-top:2px"></div>
+        <div id="rcr-sub" style="font-size:12px;color:var(--gray-500);margin-top:2px"></div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
-        <button class="btn btn-outline btn-sm" onclick="rcOpenForm()">+ 후보 등록</button>
-        <button id="rc-btn-upload" class="btn btn-outline btn-sm" onclick="document.getElementById('rc-file').click()">엑셀 업로드</button>
-        <button id="rc-btn-tpl" class="btn btn-outline btn-sm" onclick="rcDownloadTemplate()">양식</button>
-        <button class="btn btn-outline btn-sm" onclick="rcExport()">내보내기</button>
-        <input type="file" id="rc-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="rcUpload(this)">
+        <button class="btn btn-outline btn-sm" onclick="rcrOpenForm()">+ 후보 등록</button>
+        <button id="rcr-btn-upload" class="btn btn-outline btn-sm" onclick="document.getElementById('rcr-file').click()">엑셀 업로드</button>
+        <button id="rcr-btn-tpl" class="btn btn-outline btn-sm" onclick="rcrDownloadTemplate()">양식</button>
+        <button class="btn btn-outline btn-sm" onclick="rcrExport()">내보내기</button>
+        <input type="file" id="rcr-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="rcrUpload(this)">
       </div>
     </div>
-    <div id="rc-stats" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+    <div id="rcr-stats" style="display:flex;gap:8px;flex-wrap:wrap"></div>
   </div>
 
   <div class="card">
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
-      <input id="rc-search" placeholder="이름·연락처 검색" oninput="rcRender()"
+      <input id="rcr-search" placeholder="이름·연락처 검색" oninput="rcrRender()"
         style="flex:1;min-width:160px;padding:8px 12px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit">
-      <select id="rc-stage" onchange="rcRender()" style="padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit">
+      <select id="rcr-stage" onchange="rcrRender()" style="padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit">
         <option value="">전체 단계</option>
         <option>신규</option><option>접촉</option><option>면담</option>
         <option>처우협의</option><option>영입</option><option>이탈</option>
       </select>
-      <select id="rc-branch" onchange="rcRender()" style="display:none;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit"></select>
+      <select id="rcr-branch" onchange="rcrRender()" style="display:none;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit"></select>
     </div>
-    <div id="rc-body"></div>
+    <div id="rcr-body"></div>
   </div>
 </div>
 
 <!-- 후보 등록/수정 -->
-<div class="modal-overlay" id="modal-rc-form">
+<div class="modal-overlay" id="modal-rcr-form">
   <div class="modal" style="width:520px;max-width:96vw">
-    <div class="modal-head"><div class="modal-title" id="rc-form-title">후보 등록</div>
-      <button class="modal-x" onclick="closeM('modal-rc-form')">&times;</button></div>
+    <div class="modal-head"><div class="modal-title" id="rcr-form-title">후보 등록</div>
+      <button class="modal-x" onclick="closeM('modal-rcr-form')">&times;</button></div>
     <div class="modal-body">
-      <input type="hidden" id="rc-f-id">
+      <input type="hidden" id="rcr-f-id">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div><label class="fl">이름 *</label><input id="rc-f-name" class="fi"></div>
-        <div><label class="fl">연락처 *</label><input id="rc-f-phone" class="fi" placeholder="010-0000-0000"></div>
-        <div><label class="fl">출생연도</label><input id="rc-f-birth" class="fi" placeholder="1985"></div>
-        <div><label class="fl">성별</label><select id="rc-f-gender" class="fi"><option value="">-</option><option>남</option><option>여</option></select></div>
-        <div><label class="fl">거주지역</label><input id="rc-f-region" class="fi"></div>
-        <div><label class="fl">현직/최근직</label><input id="rc-f-job" class="fi"></div>
-        <div style="grid-column:1/-1"><label class="fl">이메일</label><input id="rc-f-email" class="fi"></div>
-        <div style="grid-column:1/-1"><label class="fl">경력사항</label><input id="rc-f-career" class="fi"></div>
-        <div><label class="fl">유입경로</label><select id="rc-f-source" class="fi"><option>meta</option><option>소개</option><option>직접등록</option><option>기타</option></select></div>
-        <div><label class="fl">광고명</label><input id="rc-f-ad" class="fi"></div>
-        <div id="rc-f-branch-wrap" style="grid-column:1/-1"><label class="fl">담당 지점장</label><select id="rc-f-branch" class="fi"></select></div>
-        <div style="grid-column:1/-1"><label class="fl">메모</label><textarea id="rc-f-memo" class="fi" style="min-height:60px;resize:vertical"></textarea></div>
+        <div><label class="fl">이름 *</label><input id="rcr-f-name" class="fi"></div>
+        <div><label class="fl">연락처 *</label><input id="rcr-f-phone" class="fi" placeholder="010-0000-0000"></div>
+        <div><label class="fl">출생연도</label><input id="rcr-f-birth" class="fi" placeholder="1985"></div>
+        <div><label class="fl">성별</label><select id="rcr-f-gender" class="fi"><option value="">-</option><option>남</option><option>여</option></select></div>
+        <div><label class="fl">거주지역</label><input id="rcr-f-region" class="fi"></div>
+        <div><label class="fl">현직/최근직</label><input id="rcr-f-job" class="fi"></div>
+        <div style="grid-column:1/-1"><label class="fl">이메일</label><input id="rcr-f-email" class="fi"></div>
+        <div style="grid-column:1/-1"><label class="fl">경력사항</label><input id="rcr-f-career" class="fi"></div>
+        <div><label class="fl">유입경로</label><select id="rcr-f-source" class="fi"><option>meta</option><option>소개</option><option>직접등록</option><option>기타</option></select></div>
+        <div><label class="fl">광고명</label><input id="rcr-f-ad" class="fi"></div>
+        <div id="rcr-f-branch-wrap" style="grid-column:1/-1"><label class="fl">담당 지점장</label><select id="rcr-f-branch" class="fi"></select></div>
+        <div style="grid-column:1/-1"><label class="fl">메모</label><textarea id="rcr-f-memo" class="fi" style="min-height:60px;resize:vertical"></textarea></div>
       </div>
     </div>
     <div class="modal-foot">
-      <button class="btn btn-outline" onclick="closeM('modal-rc-form')">취소</button>
-      <button class="btn btn-primary" onclick="rcSaveForm()">저장</button>
+      <button class="btn btn-outline" onclick="closeM('modal-rcr-form')">취소</button>
+      <button class="btn btn-primary" onclick="rcrSaveForm()">저장</button>
     </div>
   </div>
 </div>
 
 <!-- 후보 상세 -->
-<div class="modal-overlay" id="modal-rc-detail">
+<div class="modal-overlay" id="modal-rcr-detail">
   <div class="modal" style="width:600px;max-width:96vw">
-    <div class="modal-head"><div class="modal-title" id="rc-d-title">후보 상세</div>
-      <button class="modal-x" onclick="closeM('modal-rc-detail')">&times;</button></div>
-    <div class="modal-body" id="rc-d-body" style="max-height:70vh;overflow-y:auto"></div>
+    <div class="modal-head"><div class="modal-title" id="rcr-d-title">후보 상세</div>
+      <button class="modal-x" onclick="closeM('modal-rcr-detail')">&times;</button></div>
+    <div class="modal-body" id="rcr-d-body" style="max-height:70vh;overflow-y:auto"></div>
   </div>
 </div>
 
 <!-- 영입 확정 (계정 자동생성) -->
-<div class="modal-overlay" id="modal-rc-hire">
+<div class="modal-overlay" id="modal-rcr-hire">
   <div class="modal" style="width:440px;max-width:96vw">
     <div class="modal-head"><div class="modal-title">영입 확정 — 팀장 계정 생성</div>
-      <button class="modal-x" onclick="closeM('modal-rc-hire')">&times;</button></div>
+      <button class="modal-x" onclick="closeM('modal-rcr-hire')">&times;</button></div>
     <div class="modal-body">
-      <input type="hidden" id="rc-h-cid">
+      <input type="hidden" id="rcr-h-cid">
       <div style="padding:11px 14px;background:rgba(0,192,115,.07);border:1px solid rgba(0,192,115,.2);border-radius:var(--r-sm);font-size:12px;color:var(--gray-700);margin-bottom:12px">
         확정하면 <strong>팀장 계정이 즉시 생성</strong>되어 로그인할 수 있습니다.<br>
         초기 비밀번호는 <strong>1234</strong> 입니다.
       </div>
       <div style="display:grid;gap:10px">
-        <div><label class="fl">이름</label><input id="rc-h-name" class="fi" readonly style="background:var(--gray-50)"></div>
-        <div><label class="fl">로그인 아이디 *</label><input id="rc-h-uid" class="fi" placeholder="영문·숫자">
-          <div id="rc-h-uid-msg" style="font-size:11px;margin-top:3px"></div></div>
-        <div><label class="fl">소속 지점</label><select id="rc-h-branch" class="fi"></select></div>
-        <div><label class="fl">입사일</label><input type="date" id="rc-h-date" class="fi"></div>
+        <div><label class="fl">이름</label><input id="rcr-h-name" class="fi" readonly style="background:var(--gray-50)"></div>
+        <div><label class="fl">로그인 아이디 *</label><input id="rcr-h-uid" class="fi" placeholder="영문·숫자">
+          <div id="rcr-h-uid-msg" style="font-size:11px;margin-top:3px"></div></div>
+        <div><label class="fl">소속 지점</label><select id="rcr-h-branch" class="fi"></select></div>
+        <div><label class="fl">입사일</label><input type="date" id="rcr-h-date" class="fi"></div>
       </div>
     </div>
     <div class="modal-foot">
-      <button class="btn btn-outline" onclick="closeM('modal-rc-hire')">취소</button>
-      <button class="btn btn-primary" onclick="rcConfirmHire()">영입 확정</button>
+      <button class="btn btn-outline" onclick="closeM('modal-rcr-hire')">취소</button>
+      <button class="btn btn-primary" onclick="rcrConfirmHire()">영입 확정</button>
     </div>
   </div>
 </div>
@@ -17606,27 +17606,27 @@ function openEditUser(uid){
 //  · 영입 확정 시 accounts 에 팀장 계정 자동 생성
 // ══════════════════════════════════════════════════════════════
 let allCandidates = [];
-const RC_STAGES = ['신규','접촉','면담','처우협의','영입','이탈'];
-const RC_COLOR  = {'신규':'#64748b','접촉':'#2563eb','면담':'#7c3aed',
+const RCR_STAGES = ['신규','접촉','면담','처우협의','영입','이탈'];
+const RCR_COLOR  = {'신규':'#64748b','접촉':'#2563eb','면담':'#7c3aed',
                    '처우협의':'#e8870f','영입':'var(--ok)','이탈':'var(--gray-300)'};
 
-function rcIsAdmin(){ return curUser?.role==='admin'; }
-function rcCanUse(){ return curUser?.role==='admin' || curUser?.role==='branch'; }
+function rcrIsAdmin(){ return curUser?.role==='admin'; }
+function rcrCanUse(){ return curUser?.role==='admin' || curUser?.role==='branch'; }
 
 // 지점장은 본인 담당분만. 관리자는 전체.
-function rcMine(){
+function rcrMine(){
   const all = (allCandidates||[]).filter(c=>c && c.status!=='deleted');
-  if(rcIsAdmin()) return all;
+  if(rcrIsAdmin()) return all;
   return all.filter(c=>c.branch_name===curUser?.name);
 }
 
-function rcBranchList(){
+function rcrBranchList(){
   try{ return (getAccs()||[]).filter(a=>a.role==='branch').map(a=>a.name); }
   catch(e){ return []; }
 }
 
 async function loadCandidates(){
-  if(!rcCanUse()) return;
+  if(!rcrCanUse()) return;
   try{
     if(typeof testMode!=='undefined' && testMode){
       allCandidates = lg('candidates')||[]; return;
@@ -17645,51 +17645,51 @@ async function loadCandidates(){
 }
 
 // ── 통계 카드 ─────────────────────────────────────────────
-let _rcStageFilter = '';
-function rcRenderStats(){
-  const el=document.getElementById('rc-stats'); if(!el) return;
-  const rows=rcMine();
-  const cnt={}; RC_STAGES.forEach(s=>cnt[s]=0);
+let _rcrStageFilter = '';
+function rcrRenderStats(){
+  const el=document.getElementById('rcr-stats'); if(!el) return;
+  const rows=rcrMine();
+  const cnt={}; RCR_STAGES.forEach(s=>cnt[s]=0);
   rows.forEach(c=>{ const st=c.stage||'신규'; if(cnt[st]!==undefined) cnt[st]++; });
-  el.innerHTML = `<div class="rc-stat ${_rcStageFilter===''?'on':''}" onclick="rcPickStage('')">
+  el.innerHTML = `<div class="rcr-stat ${_rcrStageFilter===''?'on':''}" onclick="rcrPickStage('')">
       <div style="font-size:11px;color:var(--gray-500);font-weight:700">전체</div>
       <div style="font-size:19px;font-weight:800">${rows.length}</div></div>` +
-    RC_STAGES.map(s=>`<div class="rc-stat ${_rcStageFilter===s?'on':''}" onclick="rcPickStage('${s}')">
-      <div style="font-size:11px;color:${RC_COLOR[s]};font-weight:700">${s}</div>
+    RCR_STAGES.map(s=>`<div class="rcr-stat ${_rcrStageFilter===s?'on':''}" onclick="rcrPickStage('${s}')">
+      <div style="font-size:11px;color:${RCR_COLOR[s]};font-weight:700">${s}</div>
       <div style="font-size:19px;font-weight:800">${cnt[s]}</div></div>`).join('');
-  const sub=document.getElementById('rc-sub');
-  if(sub) sub.textContent = rcIsAdmin()
+  const sub=document.getElementById('rcr-sub');
+  if(sub) sub.textContent = rcrIsAdmin()
     ? `전사 ${rows.length}명 · Meta 광고 유입 후보 관리`
     : `${curUser?.name||''} 지점 담당 ${rows.length}명`;
 }
-function rcPickStage(s){
-  _rcStageFilter=s;
-  const sel=document.getElementById('rc-stage'); if(sel) sel.value=s;
-  rcRenderStats(); rcRender();
+function rcrPickStage(s){
+  _rcrStageFilter=s;
+  const sel=document.getElementById('rcr-stage'); if(sel) sel.value=s;
+  rcrRenderStats(); rcrRender();
 }
 
 // ── 목록 ─────────────────────────────────────────────────
-function rcRender(){
-  const el=document.getElementById('rc-body'); if(!el) return;
+function rcrRender(){
+  const el=document.getElementById('rcr-body'); if(!el) return;
   // 관리자 전용 지점 필터 노출
-  const bsel=document.getElementById('rc-branch');
+  const bsel=document.getElementById('rcr-branch');
   if(bsel){
-    if(rcIsAdmin()){
+    if(rcrIsAdmin()){
       if(!bsel.dataset.built){
         bsel.innerHTML='<option value="">전체 지점</option><option value="__none__">미배정</option>'+
-          rcBranchList().map(n=>`<option>${esc(n)}</option>`).join('');
+          rcrBranchList().map(n=>`<option>${esc(n)}</option>`).join('');
         bsel.dataset.built='1';
       }
       bsel.style.display='';
     } else bsel.style.display='none';
   }
 
-  const q=(document.getElementById('rc-search')?.value||'').toLowerCase().trim();
-  const stg=document.getElementById('rc-stage')?.value||'';
-  const br=(rcIsAdmin()&&bsel)?bsel.value:'';
-  _rcStageFilter=stg;
+  const q=(document.getElementById('rcr-search')?.value||'').toLowerCase().trim();
+  const stg=document.getElementById('rcr-stage')?.value||'';
+  const br=(rcrIsAdmin()&&bsel)?bsel.value:'';
+  _rcrStageFilter=stg;
 
-  let rows=rcMine();
+  let rows=rcrMine();
   if(stg) rows=rows.filter(c=>(c.stage||'신규')===stg);
   if(br==='__none__') rows=rows.filter(c=>!c.branch_name);
   else if(br) rows=rows.filter(c=>c.branch_name===br);
@@ -17711,51 +17711,51 @@ function rcRender(){
       <th style="padding:9px 10px;text-align:left">연락처</th>
       <th style="padding:9px 10px;text-align:left">지역</th>
       <th style="padding:9px 10px;text-align:left">현직</th>
-      ${rcIsAdmin()?'<th style="padding:9px 10px;text-align:left">담당 지점장</th>':''}
+      ${rcrIsAdmin()?'<th style="padding:9px 10px;text-align:left">담당 지점장</th>':''}
       <th style="padding:9px 10px;text-align:left">단계</th>
       <th style="padding:9px 10px;text-align:left">신청일</th>
       <th style="padding:9px 10px;text-align:left">메모</th>
     </tr></thead><tbody>${rows.map(c=>{
       const st=c.stage||'신규';
-      return `<tr style="cursor:pointer" onclick="rcOpenDetail('${c.id}')">
+      return `<tr style="cursor:pointer" onclick="rcrOpenDetail('${c.id}')">
         <td style="padding:9px 12px;font-weight:700">${esc(c.name||'-')}</td>
         <td style="padding:9px 10px">${esc(typeof formatPhone==='function'?formatPhone(c.phone||''):(c.phone||''))}</td>
         <td style="padding:9px 10px;color:var(--gray-500)">${esc(c.region||'-')}</td>
         <td style="padding:9px 10px;color:var(--gray-500)">${esc(c.current_job||'-')}</td>
-        ${rcIsAdmin()?`<td style="padding:9px 10px">${c.branch_name?esc(c.branch_name):'<span style="color:var(--err);font-size:11px;font-weight:700">미배정</span>'}</td>`:''}
-        <td style="padding:9px 10px"><span class="rc-sb" style="background:${RC_COLOR[st]}1a;color:${RC_COLOR[st]}">${st}</span></td>
+        ${rcrIsAdmin()?`<td style="padding:9px 10px">${c.branch_name?esc(c.branch_name):'<span style="color:var(--err);font-size:11px;font-weight:700">미배정</span>'}</td>`:''}
+        <td style="padding:9px 10px"><span class="rcr-sb" style="background:${RCR_COLOR[st]}1a;color:${RCR_COLOR[st]}">${st}</span></td>
         <td style="padding:9px 10px;color:var(--gray-400);font-size:11.5px">${(c.inflow_at||c.created_at||'').slice(0,10)}</td>
         <td style="padding:9px 10px;color:var(--gray-500);font-size:11.5px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc((c.memo||'').slice(0,40))}</td>
       </tr>`;}).join('')}</tbody></table></div>`;
 }
 
 // ── 등록/수정 폼 ─────────────────────────────────────────
-function rcOpenForm(id){
+function rcrOpenForm(id){
   const c = id ? (allCandidates||[]).find(x=>x.id===id) : null;
-  document.getElementById('rc-form-title').textContent = c?'후보 수정':'후보 등록';
+  document.getElementById('rcr-form-title').textContent = c?'후보 수정':'후보 등록';
   const set=(k,v)=>{const e=document.getElementById(k); if(e) e.value=v||'';};
-  set('rc-f-id', c?.id); set('rc-f-name', c?.name); set('rc-f-phone', c?.phone);
-  set('rc-f-birth', c?.birth_year); set('rc-f-gender', c?.gender);
-  set('rc-f-region', c?.region); set('rc-f-job', c?.current_job);
-  set('rc-f-email', c?.email); set('rc-f-career', c?.career);
-  set('rc-f-source', c?.source||'meta'); set('rc-f-ad', c?.ad_name);
-  set('rc-f-memo', c?.memo);
+  set('rcr-f-id', c?.id); set('rcr-f-name', c?.name); set('rcr-f-phone', c?.phone);
+  set('rcr-f-birth', c?.birth_year); set('rcr-f-gender', c?.gender);
+  set('rcr-f-region', c?.region); set('rcr-f-job', c?.current_job);
+  set('rcr-f-email', c?.email); set('rcr-f-career', c?.career);
+  set('rcr-f-source', c?.source||'meta'); set('rcr-f-ad', c?.ad_name);
+  set('rcr-f-memo', c?.memo);
 
-  const bw=document.getElementById('rc-f-branch-wrap');
-  const bs=document.getElementById('rc-f-branch');
-  if(rcIsAdmin()){
+  const bw=document.getElementById('rcr-f-branch-wrap');
+  const bs=document.getElementById('rcr-f-branch');
+  if(rcrIsAdmin()){
     if(bw) bw.style.display='';
-    if(bs) bs.innerHTML='<option value="">미배정</option>'+rcBranchList().map(n=>`<option>${esc(n)}</option>`).join('');
+    if(bs) bs.innerHTML='<option value="">미배정</option>'+rcrBranchList().map(n=>`<option>${esc(n)}</option>`).join('');
     if(bs) bs.value=c?.branch_name||'';
   } else {
     if(bw) bw.style.display='none';  // 지점장은 본인 담당으로 자동 배정
   }
-  openM('modal-rc-form');
+  openM('modal-rcr-form');
 }
 
-async function rcSaveForm(){
+async function rcrSaveForm(){
   const g=(k)=>document.getElementById(k)?.value.trim()||'';
-  const id=g('rc-f-id'), name=g('rc-f-name'), phone=g('rc-f-phone');
+  const id=g('rcr-f-id'), name=g('rcr-f-name'), phone=g('rcr-f-phone');
   if(!name){ showToast('이름을 입력하세요','error'); return; }
   if(!phone){ showToast('연락처를 입력하세요','error'); return; }
 
@@ -17765,12 +17765,12 @@ async function rcSaveForm(){
   if(dup){ showToast(`이미 등록된 번호입니다 (${dup.name} · ${dup.stage||'신규'})`,'error'); return; }
 
   const data={
-    name, phone, email:g('rc-f-email'), birth_year:g('rc-f-birth'),
-    gender:g('rc-f-gender'), region:g('rc-f-region'), career:g('rc-f-career'),
-    current_job:g('rc-f-job'), source:g('rc-f-source'), ad_name:g('rc-f-ad'),
-    memo:g('rc-f-memo')
+    name, phone, email:g('rcr-f-email'), birth_year:g('rcr-f-birth'),
+    gender:g('rcr-f-gender'), region:g('rcr-f-region'), career:g('rcr-f-career'),
+    current_job:g('rcr-f-job'), source:g('rcr-f-source'), ad_name:g('rcr-f-ad'),
+    memo:g('rcr-f-memo')
   };
-  if(rcIsAdmin()) data.branch_name=g('rc-f-branch');
+  if(rcrIsAdmin()) data.branch_name=g('rcr-f-branch');
 
   try{
     if(id){
@@ -17782,30 +17782,30 @@ async function rcSaveForm(){
     } else {
       data.stage='신규'; data.status='active';
       data.inflow_at=new Date().toISOString();
-      if(!rcIsAdmin()){ data.branch_name=curUser?.name||''; data.assigned_at=new Date().toISOString(); }
+      if(!rcrIsAdmin()){ data.branch_name=curUser?.name||''; data.assigned_at=new Date().toISOString(); }
       else if(data.branch_name) data.assigned_at=new Date().toISOString();
       const row=await dbI('candidates',data);
       if(!row){ showToast('저장 실패 — 반영되지 않았습니다','error'); return; }
       allCandidates.unshift(row);
       showToast('후보 등록 완료','success');
     }
-    closeM('modal-rc-form'); rcRenderStats(); rcRender();
+    closeM('modal-rcr-form'); rcrRenderStats(); rcrRender();
   }catch(e){ console.warn(e); showToast('저장 중 오류가 발생했습니다','error'); }
 }
 
 // ── 상세 ─────────────────────────────────────────────────
-let _rcDetailId='';
-function rcOpenDetail(id){
+let _rcrDetailId='';
+function rcrOpenDetail(id){
   const c=(allCandidates||[]).find(x=>x.id===id); if(!c) return;
-  _rcDetailId=id;
-  document.getElementById('rc-d-title').textContent=`${c.name||''} · ${c.stage||'신규'}`;
+  _rcrDetailId=id;
+  document.getElementById('rcr-d-title').textContent=`${c.name||''} · ${c.stage||'신규'}`;
   const row=(l,v)=>`<div style="display:flex;padding:6px 0;border-bottom:1px solid var(--gray-100)">
     <div style="width:88px;flex-shrink:0;font-size:11.5px;color:var(--gray-500);font-weight:700">${l}</div>
     <div style="flex:1;font-size:13px">${v||'-'}</div></div>`;
   const acts=(allActivities||[]).filter(a=>a.candidate_id===id)
     .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
 
-  document.getElementById('rc-d-body').innerHTML=`
+  document.getElementById('rcr-d-body').innerHTML=`
     ${row('연락처', esc(typeof formatPhone==='function'?formatPhone(c.phone||''):(c.phone||'')))}
     ${row('이메일', esc(c.email))}
     ${row('출생연도', esc(c.birth_year))}
@@ -17822,10 +17822,10 @@ function rcOpenDetail(id){
     <div style="margin-top:14px">
       <label class="fl">진행 단계</label>
       <div style="display:flex;gap:5px;flex-wrap:wrap">
-        ${RC_STAGES.map(s=>`<button onclick="rcSetStage('${id}','${s}')"
+        ${RCR_STAGES.map(s=>`<button onclick="rcrSetStage('${id}','${s}')"
           style="padding:6px 12px;font-size:12px;font-weight:700;border-radius:6px;cursor:pointer;font-family:inherit;
-          border:1.5px solid ${(c.stage||'신규')===s?RC_COLOR[s]:'var(--gray-200)'};
-          background:${(c.stage||'신규')===s?RC_COLOR[s]:'#fff'};
+          border:1.5px solid ${(c.stage||'신규')===s?RCR_COLOR[s]:'var(--gray-200)'};
+          background:${(c.stage||'신규')===s?RCR_COLOR[s]:'#fff'};
           color:${(c.stage||'신규')===s?'#fff':'var(--gray-500)'}">${s}</button>`).join('')}
       </div>
     </div>
@@ -17833,11 +17833,11 @@ function rcOpenDetail(id){
     <div style="margin-top:14px">
       <label class="fl">활동 기록 추가</label>
       <div style="display:flex;gap:6px">
-        <select id="rc-a-type" class="fi" style="width:96px;flex-shrink:0">
+        <select id="rcr-a-type" class="fi" style="width:96px;flex-shrink:0">
           <option>전화</option><option>면담</option><option>문자</option><option>메모</option>
         </select>
-        <input id="rc-a-text" class="fi" placeholder="내용" onkeydown="if(event.key==='Enter')rcAddAct('${id}')">
-        <button class="btn btn-primary btn-sm" style="flex-shrink:0" onclick="rcAddAct('${id}')">기록</button>
+        <input id="rcr-a-text" class="fi" placeholder="내용" onkeydown="if(event.key==='Enter')rcrAddAct('${id}')">
+        <button class="btn btn-primary btn-sm" style="flex-shrink:0" onclick="rcrAddAct('${id}')">기록</button>
       </div>
     </div>
 
@@ -17849,16 +17849,16 @@ function rcOpenDetail(id){
     </div>
 
     <div style="display:flex;gap:6px;margin-top:16px;flex-wrap:wrap">
-      <button class="btn btn-outline btn-sm" onclick="closeM('modal-rc-detail');rcOpenForm('${id}')">정보 수정</button>
-      ${(c.stage!=='영입')?`<button class="btn btn-primary btn-sm" onclick="rcOpenHire('${id}')">영입 확정</button>`:''}
-      ${rcIsAdmin()?`<button class="btn btn-outline btn-sm" style="color:var(--err);border-color:var(--err)" onclick="rcSoftDelete('${id}')">삭제</button>`:''}
+      <button class="btn btn-outline btn-sm" onclick="closeM('modal-rcr-detail');rcrOpenForm('${id}')">정보 수정</button>
+      ${(c.stage!=='영입')?`<button class="btn btn-primary btn-sm" onclick="rcrOpenHire('${id}')">영입 확정</button>`:''}
+      ${rcrIsAdmin()?`<button class="btn btn-outline btn-sm" style="color:var(--err);border-color:var(--err)" onclick="rcrSoftDelete('${id}')">삭제</button>`:''}
     </div>`;
-  openM('modal-rc-detail');
+  openM('modal-rcr-detail');
 }
 
-async function rcSetStage(id, stage){
+async function rcrSetStage(id, stage){
   const c=(allCandidates||[]).find(x=>x.id===id); if(!c) return;
-  if(stage==='영입'){ rcOpenHire(id); return; }
+  if(stage==='영입'){ rcrOpenHire(id); return; }
   let patch={stage};
   if(stage==='이탈'){
     const r=prompt('이탈 사유를 입력하세요'); if(r===null) return;
@@ -17868,25 +17868,25 @@ async function rcSetStage(id, stage){
   if(!ok){ showToast('저장 실패 — 반영되지 않았습니다','error'); return; }
   const i=allCandidates.findIndex(x=>x.id===id);
   if(i>=0) allCandidates[i]={...allCandidates[i],...patch};
-  await rcLog(id, 'system', `단계 변경 → ${stage}`+(patch.drop_reason?` (${patch.drop_reason})`:''));
+  await rcrLog(id, 'system', `단계 변경 → ${stage}`+(patch.drop_reason?` (${patch.drop_reason})`:''));
   showToast(`${stage} 단계로 변경`,'success');
-  rcOpenDetail(id); rcRenderStats(); rcRender();
+  rcrOpenDetail(id); rcrRenderStats(); rcrRender();
 }
 
-async function rcLog(cid, type, content){
+async function rcrLog(cid, type, content){
   try{
     await dbI('activities',{
       candidate_id:cid, lead_id:null, type, content,
       user_name:curUser?.name||'', user_role:curUser?.role||''
     });
-  }catch(e){ console.warn('rcLog', e); }
+  }catch(e){ console.warn('rcrLog', e); }
 }
 
-async function rcAddAct(id){
-  const t=document.getElementById('rc-a-type')?.value||'메모';
-  const v=document.getElementById('rc-a-text')?.value.trim()||'';
+async function rcrAddAct(id){
+  const t=document.getElementById('rcr-a-type')?.value||'메모';
+  const v=document.getElementById('rcr-a-text')?.value.trim()||'';
   if(!v){ showToast('내용을 입력하세요','error'); return; }
-  await rcLog(id, t, v);
+  await rcrLog(id, t, v);
   // 신규 상태에서 첫 접촉 기록이면 접촉 단계로 자동 이동
   const c=(allCandidates||[]).find(x=>x.id===id);
   if(c && (c.stage||'신규')==='신규' && ['전화','면담','문자'].includes(t)){
@@ -17895,52 +17895,52 @@ async function rcAddAct(id){
     if(i>=0) allCandidates[i].stage='접촉';
   }
   showToast('기록 완료','success');
-  rcOpenDetail(id); rcRenderStats(); rcRender();
+  rcrOpenDetail(id); rcrRenderStats(); rcrRender();
 }
 
-async function rcSoftDelete(id){
-  if(!rcIsAdmin()){ showToast('관리자만 가능합니다','error'); return; }
+async function rcrSoftDelete(id){
+  if(!rcrIsAdmin()){ showToast('관리자만 가능합니다','error'); return; }
   if(!confirm('이 후보를 삭제하시겠습니까?\n(기록은 보존되며 목록에서만 숨겨집니다)')) return;
   const ok=await dbU('candidates',id,{status:'deleted'});
   if(!ok){ showToast('삭제 실패','error'); return; }
   const i=allCandidates.findIndex(x=>x.id===id);
   if(i>=0) allCandidates[i].status='deleted';
-  closeM('modal-rc-detail'); showToast('삭제 완료','success');
-  rcRenderStats(); rcRender();
+  closeM('modal-rcr-detail'); showToast('삭제 완료','success');
+  rcrRenderStats(); rcrRender();
 }
 
 // ── 영입 확정 → 팀장 계정 자동 생성 ──────────────────────
-function rcOpenHire(id){
+function rcrOpenHire(id){
   const c=(allCandidates||[]).find(x=>x.id===id); if(!c) return;
-  document.getElementById('rc-h-cid').value=id;
-  document.getElementById('rc-h-name').value=c.name||'';
-  document.getElementById('rc-h-date').value=todayKst();
-  const uid=document.getElementById('rc-h-uid'); if(uid){ uid.value=''; uid.oninput=rcCheckUid; }
-  document.getElementById('rc-h-uid-msg').textContent='';
-  const bs=document.getElementById('rc-h-branch');
+  document.getElementById('rcr-h-cid').value=id;
+  document.getElementById('rcr-h-name').value=c.name||'';
+  document.getElementById('rcr-h-date').value=todayKst();
+  const uid=document.getElementById('rcr-h-uid'); if(uid){ uid.value=''; uid.oninput=rcrCheckUid; }
+  document.getElementById('rcr-h-uid-msg').textContent='';
+  const bs=document.getElementById('rcr-h-branch');
   if(bs){
-    bs.innerHTML=rcBranchList().map(n=>`<option>${esc(n)}</option>`).join('');
-    bs.value=c.branch_name||rcBranchList()[0]||'';
-    bs.disabled = !rcIsAdmin();   // 지점장은 본인 지점 고정
+    bs.innerHTML=rcrBranchList().map(n=>`<option>${esc(n)}</option>`).join('');
+    bs.value=c.branch_name||rcrBranchList()[0]||'';
+    bs.disabled = !rcrIsAdmin();   // 지점장은 본인 지점 고정
   }
-  closeM('modal-rc-detail');
-  openM('modal-rc-hire');
+  closeM('modal-rcr-detail');
+  openM('modal-rcr-hire');
 }
 
-function rcCheckUid(){
-  const v=document.getElementById('rc-h-uid')?.value.trim()||'';
-  const m=document.getElementById('rc-h-uid-msg'); if(!m) return;
+function rcrCheckUid(){
+  const v=document.getElementById('rcr-h-uid')?.value.trim()||'';
+  const m=document.getElementById('rcr-h-uid-msg'); if(!m) return;
   if(!v){ m.textContent=''; return; }
   const exists=(getAccs()||[]).some(a=>a.id===v);
   m.textContent = exists ? '이미 사용 중인 아이디입니다' : '사용 가능합니다';
   m.style.color = exists ? 'var(--err)' : 'var(--ok)';
 }
 
-async function rcConfirmHire(){
-  const cid=document.getElementById('rc-h-cid')?.value||'';
-  const uid=document.getElementById('rc-h-uid')?.value.trim()||'';
-  const branch=document.getElementById('rc-h-branch')?.value||'';
-  const hdate=document.getElementById('rc-h-date')?.value||todayKst();
+async function rcrConfirmHire(){
+  const cid=document.getElementById('rcr-h-cid')?.value||'';
+  const uid=document.getElementById('rcr-h-uid')?.value.trim()||'';
+  const branch=document.getElementById('rcr-h-branch')?.value||'';
+  const hdate=document.getElementById('rcr-h-date')?.value||todayKst();
   const c=(allCandidates||[]).find(x=>x.id===cid);
   if(!c){ showToast('대상을 찾을 수 없습니다','error'); return; }
   if(!uid){ showToast('로그인 아이디를 입력하세요','error'); return; }
@@ -17974,26 +17974,26 @@ async function rcConfirmHire(){
     const i=allCandidates.findIndex(x=>x.id===cid);
     if(i>=0) allCandidates[i]={...allCandidates[i],...patch};
 
-    await rcLog(cid,'system',`영입 확정 — ${branch} 지점 팀장 계정 생성 (${uid})`);
-    closeM('modal-rc-hire');
+    await rcrLog(cid,'system',`영입 확정 — ${branch} 지점 팀장 계정 생성 (${uid})`);
+    closeM('modal-rcr-hire');
     showToast(`영입 확정 · 팀장 계정 생성 완료 (아이디 ${uid} / 초기 비번 1234)`,'success');
-    rcRenderStats(); rcRender();
+    rcrRenderStats(); rcrRender();
   }catch(e){ console.warn(e); showToast('처리 중 오류가 발생했습니다','error'); }
 }
 
 // ── 엑셀 ─────────────────────────────────────────────────
-const RC_COLS=['이름','연락처','출생연도','성별','거주지역','현직','경력사항','이메일','광고명','신청일시','메모'];
+const RCR_COLS=['이름','연락처','출생연도','성별','거주지역','현직','경력사항','이메일','광고명','신청일시','메모'];
 
-function rcDownloadTemplate(){
+function rcrDownloadTemplate(){
   try{
-    const ws=XLSX.utils.aoa_to_sheet([RC_COLS,
+    const ws=XLSX.utils.aoa_to_sheet([RCR_COLS,
       ['홍길동','010-1234-5678','1985','남','서울 강남','보험설계사','5년','hong@ex.com','8월_팀장모집','2026-08-01 10:00','']]);
     const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'후보');
     XLSX.writeFile(wb,'리쿠르팅_업로드양식.xlsx');
   }catch(e){ showToast('양식 생성 실패','error'); }
 }
 
-async function rcUpload(input){
+async function rcrUpload(input){
   const f=input.files?.[0]; if(!f) return;
   input.value='';
   try{
@@ -18028,14 +18028,14 @@ async function rcUpload(input){
       if(row){ allCandidates.unshift(row); exist.add(np); added++; }
     }
     showToast(`업로드 완료 — 신규 ${added}건 / 중복 ${dup}건 / 오류 ${bad}건`,'success');
-    rcRenderStats(); rcRender();
+    rcrRenderStats(); rcrRender();
   }catch(e){ console.warn(e); showToast('업로드 실패 — 양식을 확인하세요','error'); }
 }
 
-function rcExport(){
+function rcrExport(){
   try{
-    const rows=rcMine();
-    const aoa=[[...RC_COLS,'담당 지점장','단계','입사일']].concat(rows.map(c=>[
+    const rows=rcrMine();
+    const aoa=[[...RCR_COLS,'담당 지점장','단계','입사일']].concat(rows.map(c=>[
       c.name||'', c.phone||'', c.birth_year||'', c.gender||'', c.region||'',
       c.current_job||'', c.career||'', c.email||'', c.ad_name||'',
       (c.inflow_at||c.created_at||'').slice(0,16).replace('T',' '), c.memo||'',
@@ -18049,9 +18049,9 @@ function rcExport(){
 
 // ── 진입 ─────────────────────────────────────────────────
 async function initRecruit(){
-  if(!rcCanUse()) return;
+  if(!rcrCanUse()) return;
   if(!allCandidates.length) await loadCandidates();
-  rcRenderStats(); rcRender();
+  rcrRenderStats(); rcrRender();
 }
 
 async function saveUser(){
