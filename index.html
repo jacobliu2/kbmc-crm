@@ -1831,6 +1831,10 @@ body.dark-mode *::-webkit-scrollbar-thumb:hover{background:rgba(180,208,232,.30)
         <option>신규</option><option>접촉</option><option>면담</option>
         <option>처우협의</option><option>영입</option><option>이탈</option>
       </select>
+      <select id="rcr-job" onchange="rcrRender()" style="padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit">
+        <option value="">전체 직무</option></select>
+      <select id="rcr-income" onchange="rcrRender()" style="padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit">
+        <option value="">전체 목표수익</option></select>
       <select id="rcr-branch" onchange="rcrRender()" style="display:none;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit"></select>
     </div>
     <div id="rcr-body"></div>
@@ -1846,17 +1850,17 @@ body.dark-mode *::-webkit-scrollbar-thumb:hover{background:rgba(180,208,232,.30)
       <input type="hidden" id="rcr-f-id">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div><label class="fl">이름 *</label><input id="rcr-f-name" class="fi"></div>
-        <div><label class="fl">연락처 *</label><input id="rcr-f-phone" class="fi" placeholder="010-0000-0000"></div>
-        <div><label class="fl">출생연도</label><input id="rcr-f-birth" class="fi" placeholder="1985"></div>
-        <div><label class="fl">성별</label><select id="rcr-f-gender" class="fi"><option value="">-</option><option>남</option><option>여</option></select></div>
-        <div><label class="fl">거주지역</label><input id="rcr-f-region" class="fi"></div>
-        <div><label class="fl">현직/최근직</label><input id="rcr-f-job" class="fi"></div>
-        <div style="grid-column:1/-1"><label class="fl">이메일</label><input id="rcr-f-email" class="fi"></div>
-        <div style="grid-column:1/-1"><label class="fl">경력사항</label><input id="rcr-f-career" class="fi"></div>
-        <div><label class="fl">유입경로</label><select id="rcr-f-source" class="fi"><option>meta</option><option>소개</option><option>직접등록</option><option>기타</option></select></div>
-        <div><label class="fl">광고명</label><input id="rcr-f-ad" class="fi"></div>
+        <div><label class="fl">전화번호 *</label><input id="rcr-f-phone" class="fi" placeholder="010-0000-0000"></div>
+        <div><label class="fl">유입경로</label><select id="rcr-f-platform" class="fi">
+          <option value="">-</option><option value="ig">ig (인스타그램)</option><option value="fb">fb (페이스북)</option><option value="직접등록">직접등록</option><option value="소개">소개</option></select></div>
+        <div><label class="fl">유입시각</label><input id="rcr-f-inflow" class="fi" placeholder="비우면 현재시각"></div>
+        <div><label class="fl">현재 하는 일</label><select id="rcr-f-job" class="fi"></select></div>
+        <div><label class="fl">법인영업 업력</label><select id="rcr-f-years" class="fi"></select></div>
+        <div style="grid-column:1/-1"><label class="fl">현재 니즈 <span style="font-weight:400;opacity:.7">(복수 선택)</span></label>
+          <div id="rcr-f-needs" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:2px"></div></div>
+        <div style="grid-column:1/-1"><label class="fl">목표 월 수익</label><select id="rcr-f-income" class="fi"></select></div>
         <div id="rcr-f-branch-wrap" style="grid-column:1/-1"><label class="fl">담당 지점장</label><select id="rcr-f-branch" class="fi"></select></div>
-        <div style="grid-column:1/-1"><label class="fl">메모</label><textarea id="rcr-f-memo" class="fi" style="min-height:60px;resize:vertical"></textarea></div>
+        <div style="grid-column:1/-1"><label class="fl">메모</label><textarea id="rcr-f-memo" class="fi" style="min-height:56px;resize:vertical"></textarea></div>
       </div>
     </div>
     <div class="modal-foot">
@@ -17613,6 +17617,48 @@ function openEditUser(uid){
 // ══════════════════════════════════════════════════════════════
 let allCandidates = [];
 const RCR_STAGES = ['신규','접촉','면담','처우협의','영입','이탈'];
+// Meta 리드폼 선택지 (필터 옵션 = 실제 응답값 기준)
+const RCR_JOBS    = ['정책자금','법인영업','개인보험','기타'];
+const RCR_YEARS   = ['없음','3개월-6개월 미만','6개월-1년 미만','1년 이상-2년 미만','2년 이상-3년 미만','3년 이상'];
+const RCR_INCOMES = ['월 1천만원 ~ 월 3천만원','월 3천만원 ~ 월 5천만원','월 5천만원 ~ 월 1억원','월 1억 이상'];
+const RCR_NEEDS   = ['소개/DB가 부족함','시스템 부재','영업 전환율이 낮음','새로운 시장 기회가 안 보임'];
+
+// Meta 응답값 정리 — 밑줄 구분자를 공백으로. (예: 월_1천만원_~_월_3천만원)
+function rcrClean(v){
+  return String(v==null?'':v).replace(/_/g,' ').replace(/\s+/g,' ').trim();
+}
+// 전화번호 앞자리 0 복원 — 엑셀이 숫자로 읽어 0을 날린다 (1071653523 → 01071653523)
+function rcrPhone(v){
+  let p=String(v==null?'':v).replace(/[^0-9]/g,'');
+  if(!p) return '';
+  if(p.length===10 && p[0]!=='0') p='0'+p;          // 1071653523
+  if(p.length===9  && p[0]!=='0') p='0'+p;          // 지역번호 등
+  if(p.startsWith('82')) p='0'+p.slice(2);          // +82 표기
+  if(p.length===11) return p.slice(0,3)+'-'+p.slice(3,7)+'-'+p.slice(7);
+  if(p.length===10) return p.slice(0,3)+'-'+p.slice(3,6)+'-'+p.slice(6);
+  return p;
+}
+// 테스트 리드 판별 — Meta 폼 검수 시 생성되는 더미 행
+function rcrIsTestLead(o){
+  const j=Object.values(o||{}).join(' ').toLowerCase();
+  return j.includes('test lead') || j.includes('dummy data');
+}
+// 유입시각 파싱 — "2026. 8. 2 오후 2:51:00" / Date 객체 / ISO 모두 수용
+function rcrParseDate(v){
+  if(!v) return null;
+  if(v instanceof Date && !isNaN(v)) return v.toISOString();
+  const t=String(v).trim();
+  const m=t.match(/(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\s*(오전|오후)?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if(m){
+    let h=parseInt(m[5],10);
+    if(m[4]==='오후' && h<12) h+=12;
+    if(m[4]==='오전' && h===12) h=0;
+    const d=new Date(+m[1], +m[2]-1, +m[3], h, +m[6], +(m[7]||0));
+    if(!isNaN(d)) return d.toISOString();
+  }
+  const d2=new Date(t);
+  return isNaN(d2)?null:d2.toISOString();
+}
 const RCR_COLOR  = {'신규':'#64748b','접촉':'#2563eb','면담':'#7c3aed',
                    '처우협의':'#e8870f','영입':'var(--ok)','이탈':'var(--gray-300)'};
 
@@ -17690,13 +17736,29 @@ function rcrRender(){
     } else bsel.style.display='none';
   }
 
+  // 직무·목표수익 옵션 1회 구성
+  const jsel=document.getElementById('rcr-job');
+  if(jsel && !jsel.dataset.built){
+    jsel.innerHTML='<option value="">전체 직무</option>'+RCR_JOBS.map(o=>`<option>${esc(o)}</option>`).join('');
+    jsel.dataset.built='1';
+  }
+  const isel=document.getElementById('rcr-income');
+  if(isel && !isel.dataset.built){
+    isel.innerHTML='<option value="">전체 목표수익</option>'+RCR_INCOMES.map(o=>`<option>${esc(o)}</option>`).join('');
+    isel.dataset.built='1';
+  }
+
   const q=(document.getElementById('rcr-search')?.value||'').toLowerCase().trim();
   const stg=document.getElementById('rcr-stage')?.value||'';
+  const job=jsel?jsel.value:'';
+  const inm=isel?isel.value:'';
   const br=(rcrIsAdmin()&&bsel)?bsel.value:'';
   _rcrStageFilter=stg;
 
   let rows=rcrMine();
   if(stg) rows=rows.filter(c=>(c.stage||'신규')===stg);
+  if(job) rows=rows.filter(c=>String(c.current_job||'').includes(job));
+  if(inm) rows=rows.filter(c=>(c.target_income||'')===inm);
   if(br==='__none__') rows=rows.filter(c=>!c.branch_name);
   else if(br) rows=rows.filter(c=>c.branch_name===br);
   if(q) rows=rows.filter(c=>
@@ -17711,27 +17773,40 @@ function rcrRender(){
     return;
   }
 
+  const inc=(v)=>{ // 목표 수익 강조색
+    if(!v) return 'var(--gray-300)';
+    if(v.includes('1억')) return 'var(--err)';
+    if(v.includes('5천만원 ~')) return '#e8870f';
+    return 'var(--gray-600)';
+  };
   el.innerHTML=`<div class="tbl-wrap"><table style="font-size:12.5px;width:100%">
     <thead><tr>
       <th style="padding:9px 12px;text-align:left">이름</th>
-      <th style="padding:9px 10px;text-align:left">연락처</th>
-      <th style="padding:9px 10px;text-align:left">지역</th>
-      <th style="padding:9px 10px;text-align:left">현직</th>
+      <th style="padding:9px 10px;text-align:left">전화번호</th>
+      <th style="padding:9px 8px;text-align:center;width:44px">유입</th>
+      <th style="padding:9px 10px;text-align:left">현재 하는 일</th>
+      <th style="padding:9px 10px;text-align:left">업력</th>
+      <th style="padding:9px 10px;text-align:left">목표 월 수익</th>
+      <th style="padding:9px 10px;text-align:left">니즈</th>
       ${rcrIsAdmin()?'<th style="padding:9px 10px;text-align:left">담당 지점장</th>':''}
       <th style="padding:9px 10px;text-align:left">단계</th>
-      <th style="padding:9px 10px;text-align:left">신청일</th>
-      <th style="padding:9px 10px;text-align:left">메모</th>
+      <th style="padding:9px 10px;text-align:left">유입시각</th>
     </tr></thead><tbody>${rows.map(c=>{
       const st=c.stage||'신규';
+      const pf=(c.platform||'').toLowerCase();
+      const pfc= pf==='ig'?'#c13584' : pf==='fb'?'#1877f2' : 'var(--gray-400)';
+      const inf=(c.inflow_at||c.created_at||'');
       return `<tr style="cursor:pointer" onclick="rcrOpenDetail('${c.id}')">
         <td style="padding:9px 12px;font-weight:700">${esc(c.name||'-')}</td>
-        <td style="padding:9px 10px">${esc(typeof formatPhone==='function'?formatPhone(c.phone||''):(c.phone||''))}</td>
-        <td style="padding:9px 10px;color:var(--gray-500)">${esc(c.region||'-')}</td>
-        <td style="padding:9px 10px;color:var(--gray-500)">${esc(c.current_job||'-')}</td>
+        <td style="padding:9px 10px;white-space:nowrap">${esc(rcrPhone(c.phone||''))}</td>
+        <td style="padding:9px 8px;text-align:center">${pf?`<span style="font-size:10.5px;font-weight:800;color:${pfc}">${esc(pf)}</span>`:'-'}</td>
+        <td style="padding:9px 10px">${esc(c.current_job||'-')}</td>
+        <td style="padding:9px 10px;color:var(--gray-500);font-size:11.5px">${esc(c.biz_years||'-')}</td>
+        <td style="padding:9px 10px;font-size:11.5px;font-weight:700;color:${inc(c.target_income||'')}">${esc(c.target_income||'-')}</td>
+        <td style="padding:9px 10px;color:var(--gray-500);font-size:11.5px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(c.needs||'')}">${esc(c.needs||'-')}</td>
         ${rcrIsAdmin()?`<td style="padding:9px 10px">${c.branch_name?esc(c.branch_name):'<span style="color:var(--err);font-size:11px;font-weight:700">미배정</span>'}</td>`:''}
         <td style="padding:9px 10px"><span class="rcr-sb" style="background:${RCR_COLOR[st]}1a;color:${RCR_COLOR[st]}">${st}</span></td>
-        <td style="padding:9px 10px;color:var(--gray-400);font-size:11.5px">${(c.inflow_at||c.created_at||'').slice(0,10)}</td>
-        <td style="padding:9px 10px;color:var(--gray-500);font-size:11.5px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc((c.memo||'').slice(0,40))}</td>
+        <td style="padding:9px 10px;color:var(--gray-400);font-size:11px;white-space:nowrap">${inf.slice(0,10)}<br><span style="opacity:.7">${inf.slice(11,16)}</span></td>
       </tr>`;}).join('')}</tbody></table></div>`;
 }
 
@@ -17739,43 +17814,69 @@ function rcrRender(){
 function rcrOpenForm(id){
   const c = id ? (allCandidates||[]).find(x=>x.id===id) : null;
   document.getElementById('rcr-form-title').textContent = c?'후보 수정':'후보 등록';
-  const set=(k,v)=>{const e=document.getElementById(k); if(e) e.value=v||'';};
+  const set=(k,v)=>{const e=document.getElementById(k); if(e) e.value=v==null?'':v;};
+  const opts=(arr,cur)=>'<option value="">-</option>'+arr.map(o=>`<option${o===cur?' selected':''}>${esc(o)}</option>`).join('');
+
   set('rcr-f-id', c?.id); set('rcr-f-name', c?.name); set('rcr-f-phone', c?.phone);
-  set('rcr-f-birth', c?.birth_year); set('rcr-f-gender', c?.gender);
-  set('rcr-f-region', c?.region); set('rcr-f-job', c?.current_job);
-  set('rcr-f-email', c?.email); set('rcr-f-career', c?.career);
-  set('rcr-f-source', c?.source||'meta'); set('rcr-f-ad', c?.ad_name);
-  set('rcr-f-memo', c?.memo);
+  set('rcr-f-platform', c?.platform||''); set('rcr-f-memo', c?.memo);
+  set('rcr-f-inflow', c?.inflow_at?String(c.inflow_at).slice(0,16).replace('T',' '):'');
+
+  const jb=document.getElementById('rcr-f-job');   if(jb) jb.innerHTML=opts(RCR_JOBS, c?.current_job);
+  const yr=document.getElementById('rcr-f-years'); if(yr) yr.innerHTML=opts(RCR_YEARS, c?.biz_years);
+  const ic=document.getElementById('rcr-f-income');if(ic) ic.innerHTML=opts(RCR_INCOMES, c?.target_income);
+
+  // 니즈 — 복수 선택 토글
+  const cur=(c?.needs||'').split(',').map(x=>x.trim()).filter(Boolean);
+  const nd=document.getElementById('rcr-f-needs');
+  if(nd) nd.innerHTML=RCR_NEEDS.map(n=>{
+    const on=cur.includes(n);
+    return `<button type="button" data-n="${esc(n)}" onclick="rcrToggleNeed(this)"
+      style="padding:5px 11px;font-size:11.5px;font-weight:${on?'700':'500'};border-radius:14px;cursor:pointer;font-family:inherit;
+      border:1.5px solid ${on?'var(--navy)':'var(--gray-200)'};background:${on?'var(--navy)':'#fff'};color:${on?'#fff':'var(--gray-500)'}">${esc(n)}</button>`;
+  }).join('');
 
   const bw=document.getElementById('rcr-f-branch-wrap');
   const bs=document.getElementById('rcr-f-branch');
   if(rcrIsAdmin()){
     if(bw) bw.style.display='';
-    if(bs) bs.innerHTML='<option value="">미배정</option>'+rcrBranchList().map(n=>`<option>${esc(n)}</option>`).join('');
-    if(bs) bs.value=c?.branch_name||'';
-  } else {
-    if(bw) bw.style.display='none';  // 지점장은 본인 담당으로 자동 배정
-  }
+    if(bs){ bs.innerHTML='<option value="">미배정</option>'+rcrBranchList().map(n=>`<option>${esc(n)}</option>`).join(''); bs.value=c?.branch_name||''; }
+  } else if(bw) bw.style.display='none';
   openM('modal-rcr-form');
+}
+
+function rcrToggleNeed(btn){
+  const on = btn.style.background.indexOf('255, 255, 255')<0 && btn.style.color==='rgb(255, 255, 255)';
+  if(on){ btn.style.background='#fff'; btn.style.color='var(--gray-500)'; btn.style.border='1.5px solid var(--gray-200)'; btn.style.fontWeight='500'; }
+  else  { btn.style.background='var(--navy)'; btn.style.color='#fff'; btn.style.border='1.5px solid var(--navy)'; btn.style.fontWeight='700'; }
+}
+function rcrPickedNeeds(){
+  return [...document.querySelectorAll('#rcr-f-needs button')]
+    .filter(b=>b.style.color==='rgb(255, 255, 255)')
+    .map(b=>b.dataset.n).join(', ');
 }
 
 async function rcrSaveForm(){
   const g=(k)=>document.getElementById(k)?.value.trim()||'';
-  const id=g('rcr-f-id'), name=g('rcr-f-name'), phone=g('rcr-f-phone');
+  const id=g('rcr-f-id'), name=g('rcr-f-name');
+  const phone=rcrPhone(g('rcr-f-phone'));
   if(!name){ showToast('이름을 입력하세요','error'); return; }
-  if(!phone){ showToast('연락처를 입력하세요','error'); return; }
+  if(!phone){ showToast('전화번호를 입력하세요','error'); return; }
 
-  // 중복 검사 (활성 후보 전체)
   const norm=(p)=>String(p||'').replace(/[^0-9]/g,'');
   const dup=(allCandidates||[]).find(c=>c.id!==id && c.status!=='deleted' && norm(c.phone)===norm(phone));
   if(dup){ showToast(`이미 등록된 번호입니다 (${dup.name} · ${dup.stage||'신규'})`,'error'); return; }
 
   const data={
-    name, phone, email:g('rcr-f-email'), birth_year:g('rcr-f-birth'),
-    gender:g('rcr-f-gender'), region:g('rcr-f-region'), career:g('rcr-f-career'),
-    current_job:g('rcr-f-job'), source:g('rcr-f-source'), ad_name:g('rcr-f-ad'),
+    name, phone,
+    platform:g('rcr-f-platform'),
+    current_job:g('rcr-f-job'),
+    biz_years:g('rcr-f-years'),
+    needs:rcrPickedNeeds(),
+    target_income:g('rcr-f-income'),
     memo:g('rcr-f-memo')
   };
+  const inf=g('rcr-f-inflow');
+  if(inf){ const p=rcrParseDate(inf); if(p) data.inflow_at=p; }
   if(rcrIsAdmin()) data.branch_name=g('rcr-f-branch');
 
   try{
@@ -17786,8 +17887,8 @@ async function rcrSaveForm(){
       if(i>=0) allCandidates[i]={...allCandidates[i],...data};
       showToast('수정 완료','success');
     } else {
-      data.stage='신규'; data.status='active';
-      data.inflow_at=new Date().toISOString();
+      data.stage='신규'; data.status='active'; data.source='meta';
+      if(!data.inflow_at) data.inflow_at=new Date().toISOString();
       if(!rcrIsAdmin()){ data.branch_name=curUser?.name||''; data.assigned_at=new Date().toISOString(); }
       else if(data.branch_name) data.assigned_at=new Date().toISOString();
       const row=await dbI('candidates',data);
@@ -17811,17 +17912,17 @@ function rcrOpenDetail(id){
   const acts=(allActivities||[]).filter(a=>a.candidate_id===id)
     .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
 
+  const nds=(c.needs||'').split(',').map(x=>x.trim()).filter(Boolean);
   document.getElementById('rcr-d-body').innerHTML=`
-    ${row('연락처', esc(typeof formatPhone==='function'?formatPhone(c.phone||''):(c.phone||'')))}
-    ${row('이메일', esc(c.email))}
-    ${row('출생연도', esc(c.birth_year))}
-    ${row('성별', esc(c.gender))}
-    ${row('거주지역', esc(c.region))}
-    ${row('현직/최근직', esc(c.current_job))}
-    ${row('경력사항', esc(c.career))}
-    ${row('유입경로', esc(c.source)+(c.ad_name?' · '+esc(c.ad_name):''))}
+    ${row('전화번호', `<a href="tel:${esc((c.phone||'').replace(/-/g,''))}" style="color:var(--navy);font-weight:700;text-decoration:none">${esc(rcrPhone(c.phone||''))}</a>`)}
+    ${row('유입경로', esc((c.platform||c.source||'-')))}
+    ${row('현재 하는 일', esc(c.current_job))}
+    ${row('법인영업 업력', esc(c.biz_years))}
+    ${row('현재 니즈', nds.length?nds.map(n=>`<span class="rcr-sb" style="background:rgba(124,58,237,.1);color:#7c3aed;margin:0 3px 3px 0">${esc(n)}</span>`).join(''):'-')}
+    ${row('목표 월 수익', c.target_income?`<span style="font-weight:700;color:${(c.target_income||'').includes('1억')?'var(--err)':'var(--gray-700)'}">${esc(c.target_income)}</span>`:'-')}
     ${row('담당 지점장', c.branch_name?esc(c.branch_name):'<span style="color:var(--err);font-weight:700">미배정</span>')}
-    ${row('신청일', (c.inflow_at||c.created_at||'').slice(0,16).replace('T',' '))}
+    ${row('유입시각', (c.inflow_at||c.created_at||'').slice(0,16).replace('T',' '))}
+    ${c.memo?row('메모', esc(c.memo)):''}
     ${c.hired_at?row('입사일', c.hired_at):''}
     ${c.drop_reason?row('이탈사유', esc(c.drop_reason)):''}
 
@@ -17988,12 +18089,26 @@ async function rcrConfirmHire(){
 }
 
 // ── 엑셀 ─────────────────────────────────────────────────
-const RCR_COLS=['이름','연락처','출생연도','성별','거주지역','현직','경력사항','이메일','광고명','신청일시','메모'];
+// Meta 리드폼 다운로드 컬럼명 (한글 헤더 그대로 매칭)
+const RCR_H = {
+  inflow:'유입시각', platform:'유입경로', job:'현재 하는 일',
+  years:'법인영업 업력', needs:'현재 니즈', income:'목표 월 수익',
+  name:'이름', phone:'전화번호'
+};
+// 헤더 표기 흔들림 흡수 (공백·개행 제거 후 대조)
+function rcrPick(row, key){
+  const want=String(key).replace(/\s/g,'');
+  for(const k of Object.keys(row||{})){
+    if(String(k).replace(/\s/g,'')===want) return row[k];
+  }
+  return '';
+}
 
 function rcrDownloadTemplate(){
   try{
-    const ws=XLSX.utils.aoa_to_sheet([RCR_COLS,
-      ['홍길동','010-1234-5678','1985','남','서울 강남','보험설계사','5년','hong@ex.com','8월_팀장모집','2026-08-01 10:00','']]);
+    const H=[RCR_H.inflow,RCR_H.platform,RCR_H.job,RCR_H.years,RCR_H.needs,RCR_H.income,RCR_H.name,RCR_H.phone];
+    const ws=XLSX.utils.aoa_to_sheet([H,
+      ['2026. 8. 3 오전 2:12:28','ig','정책자금','3개월-6개월_미만','소개/DB가 부족함','월_3천만원_~_월_5천만원','홍길동','1076158924']]);
     const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'후보');
     XLSX.writeFile(wb,'리쿠르팅_업로드양식.xlsx');
   }catch(e){ showToast('양식 생성 실패','error'); }
@@ -18004,36 +18119,45 @@ async function rcrUpload(input){
   input.value='';
   try{
     const buf=await f.arrayBuffer();
-    const wb=XLSX.read(buf,{type:'array'});
-    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
+    const wb=XLSX.read(buf,{type:'array',cellDates:true});
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:'',raw:false});
     if(!rows.length){ showToast('데이터가 없습니다','error'); return; }
 
     const norm=(p)=>String(p||'').replace(/[^0-9]/g,'');
     const exist=new Set((allCandidates||[]).filter(c=>c.status!=='deleted').map(c=>norm(c.phone)));
-    let added=0, dup=0, bad=0;
+    const seen=new Set();
+    let added=0, dup=0, test=0, bad=0;
+    const errs=[];
 
-    for(const r of rows){
-      const name=String(r['이름']||'').trim();
-      const phone=String(r['연락처']||'').trim();
-      if(!name||!phone){ bad++; continue; }
+    for(let i=0;i<rows.length;i++){
+      const r=rows[i];
+      if(rcrIsTestLead(r)){ test++; continue; }              // Meta 검수용 더미 제외
+      const name=rcrClean(rcrPick(r,RCR_H.name));
+      const phone=rcrPhone(rcrPick(r,RCR_H.phone));
+      if(!name||!phone){ bad++; if(errs.length<5) errs.push(`${i+2}행: 이름/전화번호 누락`); continue; }
       const np=norm(phone);
-      if(exist.has(np)){ dup++; continue; }
+      if(np.length<10){ bad++; if(errs.length<5) errs.push(`${i+2}행: 번호 형식 오류(${phone})`); continue; }
+      if(exist.has(np)||seen.has(np)){ dup++; continue; }
+
       const row=await dbI('candidates',{
         name, phone,
-        birth_year:String(r['출생연도']||'').trim(),
-        gender:String(r['성별']||'').trim(),
-        region:String(r['거주지역']||'').trim(),
-        current_job:String(r['현직']||'').trim(),
-        career:String(r['경력사항']||'').trim(),
-        email:String(r['이메일']||'').trim(),
-        ad_name:String(r['광고명']||'').trim(),
-        memo:String(r['메모']||'').trim(),
-        source:'meta', stage:'신규', status:'active',
-        inflow_at:(String(r['신청일시']||'').trim()||new Date().toISOString())
+        platform:      rcrClean(rcrPick(r,RCR_H.platform)).toLowerCase(),
+        current_job:   rcrClean(rcrPick(r,RCR_H.job)),
+        biz_years:     rcrClean(rcrPick(r,RCR_H.years)),
+        needs:         rcrClean(rcrPick(r,RCR_H.needs)),
+        target_income: rcrClean(rcrPick(r,RCR_H.income)),
+        inflow_at:     rcrParseDate(rcrPick(r,RCR_H.inflow)) || new Date().toISOString(),
+        source:'meta', stage:'신규', status:'active'
       });
-      if(row){ allCandidates.unshift(row); exist.add(np); added++; }
+      if(row){ allCandidates.unshift(row); seen.add(np); added++; }
+      else { bad++; if(errs.length<5) errs.push(`${i+2}행: 저장 실패`); }
     }
-    showToast(`업로드 완료 — 신규 ${added}건 / 중복 ${dup}건 / 오류 ${bad}건`,'success');
+    let msg=`신규 ${added}건`;
+    if(dup)  msg+=` / 중복 ${dup}건`;
+    if(test) msg+=` / 테스트리드 ${test}건 제외`;
+    if(bad)  msg+=` / 오류 ${bad}건`;
+    showToast('업로드 완료 — '+msg, bad?'warn':'success');
+    if(errs.length) console.warn('[리쿠르팅 업로드 오류]\n'+errs.join('\n'));
     rcrRenderStats(); rcrRender();
   }catch(e){ console.warn(e); showToast('업로드 실패 — 양식을 확인하세요','error'); }
 }
@@ -18041,11 +18165,11 @@ async function rcrUpload(input){
 function rcrExport(){
   try{
     const rows=rcrMine();
-    const aoa=[[...RCR_COLS,'담당 지점장','단계','입사일']].concat(rows.map(c=>[
-      c.name||'', c.phone||'', c.birth_year||'', c.gender||'', c.region||'',
-      c.current_job||'', c.career||'', c.email||'', c.ad_name||'',
-      (c.inflow_at||c.created_at||'').slice(0,16).replace('T',' '), c.memo||'',
-      c.branch_name||'', c.stage||'신규', c.hired_at||''
+    const H=[RCR_H.inflow,RCR_H.platform,RCR_H.job,RCR_H.years,RCR_H.needs,RCR_H.income,RCR_H.name,RCR_H.phone,'담당 지점장','단계','입사일','메모'];
+    const aoa=[H].concat(rows.map(c=>[
+      (c.inflow_at||c.created_at||'').slice(0,16).replace('T',' '),
+      c.platform||'', c.current_job||'', c.biz_years||'', c.needs||'', c.target_income||'',
+      c.name||'', rcrPhone(c.phone||''), c.branch_name||'', c.stage||'신규', c.hired_at||'', c.memo||''
     ]));
     const ws=XLSX.utils.aoa_to_sheet(aoa);
     const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'리쿠르팅');
