@@ -18256,6 +18256,23 @@ async function rcrConfirmHire(){
 }
 
 // ── 엑셀 ─────────────────────────────────────────────────
+// SheetJS 는 필요 시점에 CDN 에서 동적 로드된다(기존 DB관리 방식과 동일).
+// 이 보장이 없으면 XLSX is not defined 로 업로드/양식/내보내기가 전부 실패한다.
+async function rcrEnsureXLSX(){
+  if(window.XLSX) return true;
+  try{
+    await new Promise((res,rej)=>{
+      const sc=document.createElement('script');
+      sc.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      sc.onload=res; sc.onerror=rej; document.head.appendChild(sc);
+    });
+    return !!window.XLSX;
+  }catch(e){
+    showToast('엑셀 모듈을 불러오지 못했습니다. 네트워크를 확인하십시오','error');
+    return false;
+  }
+}
+
 // Meta 리드폼 다운로드 컬럼명 (한글 헤더 그대로 매칭)
 const RCR_H = {
   inflow:'유입시각', platform:'유입경로', job:'현재 하는 일',
@@ -18272,7 +18289,8 @@ function rcrPick(row, key){
 }
 
 // Meta 리드 다운로드 파일과 동일한 헤더·시트명(Sheet1) 구조
-function rcrDownloadTemplate(){
+async function rcrDownloadTemplate(){
+  if(!await rcrEnsureXLSX()) return;
   try{
     const H=[RCR_H.inflow,RCR_H.platform,RCR_H.job,RCR_H.years,RCR_H.needs,RCR_H.income,RCR_H.name,RCR_H.phone];
     const ws=XLSX.utils.aoa_to_sheet([H,
@@ -18288,6 +18306,8 @@ function rcrDownloadTemplate(){
 async function rcrUpload(input){
   const f=input.files?.[0]; if(!f) return;
   input.value='';
+  if(!await rcrEnsureXLSX()) return;
+  showToast('업로드 처리 중...','success');
   try{
     const buf=await f.arrayBuffer();
     const wb=XLSX.read(buf,{type:'array',cellDates:true});
@@ -18340,10 +18360,14 @@ async function rcrUpload(input){
     showToast('업로드 완료 — '+msg, bad?'error':'success');
     if(errs.length) console.warn('[리쿠르팅 업로드 오류]\n'+errs.join('\n'));
     rcrRenderStats(); rcrRender();
-  }catch(e){ console.warn(e); showToast('업로드 실패 — 양식을 확인하세요','error'); }
+  }catch(e){
+    console.error('[리쿠르팅 업로드 예외]', e);
+    showToast('업로드 실패 — '+(e&&e.message?e.message:'양식을 확인하세요'),'error');
+  }
 }
 
-function rcrExport(){
+async function rcrExport(){
+  if(!await rcrEnsureXLSX()) return;
   try{
     const rows=rcrMine();
     const H=[RCR_H.inflow,RCR_H.platform,RCR_H.job,RCR_H.years,RCR_H.needs,RCR_H.income,RCR_H.name,RCR_H.phone,'담당 지점장','단계','입사일','메모'];
