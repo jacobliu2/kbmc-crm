@@ -19058,26 +19058,52 @@ async function rcrUpload(input){
 
     const norm=(p)=>String(p||'').replace(/[^0-9]/g,'');
     const seen=new Set();  // 같은 파일 내 중복 방지
-    let added=0, dup=0, test=0, bad=0, saveFail=0, re=0;
-    const errs=[];
+    let test=0;
+    const _added=[], _re=[], _restored=[], _dup=[], _bad=[];
+    // 같은 신청 건 판정: 유입시각이 1분 이내로 같으면 동일 신청 (형식 차이 무관, epoch 비교)
+    const _sameTs=(a,b)=>{ try{ const ta=new Date(a).getTime(), tb=new Date(b).getTime();
+      return isFinite(ta)&&isFinite(tb)&&Math.abs(ta-tb)<60000; }catch(_e){ return false; } };
 
     for(let i=0;i<rows.length;i++){
       const r=rows[i];
       if(rcrIsTestLead(r)){ test++; continue; }              // Meta 검수용 더미 제외
       const name=rcrClean(rcrPick(r,RCR_H.name));
       const phone=rcrPhone(rcrPick(r,RCR_H.phone));
-      if(!name||!phone){ bad++; if(errs.length<5) errs.push(`${i+2}행: 이름/전화번호 누락`); continue; }
+      if(!name||!phone){ _bad.push({row:i+2,name:name||'(이름 없음)',why:'이름/전화번호 누락'}); continue; }
       const np=norm(phone);
-      if(np.length<10){ bad++; if(errs.length<5) errs.push(`${i+2}행: 번호 형식 오류(${phone})`); continue; }
-      if(seen.has(np)){ dup++; continue; }   // 같은 파일 안 중복
+      if(np.length<10){ _bad.push({row:i+2,name,why:'전화번호 형식 오류('+phone+')'}); continue; }
+      if(seen.has(np)){ _dup.push({row:i+2,name,why:'같은 파일 안 중복'}); continue; }
 
       // ── 동일인 판정 ────────────────────────────────────
       const _prev = (allCandidates||[]).find(c=>c && norm(c.phone_key||c.phone)===np);
       if(_prev){
-        // 진행 중인 후보 → 중복. 인재풀/삭제 이력 → 재지원으로 되살린다.
         const _closed = rcrIsPool(_prev) || _prev.status==='deleted';
-        if(!_closed){ dup++; seen.add(np); continue; }
+        if(!_closed){ _dup.push({row:i+2,name,why:'이미 진행 중인 후보'}); seen.add(np); continue; }
         const _inf = rcrParseDate(rcrPick(r,RCR_H.inflow)) || new Date().toISOString();
+
+        // ── 재지원 vs 재등록(복원) 구분 ──────────────────
+        // 유입시각이 기존 기록과 같다 = '같은 신청 건'을 다시 올리는 것(잘못 삭제 후 재등록) → 복원.
+        // 유입시각이 새것이다 = 후보가 실제로 다시 신청 → 재지원(회차 증가).
+        if(_sameTs(_prev.inflow_at||_prev.last_applied_at, _inf)){
+          const _p = { status:'active', talent_pool:false,
+            stage:_prev.stage||'신규',
+            platform:      rcrClean(rcrPick(r,RCR_H.platform)).toLowerCase(),
+            current_job:   rcrClean(rcrPick(r,RCR_H.job)),
+            biz_years:     rcrClean(rcrPick(r,RCR_H.years)),
+            needs:         rcrClean(rcrPick(r,RCR_H.needs)),
+            target_income: rcrClean(rcrPick(r,RCR_H.income)),
+            phone_key:np };
+          const _r0 = await rcrUpd(_prev.id,_p);
+          if(_r0){
+            const _i=allCandidates.findIndex(c=>c.id===_prev.id);
+            if(_i>=0) allCandidates[_i]={...allCandidates[_i],..._p};
+            await rcrLog(_prev.id,'system','삭제분 재등록(복원) — 같은 유입시각의 동일 신청 건, 재지원으로 세지 않음');
+            _restored.push({row:i+2,name}); seen.add(np);
+          } else _bad.push({row:i+2,name,why:'복원 갱신 실패'});
+          continue;
+        }
+
+        // 유입시각이 다름 → 진짜 재지원
         const _p = {
           status:'active', stage:'신규', talent_pool:false,
           reapply_count:(_prev.reapply_count||0)+1,
@@ -19096,8 +19122,8 @@ async function rcrUpload(input){
           if(_i>=0) allCandidates[_i]={...allCandidates[_i],..._p};
           await rcrLog(_prev.id,'system',
             `재지원 감지 (${_p.reapply_count}회차) — 이전 종료단계: ${_prev.drop_stage||_prev.stage||'-'}`);
-          re++; seen.add(np);
-        } else { bad++; if(errs.length<5) errs.push(`${i+2}행 ${name}: 재지원 갱신 실패`); }
+          _re.push({row:i+2,name,cnt:_p.reapply_count}); seen.add(np);
+        } else _bad.push({row:i+2,name,why:'재지원 갱신 실패'});
         continue;
       }
 
@@ -19114,31 +19140,59 @@ async function rcrUpload(input){
         phone_key:np, reapply_count:0, talent_pool:false,
         source:'meta', stage:'신규', status:'active'
       });
-      if(row){ allCandidates.unshift(row); seen.add(np); added++; }
+      if(row){ allCandidates.unshift(row); seen.add(np); _added.push({row:i+2,name}); }
       else {
-        bad++; saveFail++;
-        if(errs.length<5) errs.push(`${i+2}행 ${name}: DB 저장 실패`);
-        // 첫 건이 저장 실패하면 컬럼 누락일 가능성이 높다 → 즉시 중단해 시간 낭비를 막는다
-        if(saveFail===1 && added===0 && i<rows.length-1){
-          showToast('DB 저장에 실패했습니다. recruit2.sql 을 실행했는지 확인하십시오 (F12 콘솔에 상세 원인)','error');
-          console.error('[리쿠르팅] 첫 행부터 저장 실패 — candidates 테이블에 platform/biz_years/needs/target_income 컬럼이 없을 수 있습니다. recruit2.sql 실행 필요.');
+        _bad.push({row:i+2,name,why:'DB 저장 실패'});
+        // 첫 건부터 저장 실패면 컬럼 누락 가능성이 높다 → 즉시 중단, 사유는 결과창에 표시
+        if(_bad.filter(b=>b.why==='DB 저장 실패').length===1 && !_added.length && i<rows.length-1){
+          rcrShowUploadResult({added:_added,re:_re,restored:_restored,dup:_dup,bad:_bad,test,
+            abort:'첫 행부터 DB 저장에 실패하여 업로드를 중단했습니다. candidates 테이블에 platform·biz_years·needs·target_income 컬럼이 없을 수 있습니다 (recruit2.sql 실행 여부를 확인하세요).'});
           rcrRenderStats(); rcrRender();
           return;
         }
       }
     }
-    let msg=`신규 ${added}건`;
-    if(re)   msg+=` / 재지원 ${re}건`;
-    if(dup)  msg+=` / 중복 ${dup}건`;
-    if(test) msg+=` / 테스트리드 ${test}건 제외`;
-    if(bad)  msg+=` / 오류 ${bad}건`;
-    showToast('업로드 완료 — '+msg, bad?'error':'success');
-    if(errs.length) console.warn('[리쿠르팅 업로드 오류]\n'+errs.join('\n'));
+
+    rcrShowUploadResult({added:_added,re:_re,restored:_restored,dup:_dup,bad:_bad,test});
+    let msg=`신규 ${_added.length}건`;
+    if(_re.length)       msg+=` / 재지원 ${_re.length}건`;
+    if(_restored.length) msg+=` / 복원 ${_restored.length}건`;
+    if(_dup.length)      msg+=` / 중복 ${_dup.length}건`;
+    if(test)             msg+=` / 테스트리드 ${test}건 제외`;
+    if(_bad.length)      msg+=` / 오류 ${_bad.length}건`;
+    showToast('업로드 완료 — '+msg, _bad.length?'error':'success');
     rcrRenderStats(); rcrRender();
   }catch(e){
     console.error('[리쿠르팅 업로드 예외]', e);
     showToast('업로드 실패 — '+(e&&e.message?e.message:'양식을 확인하세요'),'error');
   }
+}
+
+// ── 업로드 결과 보고창 — 누가·왜 오류인지 화면에서 바로 확인 ──
+function rcrShowUploadResult(R){
+  let el=document.getElementById('modal-rcr-upresult');
+  if(!el){
+    el=document.createElement('div');
+    el.id='modal-rcr-upresult'; el.className='modal-overlay';
+    el.innerHTML='<div class="modal" style="width:500px;max-width:94vw;max-height:86vh;overflow-y:auto">'
+      +'<div class="mh"><div class="mt">업로드 결과</div></div>'
+      +'<div id="rcr-upresult-body" style="font-size:13px;line-height:1.7;padding:2px 2px 6px"></div>'
+      +'<div class="mf"><button class="btn" onclick="closeM(\'modal-rcr-upresult\')">확인</button></div></div>';
+    document.body.appendChild(el);
+  }
+  const nm=a=>a.map(x=>esc(x.name)).join(', ');
+  const sec=(title,color,body)=>`<div style="margin:9px 0"><div style="font-weight:800;color:${color}">${title}</div>${body?`<div style="color:var(--gray-600);margin-top:2px">${body}</div>`:''}</div>`;
+  let h='';
+  if(R.abort) h+=`<div style="background:#fee2e2;border:1.5px solid #dc2626;color:#b91c1c;border-radius:8px;padding:10px 12px;font-weight:700;margin-bottom:10px">${esc(R.abort)}</div>`;
+  if(R.added.length)    h+=sec(`✅ 신규 등록 ${R.added.length}건`,'var(--ok)', nm(R.added));
+  if(R.re.length)       h+=sec(`🔁 재지원 ${R.re.length}건`,'#e8870f', R.re.map(x=>esc(x.name)+`(${x.cnt}회차)`).join(', '));
+  if(R.restored.length) h+=sec(`♻️ 복원 ${R.restored.length}건`,'var(--blue)', nm(R.restored)+'<div style="font-size:11.5px;color:var(--gray-400)">같은 유입시각의 동일 신청 건 — 재지원으로 세지 않음</div>');
+  if(R.dup.length)      h+=sec(`⏭ 건너뜀 ${R.dup.length}건`,'var(--gray-500)', R.dup.map(x=>esc(x.name)+' ('+esc(x.why)+')').join(', '));
+  if(R.test)            h+=sec(`🧪 테스트리드 제외 ${R.test}건`,'var(--gray-500)','Meta 검수용 더미');
+  if(R.bad.length)      h+=sec(`⚠️ 오류 ${R.bad.length}건`,'var(--err)', R.bad.map(x=>`${x.row}행 <b>${esc(x.name)}</b> — ${esc(x.why)}`).join('<br>'));
+  if(!h) h='<div style="color:var(--gray-400)">처리된 항목이 없습니다.</div>';
+  document.getElementById('rcr-upresult-body').innerHTML=h;
+  openM('modal-rcr-upresult');
 }
 
 async function rcrExport(){
