@@ -17726,6 +17726,23 @@ function rcrFindSame(name, phone, excludeId){
   return { exact, likely };
 }
 
+// 후보별 최근 활동 + 건수 — DB관리 목록의 '진행내용'과 같은 역할
+// 시스템 로그(단계변경·배정·삭제 등)는 제외하고 담당자가 남긴 기록만 센다.
+const RCR_SYSTYPES = ['system','assign','status_change'];
+function rcrActMap(){
+  const m={};
+  (allCandActs||[]).forEach(a=>{
+    if(!a || !a.candidate_id) return;
+    if(RCR_SYSTYPES.includes(String(a.type||''))) return;
+    const k=a.candidate_id;
+    if(!m[k]) m[k]={latest:null, count:0};
+    m[k].count++;
+    const t=new Date(a.created_at||0).getTime();
+    if(!m[k].latest || t > new Date(m[k].latest.created_at||0).getTime()) m[k].latest=a;
+  });
+  return m;
+}
+
 // 인재풀 여부 — 이탈했거나 영입되지 않은 채 종료된 후보
 function rcrIsPool(c){
   return !!c && (c.talent_pool===true || (c.stage||'')==='이탈');
@@ -17797,11 +17814,11 @@ async function loadCandidates(){
 
 // ── 칼럼 필터 (단일 진실 공급원) ─────────────────────────
 // 상단 바에는 통합검색·인재풀·삭제분만 두고, 나머지 조건은 전부 이 객체가 관리한다.
-let _rcrCF = { platform:'', job:'', years:'', income:'', needs:'', branch:'', stage:'', period:'' };
+let _rcrCF = { platform:'', job:'', years:'', income:'', needs:'', branch:'', stage:'', period:'', act:'' };
 
 function rcrCF(k, v){ _rcrCF[k] = v; rcrRenderStats(); rcrRender(); }
 function rcrResetFilters(){
-  _rcrCF = { platform:'', job:'', years:'', income:'', needs:'', branch:'', stage:'', period:'' };
+  _rcrCF = { platform:'', job:'', years:'', income:'', needs:'', branch:'', stage:'', period:'', act:'' };
   ['rcr-search'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
   ['rcr-pool','rcr-showdel'].forEach(id=>{ const e=document.getElementById(id); if(e) e.checked=false; });
   rcrRenderStats(); rcrRender();
@@ -17851,10 +17868,14 @@ function rcrRenderStats(){
                !!document.getElementById('rcr-pool')?.checked);
   el.innerHTML = html;
 
+  const _am2 = rcrActMap();
+  const noact = rows.filter(c=>!(_am2[c.id]&&_am2[c.id].count)
+                              && !['영입','이탈'].includes(c.stage||'')).length;
   const sub=document.getElementById('rcr-sub');
-  if(sub) sub.textContent = rcrIsAdmin()
+  if(sub) sub.innerHTML = (rcrIsAdmin()
     ? `전사 ${rows.length}명 · 미배정 ${unassigned}명 · 인재풀 ${pool}명`
-    : `${curUser?.name||''} 지점 담당 ${rows.length}명`;
+    : `${curUser?.name||''} 지점 담당 ${rows.length}명`)
+    + (noact?` · <span style="color:var(--err);font-weight:800;cursor:pointer" onclick="rcrCF('act','none')">미기록 ${noact}명</span>`:'');
 }
 function rcrCardAll(){ _rcrCF.stage=''; _rcrCF.branch='';
   const p=document.getElementById('rcr-pool'); if(p) p.checked=false;
@@ -17883,6 +17904,9 @@ function rcrRender(){
   if(_rcrCF.needs)    rows=rows.filter(c=>String(c.needs||'').split(',').map(x=>x.trim()).includes(_rcrCF.needs));
   if(_rcrCF.branch==='__none__') rows=rows.filter(c=>!c.branch_name);
   else if(_rcrCF.branch)         rows=rows.filter(c=>c.branch_name===_rcrCF.branch);
+  const _am = rcrActMap();
+  if(_rcrCF.act==='none') rows=rows.filter(c=>!(_am[c.id]&&_am[c.id].count));
+  else if(_rcrCF.act==='has') rows=rows.filter(c=>!!(_am[c.id]&&_am[c.id].count));
   if(_rcrCF.period){
     const d=parseInt(_rcrCF.period,10);
     const min=Date.now()-d*86400000;
@@ -17925,6 +17949,12 @@ function rcrRender(){
       <option value="">전체</option><option value="1"${_rcrCF.period==='1'?' selected':''}>오늘</option>
       <option value="7"${_rcrCF.period==='7'?' selected':''}>7일</option>
       <option value="30"${_rcrCF.period==='30'?' selected':''}>30일</option></select></th>
+    <th style="padding:4px 6px"><select onchange="rcrCF('act',this.value)"
+      style="width:100%;padding:4px 5px;font-size:11px;font-family:inherit;border:1px solid var(--gray-200);border-radius:4px;
+      background:${_rcrCF.act?'rgba(30,41,82,.06)':'#fff'};color:${_rcrCF.act?'var(--navy)':'var(--gray-500)'};font-weight:${_rcrCF.act?'700':'400'}">
+      <option value="">전체</option>
+      <option value="none"${_rcrCF.act==='none'?' selected':''}>미기록</option>
+      <option value="has"${_rcrCF.act==='has'?' selected':''}>기록 있음</option></select></th>
   </tr>`;
 
   if(!rows.length){
@@ -17963,9 +17993,27 @@ function rcrRender(){
         ${rcrIsAdmin()?`<td style="padding:9px 10px">${c.branch_name?esc(c.branch_name):'<span style="color:var(--err);font-size:11px;font-weight:700">미배정</span>'}</td>`:''}
         <td style="padding:9px 10px"><span class="rcr-sb" style="background:${RCR_COLOR[st]}1a;color:${RCR_COLOR[st]}">${st}</span></td>
         <td style="padding:9px 10px;color:var(--gray-400);font-size:11px;white-space:nowrap">${infl.slice(0,10)}<br><span style="opacity:.7">${infl.slice(11,16)}</span></td>
+        <td style="padding:9px 10px;max-width:230px">${rcrActCell(_am[c.id], c)}</td>
       </tr>`;}).join('')}</tbody></table></div>`;
   _rcrVisible = rows.map(r=>r.id);
   rcrSyncBulk();
+}
+
+// 진행내용 셀 — 최근 기록 1건 + 누적 건수. 기록이 없으면 경과일과 함께 경고.
+function rcrActCell(a, c){
+  if(!a || !a.count){
+    const base = c.inflow_at || c.created_at;
+    const d = base ? Math.floor((Date.now()-new Date(base).getTime())/86400000) : 0;
+    const urgent = d>=2;
+    return `<span class="rcr-sb" style="background:${urgent?'rgba(239,68,68,.12)':'rgba(148,163,184,.15)'};
+      color:${urgent?'var(--err)':'var(--gray-400)'}">미기록${d>0?' '+d+'일':''}</span>`;
+  }
+  const l=a.latest||{};
+  const when=String(l.created_at||'').slice(5,10).replace('-','/');
+  return `<div style="font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+      title="${esc(l.content||'')}">${esc(l.content||'-')}</div>
+    <div style="font-size:10.5px;color:var(--gray-400);margin-top:1px">
+      ${esc(l.type||'')} · ${when} · ${esc(l.author||'')}${a.count>1?` · 총 ${a.count}건`:''}</div>`;
 }
 
 function rcrHeadRow(){
@@ -17982,6 +18030,7 @@ function rcrHeadRow(){
       ${rcrIsAdmin()?'<th style="padding:9px 10px;text-align:left">담당 지점장</th>':''}
       <th style="padding:9px 10px;text-align:left">단계</th>
       <th style="padding:9px 10px;text-align:left">유입시각</th>
+      <th style="padding:9px 10px;text-align:left">진행내용</th>
     </tr>`;
 }
 
