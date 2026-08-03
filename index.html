@@ -5291,7 +5291,7 @@ function sbH(){
 // ── 전역 로딩 오버레이 (병렬 로더 전용) ─────────────────────
 // DOM 요소는 최초 사용 시 동적 생성 — HTML 구조 무변경.
 // 400ms 미만의 짧은 로드는 표시하지 않음(깜빡임 방지). 90초 안전 해제.
-let _ldActive = 0, _ldShowTimer = null, _ldSafetyTimer = null, _ldRows = {};
+let _ldActive = 0, _ldShowTimer = null, _ldSafetyTimer = null, _ldRows = {}, _ldTotals = {};
 function _ldEl(){
   let el = document.getElementById('kbmc-global-loading');
   if(!el){
@@ -5301,14 +5301,17 @@ function _ldEl(){
     el.innerHTML = '<div class="kbmc-loading-box" style="flex-direction:column;gap:14px;padding:28px 48px;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.25)">'
       + '<div><span class="kbmc-spinner kbmc-spinner-lg" style="margin-right:0"></span></div>'
       + '<div style="font-size:14px;font-weight:700">데이터를 불러오는 중입니다</div>'
-      + '<div id="kbmc-global-loading-sub" style="font-size:12px;color:var(--gray-400);min-height:16px"></div>'
+      + '<div style="width:220px;height:6px;background:rgba(120,140,170,.25);border-radius:3px;overflow:hidden"><div id="kbmc-global-loading-bar" style="height:100%;width:0%;background:var(--blue);border-radius:3px;transition:width .25s"></div></div>'
+      + '<div id="kbmc-global-loading-sub" style="font-size:12px;color:var(--gray-400);min-height:16px">0%</div>'
       + '</div>';
     (document.body||document.documentElement).appendChild(el);
   }
   return el;
 }
 function _ldBegin(tag){
-  _ldActive++; _ldRows[tag] = 0;
+  _ldActive++; _ldRows[tag] = 0; _ldTotals[tag] = null;
+  try{ const b=document.getElementById('kbmc-global-loading-bar'); if(b) b.style.width='0%';
+       const s=document.getElementById('kbmc-global-loading-sub'); if(s) s.textContent='0%'; }catch(_e){}
   if(_ldShowTimer===null){
     _ldShowTimer = setTimeout(function(){ try{ _ldEl().style.display='flex'; }catch(_e){} }, 400);
   }
@@ -5318,14 +5321,26 @@ function _ldBegin(tag){
 function _ldTick(tag, rows){
   _ldRows[tag] = rows;
   try{
+    let rec=0, tot=0, known=true;
+    Object.keys(_ldRows).forEach(function(k){
+      rec += _ldRows[k]||0;
+      if(_ldTotals[k]>0) tot += _ldTotals[k]; else known=false;
+    });
     const s = document.getElementById('kbmc-global-loading-sub');
-    if(s) s.textContent = Object.entries(_ldRows).map(function(e){ return e[0]+' '+Number(e[1]).toLocaleString()+'건'; }).join('  ·  ');
+    const b = document.getElementById('kbmc-global-loading-bar');
+    if(known && tot>0){
+      const pct = Math.min(99, Math.floor(rec/tot*100));   // 완료 전 100% 방지
+      if(s) s.textContent = pct+'%';
+      if(b) b.style.width = pct+'%';
+    }else{
+      if(s) s.textContent = '';                            // 총량 미확보 시 % 숨김 (건수는 절대 표시 안 함)
+    }
   }catch(_e){}
 }
 function _ldForceHide(){
   if(_ldShowTimer){ clearTimeout(_ldShowTimer); _ldShowTimer = null; }
   try{ const el = document.getElementById('kbmc-global-loading'); if(el) el.style.display='none'; }catch(_e){}
-  _ldRows = {};
+  _ldRows = {}; _ldTotals = {};
 }
 function _ldEnd(){
   _ldActive = Math.max(0, _ldActive - 1);
@@ -5353,10 +5368,15 @@ async function _fetchPagesParallel(qs, tag, opt){
       const r = await fetch(SB_URL + '/rest/v1/' + qs, {
         headers:{ ...sbH(), 'Range-Unit':'items',
                   'Range': offset + '-' + (offset + effPage - 1),
-                  'Prefer':'count=none' }
+                  'Prefer': pageNo===0 ? 'count=estimated' : 'count=none' }
       });
       if(!r.ok) throw new Error('HTTP ' + r.status);
       const rows = await r.json().catch(function(){ return []; });
+      if(pageNo === 0){
+        const _cr = r.headers.get('content-range') || '';
+        const _mt = _cr.match(/\/(\d+)\s*$/);
+        if(_mt) _ldTotals[tag] = Number(_mt[1]);           // 진척도(%) 계산용 총량
+      }
       // 방어①: 첫 페이지에서 서버가 요청분보다 적게 주는데 Content-Range상
       //         요청 범위를 꽉 채운 응답이면 → 서버측 상한. 실측값으로 강등.
       if(pageNo === 0 && rows.length > 0 && rows.length < effPage){
