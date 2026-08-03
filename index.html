@@ -18479,30 +18479,45 @@ async function rcrSetStage(id, stage){
 // 섞이면 통합검색·회수판정·캘린더에 후보자 기록이 노출될 수 있다.
 let allCandActs = [];
 async function rcrLog(cid, type, content){
+  // activities 실제 컬럼: id, lead_id, type, content, stage, author, date, created_at, candidate_id
+  // ※ dbI() 는 updated_at 을 항상 붙이는데 이 테이블에는 그 컬럼이 없어 INSERT 가 400 으로 실패한다.
+  //    기존 logActivity() 도 같은 이유로 sbPost 를 직접 호출한다. 동일한 방식을 따른다.
   try{
-    // activities 실제 스키마: id, lead_id, type, content, stage, author, date, created_at
-    // (user_name/user_role 컬럼은 존재하지 않는다 → 넣으면 INSERT 전체가 400 실패)
-    const row = await dbI('activities',{
-      candidate_id:cid, lead_id:null, type, content,
-      author:(curUser&&curUser.name)||'', date:todayKst()
-    });
-    if(!row){
-      // candidate_id 컬럼이 없으면 저장 자체가 실패한다 → 원인을 즉시 알린다
-      console.error('[리쿠르팅] 활동기록 저장 실패 — activities.candidate_id 컬럼을 확인하십시오 (recruit_all.sql)');
-      showToast('활동기록 저장 실패 — recruit_all.sql 실행 여부를 확인하십시오','error');
+    const act = {
+      id: uuid(),
+      lead_id: null,
+      candidate_id: cid,
+      type: type || 'note',
+      content: content || '',
+      stage: '',
+      author: (typeof curUser!=='undefined' && curUser && curUser.name) || '',
+      date: todayKst(),
+      created_at: new Date().toISOString()
+    };
+
+    if(typeof testMode!=='undefined' && testMode){
+      const a=lg('activities')||[]; a.unshift(act); ls('activities',a);
+      allCandActs.unshift(act); return act;
+    }
+
+    if(typeof _trackLocalId==='function') _trackLocalId(act.id);
+    const ok = await sbPost('activities', act);
+    if(!ok){
+      console.error('[리쿠르팅] 활동기록 저장 실패 — 콘솔의 sbPost err 메시지를 확인하십시오', act);
+      showToast('활동기록 저장 실패 — DB에 반영되지 않았습니다','error');
+      if(typeof _pendingLocalIds!=='undefined') _pendingLocalIds.delete(act.id);
       return null;
     }
-    // dbI 가 allActivities 에 자동 unshift 하므로 즉시 빼내 전용 캐시로 옮긴다
-    if(row){
-      if(Array.isArray(allActivities)){
-        const i=allActivities.findIndex(a=>a && a.id===row.id);
-        if(i>=0) allActivities.splice(i,1);
-      }
-      allCandActs.unshift(row);
-    }
-    return row;
-  }catch(e){ console.warn('rcrLog', e); return null; }
+    // 전용 캐시에만 넣는다 (영업 활동 캐시 allActivities 와 섞지 않는다)
+    allCandActs.unshift(act);
+    return act;
+  }catch(e){
+    console.error('[리쿠르팅] rcrLog 예외', e);
+    showToast('활동기록 저장 중 오류가 발생했습니다','error');
+    return null;
+  }
 }
+
 // 후보 활동 로드 (candidates 화면 진입 시 1회)
 async function loadCandActs(){
   try{
