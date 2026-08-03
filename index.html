@@ -1831,6 +1831,7 @@ body.dark-mode *::-webkit-scrollbar-thumb:hover{background:rgba(180,208,232,.30)
       <label style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:var(--gray-500);white-space:nowrap;cursor:pointer">
         <input type="checkbox" id="rcr-showdel" onchange="rcrRender()" style="width:14px;height:14px;cursor:pointer">삭제분 포함</label>
       <button class="btn btn-outline btn-sm" onclick="rcrResetFilters()">필터 초기화</button>
+      <button class="btn btn-outline btn-sm" onclick="rcrColsReset()" title="칼럼 순서·너비를 기본값으로 되돌립니다">칼럼 초기화</button>
       <span id="rcr-fcnt" style="font-size:12px;font-weight:700;color:var(--navy);margin-left:auto"></span>
     </div>
     <div id="rcr-bulk" style="display:none;align-items:center;gap:10px;padding:9px 14px;margin-bottom:10px;
@@ -1847,6 +1848,28 @@ body.dark-mode *::-webkit-scrollbar-thumb:hover{background:rgba(180,208,232,.30)
 </div>
 
 <!-- 지점장 배정 -->
+<div class="modal-overlay" id="modal-room-book">
+  <div class="modal" style="width:440px;max-width:94vw">
+    <div class="mh"><div class="mt">회의실 예약</div></div>
+    <div class="form-grid">
+      <div class="fg full"><label>회의실</label><select id="rb-room" onchange="_rbRefreshExisting()"></select></div>
+      <div class="fg full"><label>날짜</label><input type="date" id="rb-date" onchange="_rbRefreshExisting()"></div>
+      <div class="fg"><label>시작</label><select id="rb-start"></select></div>
+      <div class="fg"><label>종료</label><select id="rb-end"></select></div>
+      <div class="fg full"><label>용도 / 회의명</label><input type="text" id="rb-title" placeholder="예: 주간 영업회의"></div>
+      <div class="fg full"><label>참석자 (선택 시 쪽지 알림 발송)</label>
+        <input type="text" id="rb-att-search" oninput="_rbRenderAtt()" placeholder="이름 검색" style="width:100%;padding:7px 10px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:13px;box-sizing:border-box">
+        <div id="rb-att-list" style="max-height:110px;overflow-y:auto;border:1px solid var(--gray-200);border-radius:8px;padding:4px;margin-top:6px"></div>
+        <div id="rb-att-chosen" style="font-size:12px;color:var(--navy);margin-top:5px;min-height:16px"></div>
+      </div>
+      <div class="fg"><label>반복</label><select id="rb-recur" onchange="_rbRecurToggle()"><option value="none">반복 없음</option><option value="weekly">매주 (같은 요일)</option><option value="daily">매일</option></select></div>
+      <div class="fg" id="rb-count-wrap" style="display:none"><label>반복 횟수 (첫 예약 포함)</label><input type="number" id="rb-count" min="2" max="30" value="4"></div>
+      <div class="fg full"><div id="rb-existing" style="font-size:12px;color:var(--gray-500);min-height:16px"></div></div>
+      <div class="fg full"><div id="rb-warn" style="color:var(--err);font-size:13px;min-height:18px"></div></div>
+    </div>
+    <div class="mf"><button class="btn btn-outline" onclick="closeM('modal-room-book')">닫기</button><button class="btn" onclick="submitRoomBooking()">예약</button></div>
+  </div>
+</div>
 <div class="modal-overlay" id="modal-rcr-assign">
   <div class="modal" style="width:420px;max-width:96vw">
     <div class="modal-head"><div class="modal-title">지점장 배정</div>
@@ -3479,6 +3502,19 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
 </div>
 
 <!-- ═══ 쪽지함 (모든 역할) ═══ -->
+<div id="screen-rooms" class="screen">
+  <div style="max-width:900px;margin:0 auto;padding:8px">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:6px 0 16px">
+      <div style="font-weight:800;font-size:18px;color:var(--navy)">회의실 예약</div>
+      <div style="flex:1"></div>
+      <button class="btn btn-outline btn-xs" onclick="roomDateShift(-1)">◀ 어제</button>
+      <input type="date" id="room-date" onchange="loadRoomScreen()" style="padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:14px">
+      <button class="btn btn-outline btn-xs" onclick="roomDateShift(1)">내일 ▶</button>
+      <button class="btn btn-xs" onclick="openRoomBooking()">＋ 새 예약</button>
+    </div>
+    <div id="room-grid"></div>
+  </div>
+</div>
 <div id="screen-messages" class="screen">
   <div class="page-header">
     <div class="page-title"><svg class="li" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>쪽지함</div>
@@ -5930,11 +5966,11 @@ function startIdleTimer(){
 
 // ── 앱 시작 ──────────────────────────────────────────────
 const NAV_CFG = {
-  admin:[{id:'admin',l:'<svg class="li" viewBox="0 0 24 24"><path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="6"/><rect x="12" y="7" width="3" height="10"/><rect x="17" y="13" width="3" height="4"/></svg>대시보드'},{id:'leads',l:'<svg class="li" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>DB관리'},{id:'stage-dashboard',l:'<svg class="li" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>단계별 현황'},{id:'insights',l:'<svg class="li" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l3-3 3 3 5-5"/></svg>인사이트'},{id:'dj-status',l:'<svg class="li" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.6A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.4 2.1L8 9.6a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.4c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2z"/></svg>대전 업무현황'},{id:'recruit',l:'<svg class="li" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>리쿠르팅'},{id:'users',l:'<svg class="li" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13A4 4 0 0 1 16 11"/></svg>사용자 관리'},{id:'activity',l:'<svg class="li" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>캘린더'},{id:'settings',l:'<svg class="li" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.8 1.2V21a2 2 0 0 1-4 0v-.1A1.6 1.6 0 0 0 8 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.2-2.8H2a2 2 0 0 1 0-4h.1A1.6 1.6 0 0 0 4.6 8a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 8 4.6a1.6 1.6 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.6 1.6 0 0 0 2.8 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.8H22a2 2 0 0 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>설정'}],
-  dbmanager:[{id:'leads',l:'<svg class="li" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>DB관리'},{id:'activity',l:'<svg class="li" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>캘린더'},{id:'notices',l:'<svg class="li" viewBox="0 0 24 24"><path d="M3 11v3a1 1 0 0 0 1 1h2l4 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15 8a4 4 0 0 1 0 8M18 5a8 8 0 0 1 0 14"/></svg>공지함'}],
-  branch:[{id:'branch',l:'<svg class="li" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M16 6h.01M8 10h.01M16 10h.01M8 14h.01M16 14h.01"/></svg>지점관리'},{id:'leads',l:'<svg class="li" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>DB관리'},{id:'stage-dashboard',l:'<svg class="li" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>단계별 현황'},{id:'my-clients',l:'<svg class="li" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 0 12 0V3H6z"/><path d="M6 5H3v2a3 3 0 0 0 3 3M18 5h3v2a3 3 0 0 1-3 3M9 21h6M12 17v4"/></svg>고객관리'},{id:'recruit',l:'<svg class="li" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>리쿠르팅'},{id:'activity',l:'<svg class="li" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>캘린더'},{id:'notices',l:'<svg class="li" viewBox="0 0 24 24"><path d="M3 11v3a1 1 0 0 0 1 1h2l4 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15 8a4 4 0 0 1 0 8M18 5a8 8 0 0 1 0 14"/></svg>공지함'}],
-  team:[{id:'leads',l:'<svg class="li" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>DB관리'},{id:'stage-dashboard',l:'<svg class="li" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>단계별 현황'},{id:'my-clients',l:'<svg class="li" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 0 12 0V3H6z"/><path d="M6 5H3v2a3 3 0 0 0 3 3M18 5h3v2a3 3 0 0 1-3 3M9 21h6M12 17v4"/></svg>고객관리'},{id:'activity',l:'<svg class="li" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>캘린더'},{id:'notices',l:'<svg class="li" viewBox="0 0 24 24"><path d="M3 11v3a1 1 0 0 0 1 1h2l4 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15 8a4 4 0 0 1 0 8M18 5a8 8 0 0 1 0 14"/></svg>공지함'}],
-  tm:[{id:'tm-panel',l:'<svg class="li" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.6A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.4 2.1L8 9.6a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.4c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2z"/></svg>관리 DB'},{id:'notices',l:'<svg class="li" viewBox="0 0 24 24"><path d="M3 11v3a1 1 0 0 0 1 1h2l4 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15 8a4 4 0 0 1 0 8M18 5a8 8 0 0 1 0 14"/></svg>공지함'}],
+  admin:[{id:'admin',l:'<svg class="li" viewBox="0 0 24 24"><path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="6"/><rect x="12" y="7" width="3" height="10"/><rect x="17" y="13" width="3" height="4"/></svg>대시보드'},{id:'leads',l:'<svg class="li" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>DB관리'},{id:'stage-dashboard',l:'<svg class="li" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>단계별 현황'},{id:'insights',l:'<svg class="li" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l3-3 3 3 5-5"/></svg>인사이트'},{id:'dj-status',l:'<svg class="li" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.6A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.4 2.1L8 9.6a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.4c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2z"/></svg>대전 업무현황'},{id:'recruit',l:'<svg class="li" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>리쿠르팅'},{id:'users',l:'<svg class="li" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13A4 4 0 0 1 16 11"/></svg>사용자 관리'},{id:'activity',l:'<svg class="li" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>캘린더'},{id:'settings',l:'<svg class="li" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.8 1.2V21a2 2 0 0 1-4 0v-.1A1.6 1.6 0 0 0 8 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.2-2.8H2a2 2 0 0 1 0-4h.1A1.6 1.6 0 0 0 4.6 8a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 8 4.6a1.6 1.6 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.6 1.6 0 0 0 2.8 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.8H22a2 2 0 0 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>설정'},{id:'rooms',l:'<svg class="li" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M8 4v3M16 4v3"/></svg>회의실'}],
+  dbmanager:[{id:'leads',l:'<svg class="li" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>DB관리'},{id:'activity',l:'<svg class="li" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>캘린더'},{id:'notices',l:'<svg class="li" viewBox="0 0 24 24"><path d="M3 11v3a1 1 0 0 0 1 1h2l4 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15 8a4 4 0 0 1 0 8M18 5a8 8 0 0 1 0 14"/></svg>공지함'},{id:'rooms',l:'<svg class="li" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M8 4v3M16 4v3"/></svg>회의실'}],
+  branch:[{id:'branch',l:'<svg class="li" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M16 6h.01M8 10h.01M16 10h.01M8 14h.01M16 14h.01"/></svg>지점관리'},{id:'leads',l:'<svg class="li" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>DB관리'},{id:'stage-dashboard',l:'<svg class="li" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>단계별 현황'},{id:'my-clients',l:'<svg class="li" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 0 12 0V3H6z"/><path d="M6 5H3v2a3 3 0 0 0 3 3M18 5h3v2a3 3 0 0 1-3 3M9 21h6M12 17v4"/></svg>고객관리'},{id:'recruit',l:'<svg class="li" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>리쿠르팅'},{id:'activity',l:'<svg class="li" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>캘린더'},{id:'notices',l:'<svg class="li" viewBox="0 0 24 24"><path d="M3 11v3a1 1 0 0 0 1 1h2l4 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15 8a4 4 0 0 1 0 8M18 5a8 8 0 0 1 0 14"/></svg>공지함'},{id:'rooms',l:'<svg class="li" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M8 4v3M16 4v3"/></svg>회의실'}],
+  team:[{id:'leads',l:'<svg class="li" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>DB관리'},{id:'stage-dashboard',l:'<svg class="li" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>단계별 현황'},{id:'my-clients',l:'<svg class="li" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 0 12 0V3H6z"/><path d="M6 5H3v2a3 3 0 0 0 3 3M18 5h3v2a3 3 0 0 1-3 3M9 21h6M12 17v4"/></svg>고객관리'},{id:'activity',l:'<svg class="li" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>캘린더'},{id:'notices',l:'<svg class="li" viewBox="0 0 24 24"><path d="M3 11v3a1 1 0 0 0 1 1h2l4 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15 8a4 4 0 0 1 0 8M18 5a8 8 0 0 1 0 14"/></svg>공지함'},{id:'rooms',l:'<svg class="li" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M8 4v3M16 4v3"/></svg>회의실'}],
+  tm:[{id:'tm-panel',l:'<svg class="li" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.6A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.4 2.1L8 9.6a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.4c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2z"/></svg>관리 DB'},{id:'notices',l:'<svg class="li" viewBox="0 0 24 24"><path d="M3 11v3a1 1 0 0 0 1 1h2l4 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15 8a4 4 0 0 1 0 8M18 5a8 8 0 0 1 0 14"/></svg>공지함'},{id:'rooms',l:'<svg class="li" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M8 4v3M16 4v3"/></svg>회의실'}],
 };
 const RL={admin:'관리자',dbmanager:'DB관리자',branch:'지점장',team:'팀장',tm:'대전TM'};
 
@@ -6024,11 +6060,11 @@ function startApp(){
 function showScreen(id, btn){
   // 역할별 접근 가능 화면 화이트리스트
   const ALLOWED = {
-    admin:     ['admin','insights','leads','stage-dashboard','dj-status','users','activity','settings','messages','recruit'],
-    dbmanager: ['leads','activity','notices','messages'],
-    branch:    ['branch','leads','stage-dashboard','my-clients','activity','notices','messages','recruit'],
-    team:      ['leads','stage-dashboard','my-leads','my-clients','activity','notices','messages'],
-    tm:        ['tm-panel','notices','messages'],
+    admin:     ['admin','insights','leads','stage-dashboard','dj-status','users','activity','settings','messages','recruit','rooms'],
+    dbmanager: ['leads','activity','notices','messages','rooms'],
+    branch:    ['branch','leads','stage-dashboard','my-clients','activity','notices','messages','recruit','rooms'],
+    team:      ['leads','stage-dashboard','my-leads','my-clients','activity','notices','messages','rooms'],
+    tm:        ['tm-panel','notices','messages','rooms'],
   };
   const role = curUser?.role;
   const allowed = ALLOWED[role] || [];
@@ -6057,7 +6093,7 @@ function showScreen(id, btn){
     'admin':loadAdmin,'insights':loadInsights,'leads':loadLeads,'my-leads':loadMyLeads,'my-clients':loadMyClients,
     'settings':loadSettings,'tm-panel':loadTmPanel,'branch':loadBranchScreen,'activity':loadActivityScreen,'notices':loadNoticesScreen,
     'stage-dashboard':loadStageDashboard,'dj-status':loadDjStatus,'messages':loadMessages,
-    'users':loadUsersScreen
+    'users':loadUsersScreen,'rooms':loadRoomScreen
   }[id]||function(){})();
 }
 
@@ -6371,6 +6407,192 @@ function showToast(msg,type=''){const el=document.getElementById('toast');if(!el
 // ── Modal / Overlay ───────────────────────────────────────
 function openM(id){document.getElementById(id)?.classList.add('open');}
 function closeM(id){document.getElementById(id)?.classList.remove('open');}
+
+// ═══════════════ 회의실 예약 ═══════════════
+const ROOMS = ['소회의실1','소회의실2','대회의실','강의장'];
+const ROOM_OPEN_MIN = 6*60;    // 06:00 (아침 일찍 오시는 분 배려)
+const ROOM_CLOSE_MIN = 22*60;  // 22:00
+const ROOM_SLOT = 30;          // 30분 단위
+let _roomCache = [];           // 선택 날짜의 active 예약
+
+function _minToHHMM(m){ const h=Math.floor(m/60), mm=m%60; return String(h).padStart(2,'0')+':'+String(mm).padStart(2,'0'); }
+function _roomDateEl(){ return document.getElementById('room-date'); }
+function roomDateShift(d){ const el=_roomDateEl(); if(!el) return; const base=el.value?new Date(el.value+'T00:00:00'):new Date(); base.setDate(base.getDate()+d); el.value=base.getFullYear()+'-'+String(base.getMonth()+1).padStart(2,'0')+'-'+String(base.getDate()).padStart(2,'0'); loadRoomScreen(); }  // KST 안전: toISOString 금지 계율 준수
+
+async function loadRoomScreen(){
+  const el=_roomDateEl();
+  if(el && !el.value){ el.value = todayKst(); }
+  const date = (el && el.value) || todayKst();
+  const grid = document.getElementById('room-grid');
+  if(grid) grid.innerHTML = '<div style="padding:30px;text-align:center;color:var(--gray-400)">불러오는 중…</div>';
+  try{ _roomCache = await sbGet('room_reservations?res_date=eq.'+date+'&status=eq.active&order=start_min.asc') || []; }
+  catch(e){ _roomCache=[]; }
+  _renderRoomGrid();
+}
+
+function _renderRoomGrid(){
+  const grid=document.getElementById('room-grid'); if(!grid) return;
+  const real=(typeof _impersonator!=='undefined' && _impersonator) || curUser;
+  const isAdmin = real && real.role==='admin';
+  grid.innerHTML = ROOMS.map(function(room){
+    const list=_roomCache.filter(function(r){return r.room===room;}).sort(function(a,b){return a.start_min-b.start_min;});
+    const chips = list.length ? list.map(function(r){
+      const mine = r.reserved_by===curUser.name;
+      const canCancel = mine || isAdmin;
+      let att=''; try{ const a=JSON.parse(r.attendees||'[]'); if(a.length) att=' · 참석 '+a.length+'명'; }catch(e){}
+      return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--gray-200);border-radius:8px;margin-bottom:6px;background:var(--gray-50)">'
+        + '<span style="font-weight:700;color:var(--navy);white-space:nowrap">'+_minToHHMM(r.start_min)+'–'+_minToHHMM(r.end_min)+'</span>'
+        + '<span style="flex:1;font-size:13px">'+esc(r.title||'(제목 없음)')+'<span style="color:var(--gray-400);font-size:12px"> · '+esc(r.reserved_by)+att+'</span></span>'
+        + (canCancel?'<button class="btn btn-xs" style="color:var(--err)" onclick="cancelRoomRes(\''+r.id+'\')">취소</button>':'')
+        + '</div>';
+    }).join('') : '<div style="padding:10px;color:var(--gray-400);font-size:13px">예약 없음</div>';
+    return '<div class="card" style="margin-bottom:14px;padding:14px">'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
+      + '<div style="font-weight:800;font-size:15px;color:var(--navy)">'+room+'</div>'
+      + '<button class="btn btn-xs" onclick="openRoomBooking(\''+room+'\')">＋ 예약</button></div>'
+      + chips + '</div>';
+  }).join('');
+}
+
+function openRoomBooking(room){
+  const _rEl=document.getElementById('rb-room');
+  _rEl.innerHTML = ROOMS.map(function(r){return '<option value="'+r+'">'+r+'</option>';}).join('');
+  _rEl.value = room || ROOMS[0];
+  document.getElementById('rb-date').value = (_roomDateEl() && _roomDateEl().value) || todayKst();
+  document.getElementById('rb-title').value = '';
+  _rbAttSel = [];
+  var _as=document.getElementById('rb-att-search'); if(_as) _as.value='';
+  _rbRenderAtt();
+  document.getElementById('rb-recur').value = 'none';
+  document.getElementById('rb-count').value = '4';
+  document.getElementById('rb-count-wrap').style.display = 'none';
+  const opts=[]; for(let m=ROOM_OPEN_MIN;m<=ROOM_CLOSE_MIN;m+=ROOM_SLOT){ opts.push('<option value="'+m+'">'+_minToHHMM(m)+'</option>'); }
+  const sEl=document.getElementById('rb-start'), eEl=document.getElementById('rb-end');
+  sEl.innerHTML = opts.slice(0,-1).join('');   // 마감시각은 시작에서 제외
+  eEl.innerHTML = opts.slice(1).join('');      // 개장시각은 종료에서 제외
+  sEl.value = String(9*60);   // 기본 09:00
+  eEl.value = String(10*60);  // 기본 10:00
+  sEl.onchange=_rbRefreshExisting; eEl.onchange=_rbRefreshExisting;
+  document.getElementById('rb-warn').textContent='';
+  _rbRefreshExisting();
+  openM('modal-room-book');
+}
+function _rbRecurToggle(){
+  const v=document.getElementById('rb-recur').value;
+  document.getElementById('rb-count-wrap').style.display = (v==='none')?'none':'';
+}
+// 선택한 방·날짜의 기존 예약을 모달 안에 보여준다 (빈 시간 눈으로 확인 — 흐름 매끄럽게)
+async function _rbRefreshExisting(){
+  const box=document.getElementById('rb-existing'); if(!box) return;
+  const room=document.getElementById('rb-room').value;
+  const date=document.getElementById('rb-date').value;
+  if(!room||!date){ box.innerHTML=''; return; }
+  box.textContent='이 방 예약 확인 중…';
+  let list=[];
+  try{ list = await sbGet('room_reservations?room=eq.'+encodeURIComponent(room)+'&res_date=eq.'+date+'&status=eq.active&order=start_min.asc') || []; }
+  catch(e){ box.innerHTML=''; return; }
+  if(!list.length){ box.innerHTML='<span style="color:var(--ok)">이 날 이 방은 비어 있습니다.</span>'; return; }
+  var _s=parseInt((document.getElementById('rb-start')||{}).value,10), _e=parseInt((document.getElementById('rb-end')||{}).value,10);
+  var _clash=list.find(function(r){ return _s<r.end_min && _e>r.start_min; });
+  var _lt=list.map(function(r){return _minToHHMM(r.start_min)+'~'+_minToHHMM(r.end_min);}).join(', ');
+  if(_clash){ box.innerHTML='<div style="background:#fee2e2;border:1.5px solid #dc2626;color:#b91c1c;border-radius:8px;padding:9px 11px;font-weight:800;font-size:13px">⚠ 선택한 시간('+_minToHHMM(_s)+'~'+_minToHHMM(_e)+')은 이미 예약되어 있습니다<br><span style="font-weight:600;font-size:11px">기존 예약: '+_lt+'</span></div>'; }
+  else { box.innerHTML='<span style="color:var(--gray-500);font-size:12px">이미 예약된 시간 — '+_lt+'</span>'; }
+}
+// ── 참석자 선택 + 쪽지 알림 ──
+let _rbAttSel = [];  // [{id,name,role}]
+function _rbAllUsers(){ try{ return (getAccs()||[]).filter(function(a){return a && a.name;}); }catch(e){ return []; } }
+function _rbRenderAtt(){
+  const box=document.getElementById('rb-att-list'); if(!box) return;
+  const q=(document.getElementById('rb-att-search').value||'').toLowerCase().trim();
+  const selNames=_rbAttSel.map(function(a){return a.name;});
+  const users=_rbAllUsers().filter(function(a){ return !q || (a.name||'').toLowerCase().indexOf(q)>=0; }).slice(0,60);
+  box.innerHTML = users.length ? users.map(function(a){
+    const checked=selNames.indexOf(a.name)>=0;
+    return '<label style="display:flex;align-items:center;gap:7px;padding:4px 6px;cursor:pointer;font-size:13px">'
+      + '<input type="checkbox" '+(checked?'checked':'')+' onchange="_rbToggleAtt(\''+String(a.id||a.name)+'\')"> '
+      + esc(a.name)+'<span style="color:var(--gray-400);font-size:11px">'+(a.role?(' · '+((typeof RL!=='undefined'&&RL[a.role])||a.role)):'')+'</span></label>';
+  }).join('') : '<div style="padding:8px;color:var(--gray-400);font-size:12px">결과 없음</div>';
+  const chosen=document.getElementById('rb-att-chosen');
+  if(chosen) chosen.textContent = _rbAttSel.length ? ('선택: '+_rbAttSel.map(function(a){return a.name;}).join(', ')) : '';
+}
+function _rbToggleAtt(id){
+  const u=_rbAllUsers().find(function(a){return String(a.id||a.name)===String(id);});
+  if(!u) return;
+  const i=_rbAttSel.findIndex(function(a){return a.name===u.name;});
+  if(i>=0) _rbAttSel.splice(i,1); else _rbAttSel.push({id:u.id||u.name, name:u.name, role:u.role||''});
+  _rbRenderAtt();
+}
+async function _roomNotify(recip, subject, content){
+  try{
+    const nowIso=new Date().toISOString();
+    const row={ subject:subject, content:content,
+      sender_id:String(curUser.id||curUser.name), sender_name:curUser.name, sender_role:curUser.role||'',
+      recipient_id:String(recip.id||recip.name), recipient_name:recip.name, recipient_role:recip.role||'',
+      lead_id:null, parent_id:null, thread_root_id:null, announcement_id:null,
+      is_read:false, read_at:null, is_deleted_by_sender:false, is_deleted_by_recipient:false, created_at:nowIso };
+    const h={...sbH(),'Prefer':'return=representation'};
+    const r=await fetch(SB_URL+'/rest/v1/messages',{method:'POST',headers:h,body:JSON.stringify(row)});
+    if(!r.ok) return false;
+    const arr=await r.json(); const mid=arr && arr[0] && arr[0].id;
+    if(mid) await sbPatch('messages', mid, {thread_root_id:mid});
+    return true;
+  }catch(e){ return false; }
+}
+
+async function submitRoomBooking(){
+  const room=document.getElementById('rb-room').value;
+  const date=document.getElementById('rb-date').value;
+  const startMin=parseInt(document.getElementById('rb-start').value,10);
+  const endMin=parseInt(document.getElementById('rb-end').value,10);
+  const title=(document.getElementById('rb-title').value||'').trim();
+  const recur=document.getElementById('rb-recur').value;
+  const warn=document.getElementById('rb-warn'); warn.textContent='';
+  if(!date){ warn.textContent='날짜를 선택하세요.'; return; }
+  if(!(endMin>startMin)){ warn.textContent='종료 시각이 시작보다 늦어야 합니다.'; return; }
+  // 반복 날짜 생성 (첫 예약 포함)
+  let count=1;
+  if(recur!=='none'){ count=Math.max(2, Math.min(30, parseInt(document.getElementById('rb-count').value,10)||1)); }
+  const dates=[]; const base=new Date(date+'T00:00:00');
+  for(let i=0;i<count;i++){ const d=new Date(base); if(recur==='weekly') d.setDate(d.getDate()+7*i); else if(recur==='daily') d.setDate(d.getDate()+i); dates.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')); }
+  // ★ 충돌 검사 — 캐시가 아니라 서버에 지금 직접 묻는다 (이중 부킹 방지의 급소). 반복이면 모든 회차를 한 번에 조회.
+  let existing=[];
+  try{ existing = await sbGet('room_reservations?room=eq.'+encodeURIComponent(room)+'&res_date=in.('+dates.join(',')+')&status=eq.active') || []; }
+  catch(e){ warn.textContent='서버 확인 실패. 다시 시도해 주세요.'; return; }
+  const recurGroup = (count>1) ? ('rg_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)) : null;
+  const toBook=[], skipped=[];
+  dates.forEach(function(d){
+    const clash = existing.find(function(r){ return r.res_date===d && startMin<r.end_min && endMin>r.start_min; });
+    if(clash) skipped.push(d); else toBook.push(d);
+  });
+  if(!toBook.length){ warn.innerHTML='<span style="font-weight:800">⚠ 이미 예약된 시간입니다. 다른 시간을 선택하세요.</span>'; try{showToast('이미 예약된 시간입니다','error');}catch(e){} return; }
+  const rows = toBook.map(function(d){ return { room:room, res_date:d, start_min:startMin, end_min:endMin, title:title, reserved_by:curUser.name, attendees:JSON.stringify(_rbAttSel.map(function(a){return a.name;})), recur_group:recurGroup, status:'active' }; });
+  const res = await sbPost('room_reservations', rows);
+  if(res){
+    closeM('modal-room-book');
+    let msg = toBook.length+'건 예약되었습니다';
+    if(skipped.length) msg += ' · '+skipped.length+'건은 이미 예약되어 건너뜀';
+    showToast(msg,'success');
+    if(_rbAttSel.length){
+      var _dstr=toBook[0]+(toBook.length>1?(" 외 "+(toBook.length-1)+"회"):"");
+      var _subj="회의실 예약 안내: "+room;
+      var _body=curUser.name+"님이 회의에 초대했습니다.\n회의실: "+room+"\n일시: "+_dstr+" "+_minToHHMM(startMin)+"-"+_minToHHMM(endMin)+(title?("\n용도: "+title):"");
+      var _attCopy=_rbAttSel.slice(); setTimeout(function(){ _attCopy.forEach(function(a){ if(a && a.name!==curUser.name){ try{ _roomNotify(a,_subj,_body); }catch(e){} } }); }, 0);
+    }
+    const el=_roomDateEl(); if(el){ el.value=toBook[0]; }   // 방금 예약한 날짜로 화면 이동 (흐름 매끄럽게)
+    loadRoomScreen(); if(typeof _showRoomsInCal!=='undefined' && _showRoomsInCal && typeof loadRoomCalMonth==='function') loadRoomCalMonth();
+  } else { warn.textContent='저장 실패. 다시 시도해 주세요.'; }
+}
+async function cancelRoomRes(id){
+  const r=_roomCache.find(function(x){return x.id===id;});
+  const real=(typeof _impersonator!=='undefined' && _impersonator) || curUser;
+  const isAdmin = real && real.role==='admin';
+  if(r && r.reserved_by!==curUser.name && !isAdmin){ showToast('본인 예약만 취소할 수 있습니다','error'); return; }
+  if(!confirm('이 예약을 취소하시겠습니까?')) return;
+  const ok = await sbPatch('room_reservations', id, {status:'cancelled'});
+  if(ok){ showToast('취소되었습니다','success'); loadRoomScreen(); if(typeof _showRoomsInCal!=='undefined' && _showRoomsInCal && typeof loadRoomCalMonth==='function') loadRoomCalMonth(); }
+  else showToast('취소 실패','error');
+}
+
 function openOv(id){document.getElementById(id)?.classList.add('open');}
 function closeOv(id){document.getElementById(id)?.classList.remove('open');}
 
@@ -18009,33 +18231,36 @@ function rcrRender(){
     <option value="">${ph}</option>${opts.map(o=>`<option${_rcrCF[k]===o?' selected':''}>${esc(o)}</option>`).join('')}</select>`;
 
   const branchOpts = rcrBranchList();
-  const filterRow = `<tr style="background:var(--gray-50)">
-    ${rcrIsAdmin()?'<th style="padding:4px 6px"></th>':''}
-    <th style="padding:4px 6px"></th>
-    <th style="padding:4px 6px"></th>
-    <th style="padding:4px 4px">${sel('platform', rcrDistinct('platform'), '전체')}</th>
-    <th style="padding:4px 6px">${sel('job', rcrDistinct('current_job',true), '전체')}</th>
-    <th style="padding:4px 6px">${sel('years', rcrDistinct('biz_years'), '전체')}</th>
-    <th style="padding:4px 6px">${sel('income', rcrDistinct('target_income'), '전체')}</th>
-    <th style="padding:4px 6px">${sel('needs', rcrDistinct('needs',true), '전체')}</th>
-    ${rcrIsAdmin()?`<th style="padding:4px 6px"><select onchange="rcrCF('branch',this.value)"
+  const _fTh = (inner,pad)=>`<th style="padding:4px ${pad||'6px'}">${inner||''}</th>`;
+  const _filterCells = {
+    name: _fTh(''), phone: _fTh(''),
+    platform: _fTh(sel('platform', rcrDistinct('platform'), '전체'),'4px'),
+    job:      _fTh(sel('job', rcrDistinct('current_job',true), '전체')),
+    years:    _fTh(sel('years', rcrDistinct('biz_years'), '전체')),
+    income:   _fTh(sel('income', rcrDistinct('target_income'), '전체')),
+    needs:    _fTh(sel('needs', rcrDistinct('needs',true), '전체')),
+    branch:   rcrIsAdmin()?`<th style="padding:4px 6px"><select onchange="rcrCF('branch',this.value)"
       style="width:100%;padding:4px 5px;font-size:11px;font-family:inherit;border:1px solid var(--gray-200);border-radius:4px;
       background:${_rcrCF.branch?'rgba(30,41,82,.06)':'#fff'};color:${_rcrCF.branch?'var(--navy)':'var(--gray-500)'};font-weight:${_rcrCF.branch?'700':'400'}">
       <option value="">전체</option><option value="__none__"${_rcrCF.branch==='__none__'?' selected':''}>미배정</option>
-      ${branchOpts.map(o=>`<option${_rcrCF.branch===o?' selected':''}>${esc(o)}</option>`).join('')}</select></th>`:''}
-    <th style="padding:4px 6px">${sel('stage', RCR_STAGES.slice(), '전체')}</th>
-    <th style="padding:4px 6px"><select onchange="rcrCF('period',this.value)"
+      ${branchOpts.map(o=>`<option${_rcrCF.branch===o?' selected':''}>${esc(o)}</option>`).join('')}</select></th>`:'',
+    stage:    _fTh(sel('stage', RCR_STAGES.slice(), '전체')),
+    inflow:   `<th style="padding:4px 6px"><select onchange="rcrCF('period',this.value)"
       style="width:100%;padding:4px 5px;font-size:11px;font-family:inherit;border:1px solid var(--gray-200);border-radius:4px;
       background:${_rcrCF.period?'rgba(30,41,82,.06)':'#fff'};color:${_rcrCF.period?'var(--navy)':'var(--gray-500)'};font-weight:${_rcrCF.period?'700':'400'}">
       <option value="">전체</option><option value="1"${_rcrCF.period==='1'?' selected':''}>오늘</option>
       <option value="7"${_rcrCF.period==='7'?' selected':''}>7일</option>
-      <option value="30"${_rcrCF.period==='30'?' selected':''}>30일</option></select></th>
-    <th style="padding:4px 6px"><select onchange="rcrCF('act',this.value)"
+      <option value="30"${_rcrCF.period==='30'?' selected':''}>30일</option></select></th>`,
+    act:      `<th style="padding:4px 6px"><select onchange="rcrCF('act',this.value)"
       style="width:100%;padding:4px 5px;font-size:11px;font-family:inherit;border:1px solid var(--gray-200);border-radius:4px;
       background:${_rcrCF.act?'rgba(30,41,82,.06)':'#fff'};color:${_rcrCF.act?'var(--navy)':'var(--gray-500)'};font-weight:${_rcrCF.act?'700':'400'}">
       <option value="">전체</option>
       <option value="none"${_rcrCF.act==='none'?' selected':''}>미기록</option>
-      <option value="has"${_rcrCF.act==='has'?' selected':''}>기록 있음</option></select></th>
+      <option value="has"${_rcrCF.act==='has'?' selected':''}>기록 있음</option></select></th>`,
+  };
+  const filterRow = `<tr style="background:var(--gray-50)">
+    ${rcrIsAdmin()?'<th style="padding:4px 6px"></th>':''}
+    ${rcrColOrder().map(k=>_filterCells[k]||_fTh('')).join('')}
   </tr>`;
 
   if(!rows.length){
@@ -18043,7 +18268,7 @@ function rcrRender(){
       <thead>${rcrHeadRow()}${filterRow}</thead></table></div>
       <div style="text-align:center;padding:36px 16px;color:var(--gray-300);font-size:13px">
       해당 조건의 후보가 없습니다</div>`;
-    _rcrVisible=[]; rcrSyncBulk();
+    _rcrVisible=[]; rcrSyncBulk(); _rcrHeadWire();
     return;
   }
 
@@ -18061,23 +18286,27 @@ function rcrRender(){
       const infl=(c.inflow_at||c.created_at||'');
       const selq=_rcrSel.has(c.id);
       const del=c.status==='deleted';
+      const _cells = {
+        name: `<td style="padding:9px 12px;font-weight:700">${esc(c.name||'-')}${(c.reapply_count||0)>0?`<span class="rcr-sb" style="background:rgba(232,135,15,.13);color:#e8870f;margin-left:5px;font-size:10px;padding:1px 6px">재${c.reapply_count}</span>`:''}${del?'<span class="rcr-sb" style="background:rgba(239,68,68,.12);color:var(--err);margin-left:4px;font-size:10px;padding:1px 6px">삭제</span>':''}</td>`,
+        phone: `<td style="padding:9px 10px;white-space:nowrap">${esc(rcrPhone(c.phone||''))}</td>`,
+        platform: `<td style="padding:9px 8px;text-align:center">${pf?`<span style="font-size:10.5px;font-weight:800;color:${pfc}">${esc(pf)}</span>`:'-'}</td>`,
+        job: `<td style="padding:9px 10px">${esc(c.current_job||'-')}</td>`,
+        years: `<td style="padding:9px 10px;color:var(--gray-500);font-size:11.5px">${esc(c.biz_years||'-')}</td>`,
+        income: `<td style="padding:9px 10px;font-size:11.5px;font-weight:700;color:${inc(c.target_income||'')}">${esc(c.target_income||'-')}</td>`,
+        needs: `<td style="padding:9px 10px;color:var(--gray-500);font-size:11.5px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(c.needs||'')}">${esc(c.needs||'-')}</td>`,
+        branch: rcrIsAdmin()?`<td style="padding:9px 10px">${c.branch_name?esc(c.branch_name):'<span style="color:var(--err);font-size:11px;font-weight:700">미배정</span>'}</td>`:'',
+        stage: `<td style="padding:9px 10px"><span class="rcr-sb" style="background:${RCR_COLOR[st]}1a;color:${RCR_COLOR[st]}">${st}</span></td>`,
+        inflow: `<td style="padding:9px 10px;color:var(--gray-400);font-size:11px;white-space:nowrap">${infl.slice(0,10)}<br><span style="opacity:.7">${infl.slice(11,16)}</span></td>`,
+        act: `<td style="padding:9px 10px;max-width:230px">${rcrActCell(_am[c.id], c)}</td>`,
+      };
       return `<tr style="cursor:pointer;background:${selq?'rgba(30,41,82,.04)':'transparent'};opacity:${del?.5:1}" onclick="rcrRowClick(event,'${c.id}')">
         ${rcrIsAdmin()?`<td style="padding:9px 8px;text-align:center" onclick="event.stopPropagation()">
           <input type="checkbox" ${selq?'checked':''} onclick="event.stopPropagation();rcrCkClick('${c.id}',event)" style="width:14px;height:14px;cursor:pointer"></td>`:''}
-        <td style="padding:9px 12px;font-weight:700">${esc(c.name||'-')}${(c.reapply_count||0)>0?`<span class="rcr-sb" style="background:rgba(232,135,15,.13);color:#e8870f;margin-left:5px;font-size:10px;padding:1px 6px">재${c.reapply_count}</span>`:''}${del?'<span class="rcr-sb" style="background:rgba(239,68,68,.12);color:var(--err);margin-left:4px;font-size:10px;padding:1px 6px">삭제</span>':''}</td>
-        <td style="padding:9px 10px;white-space:nowrap">${esc(rcrPhone(c.phone||''))}</td>
-        <td style="padding:9px 8px;text-align:center">${pf?`<span style="font-size:10.5px;font-weight:800;color:${pfc}">${esc(pf)}</span>`:'-'}</td>
-        <td style="padding:9px 10px">${esc(c.current_job||'-')}</td>
-        <td style="padding:9px 10px;color:var(--gray-500);font-size:11.5px">${esc(c.biz_years||'-')}</td>
-        <td style="padding:9px 10px;font-size:11.5px;font-weight:700;color:${inc(c.target_income||'')}">${esc(c.target_income||'-')}</td>
-        <td style="padding:9px 10px;color:var(--gray-500);font-size:11.5px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(c.needs||'')}">${esc(c.needs||'-')}</td>
-        ${rcrIsAdmin()?`<td style="padding:9px 10px">${c.branch_name?esc(c.branch_name):'<span style="color:var(--err);font-size:11px;font-weight:700">미배정</span>'}</td>`:''}
-        <td style="padding:9px 10px"><span class="rcr-sb" style="background:${RCR_COLOR[st]}1a;color:${RCR_COLOR[st]}">${st}</span></td>
-        <td style="padding:9px 10px;color:var(--gray-400);font-size:11px;white-space:nowrap">${infl.slice(0,10)}<br><span style="opacity:.7">${infl.slice(11,16)}</span></td>
-        <td style="padding:9px 10px;max-width:230px">${rcrActCell(_am[c.id], c)}</td>
+        ${rcrColOrder().map(k=>_cells[k]||'').join('')}
       </tr>`;}).join('')}</tbody></table></div>`;
   _rcrVisible = rows.map(r=>r.id);
   rcrSyncBulk();
+  _rcrHeadWire();
 }
 
 // 진행내용 셀 — 최근 기록 1건 + 누적 건수. 기록이 없으면 경과일과 함께 경고.
@@ -18097,22 +18326,81 @@ function rcrActCell(a, c){
       ${esc(l.type||'')} · ${when} · ${esc(l.author||'')}${a.count>1?` · 총 ${a.count}건`:''}</div>`;
 }
 
+// ── 리쿠르팅 칼럼 편의기능: 헤더 드래그=순서 변경 · 우측 모서리 드래그=너비 조절 ──
+// 배치는 이 브라우저의 localStorage에 저장 (사용자 PC별). '칼럼 초기화'로 복원.
+const RCR_COL_LSKEY = 'kbmc_rcr_cols_v1';
+const RCR_COL_DEFS = [
+  {k:'name',     l:'이름',          w:120},
+  {k:'phone',    l:'전화번호',      w:110},
+  {k:'platform', l:'유입',          w:44, center:true},
+  {k:'job',      l:'현재 하는 일',   w:130},
+  {k:'years',    l:'업력',          w:80},
+  {k:'income',   l:'목표 월 수익',   w:100},
+  {k:'needs',    l:'니즈',          w:150},
+  {k:'branch',   l:'담당 지점장',    w:100, adminOnly:true},
+  {k:'stage',    l:'단계',          w:80},
+  {k:'inflow',   l:'유입시각',      w:90},
+  {k:'act',      l:'진행내용',      w:230},
+];
+function _rcrColCfg(){ try{ return JSON.parse(localStorage.getItem(RCR_COL_LSKEY)||'{}')||{}; }catch(e){ return {}; } }
+function _rcrColSave(p){ try{ const c=_rcrColCfg(); Object.assign(c,p); localStorage.setItem(RCR_COL_LSKEY, JSON.stringify(c)); }catch(e){} }
+function rcrColOrder(){
+  const keys = RCR_COL_DEFS.filter(d=>!d.adminOnly || rcrIsAdmin()).map(d=>d.k);
+  const saved = (_rcrColCfg().order||[]).filter(k=>keys.includes(k));
+  keys.forEach(k=>{ if(!saved.includes(k)) saved.push(k); });   // 새 칼럼은 자동으로 뒤에 편입
+  return saved;
+}
+function rcrColW(k){ const d=RCR_COL_DEFS.find(x=>x.k===k)||{}; const w=(_rcrColCfg().w||{})[k]; return Math.max(36, parseInt(w,10)||d.w||100); }
+function rcrColsReset(){ try{ localStorage.removeItem(RCR_COL_LSKEY); }catch(e){} rcrRender(); showToast('칼럼 배치를 초기화했습니다','success'); }
+
 function rcrHeadRow(){
+  const cells = rcrColOrder().map(k=>{
+    const d=RCR_COL_DEFS.find(x=>x.k===k)||{l:k};
+    return `<th data-rcol="${k}" draggable="true"
+      style="padding:9px 10px;text-align:${d.center?'center':'left'};width:${rcrColW(k)}px;min-width:0;position:relative;cursor:grab"
+      title="드래그: 순서 이동 · 우측 모서리: 너비 조절">${d.l}<div class="resizer" style="position:absolute;top:0;right:-2px;bottom:0;width:5px;cursor:col-resize"></div></th>`;
+  }).join('');
   return `<tr>
       ${rcrIsAdmin()?`<th style="padding:9px 8px;width:34px;text-align:center">
         <input type="checkbox" id="rcr-ckall" onchange="rcrSelAll(this.checked)" style="width:14px;height:14px;cursor:pointer"></th>`:''}
-      <th style="padding:9px 12px;text-align:left">이름</th>
-      <th style="padding:9px 10px;text-align:left">전화번호</th>
-      <th style="padding:9px 8px;text-align:center;width:44px">유입</th>
-      <th style="padding:9px 10px;text-align:left">현재 하는 일</th>
-      <th style="padding:9px 10px;text-align:left">업력</th>
-      <th style="padding:9px 10px;text-align:left">목표 월 수익</th>
-      <th style="padding:9px 10px;text-align:left">니즈</th>
-      ${rcrIsAdmin()?'<th style="padding:9px 10px;text-align:left">담당 지점장</th>':''}
-      <th style="padding:9px 10px;text-align:left">단계</th>
-      <th style="padding:9px 10px;text-align:left">유입시각</th>
-      <th style="padding:9px 10px;text-align:left">진행내용</th>
+      ${cells}
     </tr>`;
+}
+
+// 렌더 후 헤더에 리사이즈·드래그 이벤트 연결
+function _rcrHeadWire(){
+  document.querySelectorAll('#rcr-body th[data-rcol]').forEach(th=>{
+    const key = th.dataset.rcol;
+    const rz = th.querySelector('.resizer');
+    if(rz){
+      rz.addEventListener('mousedown', e=>{
+        e.preventDefault(); e.stopPropagation();
+        th.draggable = false;                       // 리사이즈 중 드래그 오발동 방지
+        const sx=e.clientX, sw=th.offsetWidth;
+        const mv=ev=>{ th.style.width=Math.max(36, sw+(ev.clientX-sx))+'px'; };
+        const up=ev=>{
+          document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up);
+          th.draggable = true;
+          const cfg=_rcrColCfg(); const ws=cfg.w||{}; ws[key]=Math.max(36, sw+(ev.clientX-sx)); _rcrColSave({w:ws});
+        };
+        document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
+      });
+    }
+    th.addEventListener('dragstart', e=>{ e.dataTransfer.setData('text/rcol', key); e.dataTransfer.effectAllowed='move'; th.style.opacity='.4'; });
+    th.addEventListener('dragend',   ()=>{ th.style.opacity=''; });
+    th.addEventListener('dragover',  e=>{ if(Array.from(e.dataTransfer.types).includes('text/rcol')){ e.preventDefault(); e.dataTransfer.dropEffect='move'; } });
+    th.addEventListener('drop', e=>{
+      e.preventDefault();
+      const from = e.dataTransfer.getData('text/rcol');
+      if(!from || from===key) return;
+      const order = rcrColOrder();
+      const fi=order.indexOf(from), ti=order.indexOf(key);
+      if(fi<0||ti<0) return;
+      order.splice(fi,1); order.splice(ti,0,from);
+      _rcrColSave({order:order});
+      rcrRender();
+    });
+  });
 }
 
 // ── 선택 · 지점장 배정 ───────────────────────────────────
