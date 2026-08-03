@@ -18389,7 +18389,7 @@ function rcrOpenDetail(id){
 
     <div style="margin-top:12px">
       ${acts.length?acts.map(a=>`<div style="padding:7px 10px;background:var(--gray-50);border-radius:6px;margin-bottom:5px">
-        <div style="font-size:11px;color:var(--gray-400)">${esc(a.type||'')} · ${esc(a.user_name||'')} · ${(a.created_at||'').slice(0,16).replace('T',' ')}</div>
+        <div style="font-size:11px;color:var(--gray-400)">${esc(a.type||'')} · ${esc(a.author||a.user_name||'')} · ${(a.created_at||'').slice(0,16).replace('T',' ')}</div>
         <div style="font-size:12.5px;margin-top:2px">${esc(a.content||'')}</div></div>`).join('')
         :'<div style="font-size:12px;color:var(--gray-300);text-align:center;padding:12px">활동 기록이 없습니다</div>'}
     </div>
@@ -18431,10 +18431,18 @@ async function rcrSetStage(id, stage){
 let allCandActs = [];
 async function rcrLog(cid, type, content){
   try{
+    // activities 실제 스키마: id, lead_id, type, content, stage, author, date, created_at
+    // (user_name/user_role 컬럼은 존재하지 않는다 → 넣으면 INSERT 전체가 400 실패)
     const row = await dbI('activities',{
       candidate_id:cid, lead_id:null, type, content,
-      user_name:curUser?.name||'', user_role:curUser?.role||''
+      author:(curUser&&curUser.name)||'', date:todayKst()
     });
+    if(!row){
+      // candidate_id 컬럼이 없으면 저장 자체가 실패한다 → 원인을 즉시 알린다
+      console.error('[리쿠르팅] 활동기록 저장 실패 — activities.candidate_id 컬럼을 확인하십시오 (recruit_all.sql)');
+      showToast('활동기록 저장 실패 — recruit_all.sql 실행 여부를 확인하십시오','error');
+      return null;
+    }
     // dbI 가 allActivities 에 자동 unshift 하므로 즉시 빼내 전용 캐시로 옮긴다
     if(row){
       if(Array.isArray(allActivities)){
