@@ -18053,7 +18053,7 @@ function rcrOpenDetail(id){
   const row=(l,v)=>`<div style="display:flex;padding:6px 0;border-bottom:1px solid var(--gray-100)">
     <div style="width:88px;flex-shrink:0;font-size:11.5px;color:var(--gray-500);font-weight:700">${l}</div>
     <div style="flex:1;font-size:13px">${v||'-'}</div></div>`;
-  const acts=(allActivities||[]).filter(a=>a.candidate_id===id)
+  const acts=(allCandActs||[]).filter(a=>a.candidate_id===id)
     .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
 
   const nds=(c.needs||'').split(',').map(x=>x.trim()).filter(Boolean);
@@ -18125,13 +18125,35 @@ async function rcrSetStage(id, stage){
   rcrOpenDetail(id); rcrRenderStats(); rcrRender();
 }
 
+// 리쿠르팅 활동은 영업 활동 캐시(allActivities)와 섞지 않는다.
+// 섞이면 통합검색·회수판정·캘린더에 후보자 기록이 노출될 수 있다.
+let allCandActs = [];
 async function rcrLog(cid, type, content){
   try{
-    await dbI('activities',{
+    const row = await dbI('activities',{
       candidate_id:cid, lead_id:null, type, content,
       user_name:curUser?.name||'', user_role:curUser?.role||''
     });
-  }catch(e){ console.warn('rcrLog', e); }
+    // dbI 가 allActivities 에 자동 unshift 하므로 즉시 빼내 전용 캐시로 옮긴다
+    if(row){
+      if(Array.isArray(allActivities)){
+        const i=allActivities.findIndex(a=>a && a.id===row.id);
+        if(i>=0) allActivities.splice(i,1);
+      }
+      allCandActs.unshift(row);
+    }
+    return row;
+  }catch(e){ console.warn('rcrLog', e); return null; }
+}
+// 후보 활동 로드 (candidates 화면 진입 시 1회)
+async function loadCandActs(){
+  try{
+    if(typeof testMode!=='undefined' && testMode){
+      allCandActs=(lg('activities')||[]).filter(a=>a&&a.candidate_id); return;
+    }
+    const rows = await sbGet('activities?select=*&candidate_id=not.is.null&order=created_at.desc&limit=1000');
+    allCandActs = Array.isArray(rows)?rows:[];
+  }catch(e){ console.warn('loadCandActs', e); allCandActs=[]; }
 }
 
 async function rcrAddAct(id){
@@ -18249,13 +18271,17 @@ function rcrPick(row, key){
   return '';
 }
 
+// Meta 리드 다운로드 파일과 동일한 헤더·시트명(Sheet1) 구조
 function rcrDownloadTemplate(){
   try{
     const H=[RCR_H.inflow,RCR_H.platform,RCR_H.job,RCR_H.years,RCR_H.needs,RCR_H.income,RCR_H.name,RCR_H.phone];
     const ws=XLSX.utils.aoa_to_sheet([H,
-      ['2026. 8. 3 오전 2:12:28','ig','정책자금','3개월-6개월_미만','소개/DB가 부족함','월_3천만원_~_월_5천만원','홍길동','1076158924']]);
-    const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'후보');
-    XLSX.writeFile(wb,'리쿠르팅_업로드양식.xlsx');
+      ['2026. 8. 2 오후 2:51:00','ig','정책자금','없음','소개/DB가 부족함','월_1천만원_~_월_3천만원','태건호','1086627557'],
+      ['2026. 8. 2 오후 7:53:16','fb','법인영업','3년_이상','시스템 부재','월_3천만원_~_월_5천만원','김영일','1092703489'],
+      ['2026. 8. 3 오전 8:18:09','fb','법인영업,개인보험','3년_이상','시스템 부재','월_1억_이상','최성진','1032687799']]);
+    ws['!cols']=[{wch:22},{wch:9},{wch:18},{wch:16},{wch:22},{wch:22},{wch:12},{wch:14}];
+    const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Sheet1');
+    XLSX.writeFile(wb,`리쿠르팅-${todayKst().replace(/-/g,'')}.xlsx`);
   }catch(e){ showToast('양식 생성 실패','error'); }
 }
 
@@ -18271,7 +18297,7 @@ async function rcrUpload(input){
     const norm=(p)=>String(p||'').replace(/[^0-9]/g,'');
     const exist=new Set((allCandidates||[]).filter(c=>c.status!=='deleted').map(c=>norm(c.phone)));
     const seen=new Set();
-    let added=0, dup=0, test=0, bad=0;
+    let added=0, dup=0, test=0, bad=0, saveFail=0;
     const errs=[];
 
     for(let i=0;i<rows.length;i++){
@@ -18295,13 +18321,23 @@ async function rcrUpload(input){
         source:'meta', stage:'신규', status:'active'
       });
       if(row){ allCandidates.unshift(row); seen.add(np); added++; }
-      else { bad++; if(errs.length<5) errs.push(`${i+2}행: 저장 실패`); }
+      else {
+        bad++; saveFail++;
+        if(errs.length<5) errs.push(`${i+2}행 ${name}: DB 저장 실패`);
+        // 첫 건이 저장 실패하면 컬럼 누락일 가능성이 높다 → 즉시 중단해 시간 낭비를 막는다
+        if(saveFail===1 && added===0 && i<rows.length-1){
+          showToast('DB 저장에 실패했습니다. recruit2.sql 을 실행했는지 확인하십시오 (F12 콘솔에 상세 원인)','error');
+          console.error('[리쿠르팅] 첫 행부터 저장 실패 — candidates 테이블에 platform/biz_years/needs/target_income 컬럼이 없을 수 있습니다. recruit2.sql 실행 필요.');
+          rcrRenderStats(); rcrRender();
+          return;
+        }
+      }
     }
     let msg=`신규 ${added}건`;
     if(dup)  msg+=` / 중복 ${dup}건`;
     if(test) msg+=` / 테스트리드 ${test}건 제외`;
     if(bad)  msg+=` / 오류 ${bad}건`;
-    showToast('업로드 완료 — '+msg, bad?'warn':'success');
+    showToast('업로드 완료 — '+msg, bad?'error':'success');
     if(errs.length) console.warn('[리쿠르팅 업로드 오류]\n'+errs.join('\n'));
     rcrRenderStats(); rcrRender();
   }catch(e){ console.warn(e); showToast('업로드 실패 — 양식을 확인하세요','error'); }
@@ -18326,6 +18362,7 @@ function rcrExport(){
 async function initRecruit(){
   if(!rcrCanUse()) return;
   if(!allCandidates.length) await loadCandidates();
+  if(!allCandActs.length) await loadCandActs();
   rcrRenderStats(); rcrRender();
 }
 
