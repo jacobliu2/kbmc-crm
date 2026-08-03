@@ -1837,7 +1837,31 @@ body.dark-mode *::-webkit-scrollbar-thumb:hover{background:rgba(180,208,232,.30)
         <option value="">전체 목표수익</option></select>
       <select id="rcr-branch" onchange="rcrRender()" style="display:none;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:var(--r-sm);font-size:13px;font-family:inherit"></select>
     </div>
+    <div id="rcr-bulk" style="display:none;align-items:center;gap:10px;padding:9px 14px;margin-bottom:10px;
+      background:rgba(30,41,82,.05);border:1.5px solid var(--navy);border-radius:var(--r-sm)">
+      <span id="rcr-bulk-cnt" style="font-size:13px;font-weight:800;color:var(--navy)"></span>
+      <button class="btn btn-primary btn-sm" onclick="rcrOpenAssign()">지점장 배정</button>
+      <button class="btn btn-outline btn-sm" onclick="rcrClearSel()">선택 해제</button>
+    </div>
     <div id="rcr-body"></div>
+  </div>
+</div>
+
+<!-- 지점장 배정 -->
+<div class="modal-overlay" id="modal-rcr-assign">
+  <div class="modal" style="width:420px;max-width:96vw">
+    <div class="modal-head"><div class="modal-title">지점장 배정</div>
+      <button class="modal-x" onclick="closeM('modal-rcr-assign')">&times;</button></div>
+    <div class="modal-body">
+      <div id="rcr-as-sub" style="font-size:12px;color:var(--gray-500);margin-bottom:12px"></div>
+      <div id="rcr-as-cards" style="display:flex;flex-direction:column;gap:7px"></div>
+      <div style="margin-top:12px"><label class="fl">배정 메모 <span style="font-weight:400;opacity:.7">(선택)</span></label>
+        <input id="rcr-as-note" class="fi" placeholder="활동 기록에 함께 남습니다"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeM('modal-rcr-assign')">취소</button>
+      <button class="btn btn-primary" onclick="rcrDoAssign()">배정 확정</button>
+    </div>
   </div>
 </div>
 
@@ -17781,6 +17805,8 @@ function rcrRender(){
   };
   el.innerHTML=`<div class="tbl-wrap"><table style="font-size:12.5px;width:100%">
     <thead><tr>
+      ${rcrIsAdmin()?`<th style="padding:9px 8px;width:34px;text-align:center">
+        <input type="checkbox" id="rcr-ckall" onchange="rcrSelAll(this.checked)" style="width:14px;height:14px;cursor:pointer"></th>`:''}
       <th style="padding:9px 12px;text-align:left">이름</th>
       <th style="padding:9px 10px;text-align:left">전화번호</th>
       <th style="padding:9px 8px;text-align:center;width:44px">유입</th>
@@ -17796,7 +17822,10 @@ function rcrRender(){
       const pf=(c.platform||'').toLowerCase();
       const pfc= pf==='ig'?'#c13584' : pf==='fb'?'#1877f2' : 'var(--gray-400)';
       const inf=(c.inflow_at||c.created_at||'');
-      return `<tr style="cursor:pointer" onclick="rcrOpenDetail('${c.id}')">
+      const sel=_rcrSel.has(c.id);
+      return `<tr style="cursor:pointer;background:${sel?'rgba(30,41,82,.04)':'transparent'}" onclick="rcrOpenDetail('${c.id}')">
+        ${rcrIsAdmin()?`<td style="padding:9px 8px;text-align:center" onclick="event.stopPropagation()">
+          <input type="checkbox" ${sel?'checked':''} onchange="rcrToggleSel('${c.id}',this.checked)" style="width:14px;height:14px;cursor:pointer"></td>`:''}
         <td style="padding:9px 12px;font-weight:700">${esc(c.name||'-')}</td>
         <td style="padding:9px 10px;white-space:nowrap">${esc(rcrPhone(c.phone||''))}</td>
         <td style="padding:9px 8px;text-align:center">${pf?`<span style="font-size:10.5px;font-weight:800;color:${pfc}">${esc(pf)}</span>`:'-'}</td>
@@ -17808,6 +17837,117 @@ function rcrRender(){
         <td style="padding:9px 10px"><span class="rcr-sb" style="background:${RCR_COLOR[st]}1a;color:${RCR_COLOR[st]}">${st}</span></td>
         <td style="padding:9px 10px;color:var(--gray-400);font-size:11px;white-space:nowrap">${inf.slice(0,10)}<br><span style="opacity:.7">${inf.slice(11,16)}</span></td>
       </tr>`;}).join('')}</tbody></table></div>`;
+  _rcrVisible = rows.map(r=>r.id);
+  rcrSyncBulk();
+}
+
+// ── 선택 · 지점장 배정 ───────────────────────────────────
+let _rcrSel = new Set();
+let _rcrVisible = [];
+let _rcrAsPick = '';
+
+function rcrToggleSel(id, on){
+  if(on) _rcrSel.add(id); else _rcrSel.delete(id);
+  rcrSyncBulk();
+  const ck=document.getElementById('rcr-ckall');
+  if(ck) ck.checked = _rcrVisible.length>0 && _rcrVisible.every(x=>_rcrSel.has(x));
+}
+function rcrSelAll(on){
+  _rcrVisible.forEach(id=>{ if(on) _rcrSel.add(id); else _rcrSel.delete(id); });
+  rcrRender();
+}
+function rcrClearSel(){ _rcrSel.clear(); rcrRender(); }
+
+function rcrSyncBulk(){
+  const bar=document.getElementById('rcr-bulk'); if(!bar) return;
+  // 지점장은 배정 권한 없음 (본인 담당분만 보므로 배정 개념이 없다)
+  if(!rcrIsAdmin() || _rcrSel.size===0){ bar.style.display='none'; return; }
+  bar.style.display='flex';
+  const el=document.getElementById('rcr-bulk-cnt');
+  if(el) el.textContent = `${_rcrSel.size}명 선택됨`;
+}
+
+// 상세에서 단건 배정
+function rcrAssignOne(id){
+  _rcrSel = new Set([id]);
+  closeM('modal-rcr-detail');
+  rcrOpenAssign();
+}
+function rcrOpenAssign(){
+  if(!rcrIsAdmin()){ showToast('관리자만 배정할 수 있습니다','error'); return; }
+  if(!_rcrSel.size){ showToast('배정할 후보를 선택하세요','error'); return; }
+  _rcrAsPick='';
+  const names=[...(_rcrSel)].map(id=>(allCandidates||[]).find(c=>c.id===id)?.name).filter(Boolean);
+  const sub=document.getElementById('rcr-as-sub');
+  if(sub) sub.innerHTML=`선택 <strong>${_rcrSel.size}명</strong> — ${esc(names.slice(0,4).join(', '))}${names.length>4?` 외 ${names.length-4}명`:''}`;
+
+  // 지점장별 현재 담당 인원수 함께 표시 (배분 균형 판단용)
+  const load={};
+  (allCandidates||[]).filter(c=>c.status!=='deleted' && !['영입','이탈'].includes(c.stage||''))
+    .forEach(c=>{ if(c.branch_name) load[c.branch_name]=(load[c.branch_name]||0)+1; });
+
+  const wrap=document.getElementById('rcr-as-cards');
+  if(wrap) wrap.innerHTML = rcrBranchList().map(n=>`
+    <label onclick="rcrPickBranch('${escJs?escJs(n):n}')" data-b="${esc(n)}"
+      style="display:flex;align-items:center;gap:10px;padding:11px 14px;border:1.5px solid var(--gray-200);
+      border-radius:var(--r-sm);cursor:pointer" class="rcr-as-card">
+      <input type="radio" name="rcr-as" style="accent-color:var(--navy)">
+      <div style="flex:1"><div style="font-size:13px;font-weight:700">${esc(n)}</div>
+        <div style="font-size:11px;color:var(--gray-400)">현재 진행중 ${load[n]||0}명</div></div>
+    </label>`).join('') +
+    `<label onclick="rcrPickBranch('')" data-b="" class="rcr-as-card"
+      style="display:flex;align-items:center;gap:10px;padding:11px 14px;border:1.5px solid var(--gray-200);
+      border-radius:var(--r-sm);cursor:pointer">
+      <input type="radio" name="rcr-as" style="accent-color:var(--err)">
+      <div style="flex:1"><div style="font-size:13px;font-weight:700;color:var(--err)">배정 해제</div>
+        <div style="font-size:11px;color:var(--gray-400)">미배정 상태로 되돌립니다</div></div>
+    </label>`;
+  const note=document.getElementById('rcr-as-note'); if(note) note.value='';
+  openM('modal-rcr-assign');
+}
+
+function rcrPickBranch(n){
+  _rcrAsPick=n;
+  document.querySelectorAll('.rcr-as-card').forEach(el=>{
+    const on = (el.dataset.b||'')===n;
+    el.style.borderColor = on ? 'var(--navy)' : 'var(--gray-200)';
+    el.style.background  = on ? 'rgba(30,41,82,.04)' : '#fff';
+    const r=el.querySelector('input'); if(r) r.checked=on;
+  });
+}
+
+async function rcrDoAssign(){
+  if(!rcrIsAdmin()){ showToast('관리자만 가능합니다','error'); return; }
+  const ids=[..._rcrSel];
+  if(!ids.length){ showToast('선택된 후보가 없습니다','error'); return; }
+  const picked=_rcrAsPick;
+  const hasRadio=[...document.querySelectorAll('.rcr-as-card input')].some(r=>r.checked);
+  if(!hasRadio){ showToast('배정할 지점장을 선택하세요','error'); return; }
+
+  const note=document.getElementById('rcr-as-note')?.value.trim()||'';
+  const label = picked || '미배정';
+  if(!confirm(`${ids.length}명을 ${picked?picked+' 지점장에게 배정':'미배정 상태로 해제'}합니다.\n진행하시겠습니까?`)) return;
+
+  const now=new Date().toISOString();
+  let ok=0, fail=0;
+  for(const id of ids){
+    const c=(allCandidates||[]).find(x=>x.id===id); if(!c) continue;
+    const before=c.branch_name||'미배정';
+    const patch = picked
+      ? { branch_name:picked, assigned_at:now }
+      : { branch_name:'',     assigned_at:null };
+    const r=await dbU('candidates',id,patch);
+    if(!r){ fail++; continue; }
+    const i=allCandidates.findIndex(x=>x.id===id);
+    if(i>=0) allCandidates[i]={...allCandidates[i],...patch};
+    await rcrLog(id,'system',`지점장 배정 ${before} → ${label}`+(note?` (${note})`:''));
+    ok++;
+  }
+  closeM('modal-rcr-assign');
+  _rcrSel.clear();
+  if(fail) showToast(`배정 ${ok}명 완료 / ${fail}명 실패 — 실패분은 반영되지 않았습니다`,'error');
+  else     showToast(`${ok}명 ${picked?picked+' 지점장 배정 완료':'배정 해제 완료'}`,'success');
+  rcrRenderStats(); rcrRender();
 }
 
 // ── 등록/수정 폼 ─────────────────────────────────────────
@@ -17957,6 +18097,7 @@ function rcrOpenDetail(id){
 
     <div style="display:flex;gap:6px;margin-top:16px;flex-wrap:wrap">
       <button class="btn btn-outline btn-sm" onclick="closeM('modal-rcr-detail');rcrOpenForm('${id}')">정보 수정</button>
+      ${rcrIsAdmin()?`<button class="btn btn-outline btn-sm" onclick="rcrAssignOne('${id}')">지점장 배정</button>`:''}
       ${(c.stage!=='영입')?`<button class="btn btn-primary btn-sm" onclick="rcrOpenHire('${id}')">영입 확정</button>`:''}
       ${rcrIsAdmin()?`<button class="btn btn-outline btn-sm" style="color:var(--err);border-color:var(--err)" onclick="rcrSoftDelete('${id}')">삭제</button>`:''}
     </div>`;
