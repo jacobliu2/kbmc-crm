@@ -17665,6 +17665,47 @@ function rcrPhone(v){
   if(p.length===10) return p.slice(0,3)+'-'+p.slice(3,6)+'-'+p.slice(6);
   return p;
 }
+// ── DB 저장 래퍼 (컬럼 누락 자동 진단) ────────────────────
+// SQL 미실행으로 컬럼이 없으면 PostgREST 가 INSERT/PATCH 전체를 400 으로 거부한다.
+// 확장 필드를 단계적으로 걷어내며 재시도해, 어떤 상태에서도 저장은 되게 한다.
+const RCR_EXT3 = ['phone_key','reapply_count','first_applied_at','last_applied_at',
+                  'talent_pool','dropped_at','drop_stage','deleted_at','deleted_by','delete_reason'];
+const RCR_EXT2 = ['platform','biz_years','needs','target_income','lead_uid'];
+let _rcrSqlWarned = 0;   // 0=미확인 1=recruit3 필요 2=recruit2 필요
+
+function rcrStrip(o, keys){
+  const r={}; Object.keys(o||{}).forEach(k=>{ if(!keys.includes(k)) r[k]=o[k]; });
+  return r;
+}
+function rcrSqlNotice(level){
+  if(_rcrSqlWarned>=level) return;
+  _rcrSqlWarned=level;
+  const msg = level===2
+    ? 'DB에 Meta 항목 컬럼이 없습니다 — recruit_all.sql 을 실행하십시오 (유입경로·업력·니즈·목표수익이 저장되지 않습니다)'
+    : 'DB에 추적 컬럼이 없습니다 — recruit3.sql 을 실행하십시오 (재지원·인재풀 기능이 동작하지 않습니다)';
+  showToast(msg,'error');
+  console.error('[리쿠르팅] '+msg);
+}
+
+async function rcrIns(data){
+  let row = await dbI('candidates', data);
+  if(row) return row;
+  row = await dbI('candidates', rcrStrip(data, RCR_EXT3));
+  if(row){ rcrSqlNotice(1); return row; }
+  row = await dbI('candidates', rcrStrip(data, [...RCR_EXT3, ...RCR_EXT2]));
+  if(row){ rcrSqlNotice(2); return row; }
+  return null;
+}
+async function rcrUpd(id, data){
+  let ok = await dbU('candidates', id, data);
+  if(ok) return true;
+  ok = await dbU('candidates', id, rcrStrip(data, RCR_EXT3));
+  if(ok){ rcrSqlNotice(1); return true; }
+  ok = await dbU('candidates', id, rcrStrip(data, [...RCR_EXT3, ...RCR_EXT2]));
+  if(ok){ rcrSqlNotice(2); return true; }
+  return false;
+}
+
 // ── 동일인 추적 ───────────────────────────────────────────
 // 식별 기준: ① 전화번호(정규화) 완전일치 = 확정 동일인
 //            ② 이름 동일 + 뒷 4자리 동일 = 동일인 의심 (번호 변경 가능성)
@@ -18031,7 +18072,7 @@ async function rcrBulkDelete(){
   for(const id of alive){
     const patch={ status:'deleted', deleted_at:now,
                   deleted_by:curUser?.name||'', delete_reason:reason.trim() };
-    const r=await dbU('candidates',id,patch);
+    const r=await rcrUpd(id,patch);
     if(!r){ fail.push(id); continue; }
     const i=allCandidates.findIndex(x=>x.id===id);
     if(i>=0) allCandidates[i]={...allCandidates[i],...patch};
@@ -18058,7 +18099,7 @@ async function rcrBulkPool(){
     const c=(allCandidates||[]).find(x=>x.id===id); if(!c) continue;
     const patch={ stage:'이탈', talent_pool:true, dropped_at:now,
                   drop_stage:c.stage||'신규', drop_reason:(reason||'').trim() };
-    const r=await dbU('candidates',id,patch);
+    const r=await rcrUpd(id,patch);
     if(!r){ fail.push(id); continue; }
     const i=allCandidates.findIndex(x=>x.id===id);
     if(i>=0) allCandidates[i]={...allCandidates[i],...patch};
@@ -18140,7 +18181,7 @@ async function rcrDoAssign(){
     const patch = picked
       ? { branch_name:picked, assigned_at:now }
       : { branch_name:'',     assigned_at:null };
-    const r=await dbU('candidates',id,patch);
+    const r=await rcrUpd(id,patch);
     if(!r){ fail++; continue; }
     const i=allCandidates.findIndex(x=>x.id===id);
     if(i>=0) allCandidates[i]={...allCandidates[i],...patch};
@@ -18246,8 +18287,8 @@ async function rcrSaveForm(){
         first_applied_at:_reapply.first_applied_at||_reapply.inflow_at||_reapply.created_at,
         last_applied_at:new Date().toISOString(),
         inflow_at:data.inflow_at||new Date().toISOString() };
-      const ok=await dbU('candidates',_reapply.id,p);
-      if(!ok){ showToast('저장 실패 — 반영되지 않았습니다','error'); return; }
+      const ok=await rcrUpd(_reapply.id,p);
+      if(!ok){ showToast('저장 실패 — DB에 반영되지 않았습니다. F12 콘솔의 sbPost/sbPatch err 메시지를 확인하십시오','error'); return; }
       const i=allCandidates.findIndex(c=>c.id===_reapply.id);
       if(i>=0) allCandidates[i]={...allCandidates[i],...p};
       await rcrLog(_reapply.id,'system',
@@ -18256,8 +18297,8 @@ async function rcrSaveForm(){
       rcrRenderStats(); rcrRender(); return;
     }
     if(id){
-      const ok=await dbU('candidates',id,data);
-      if(!ok){ showToast('저장 실패 — 반영되지 않았습니다','error'); return; }
+      const ok=await rcrUpd(id,data);
+      if(!ok){ showToast('저장 실패 — DB에 반영되지 않았습니다. F12 콘솔의 sbPost/sbPatch err 메시지를 확인하십시오','error'); return; }
       const i=allCandidates.findIndex(c=>c.id===id);
       if(i>=0) allCandidates[i]={...allCandidates[i],...data};
       showToast('수정 완료','success');
@@ -18268,8 +18309,8 @@ async function rcrSaveForm(){
       data.reapply_count=0; data.talent_pool=false;
       if(!rcrIsAdmin()){ data.branch_name=curUser?.name||''; data.assigned_at=new Date().toISOString(); }
       else if(data.branch_name) data.assigned_at=new Date().toISOString();
-      const row=await dbI('candidates',data);
-      if(!row){ showToast('저장 실패 — 반영되지 않았습니다','error'); return; }
+      const row=await rcrIns(data);
+      if(!row){ showToast('저장 실패 — DB에 반영되지 않았습니다. F12 콘솔의 sbPost/sbPatch err 메시지를 확인하십시오','error'); return; }
       allCandidates.unshift(row);
       showToast('후보 등록 완료','success');
     }
@@ -18376,8 +18417,8 @@ async function rcrSetStage(id, stage){
   } else {
     patch.talent_pool=false;
   }
-  const ok=await dbU('candidates',id,patch);
-  if(!ok){ showToast('저장 실패 — 반영되지 않았습니다','error'); return; }
+  const ok=await rcrUpd(id,patch);
+  if(!ok){ showToast('저장 실패 — DB에 반영되지 않았습니다. F12 콘솔의 sbPost/sbPatch err 메시지를 확인하십시오','error'); return; }
   const i=allCandidates.findIndex(x=>x.id===id);
   if(i>=0) allCandidates[i]={...allCandidates[i],...patch};
   await rcrLog(id, 'system', `단계 변경 → ${stage}`+(patch.drop_reason?` (${patch.drop_reason})`:''));
@@ -18424,7 +18465,7 @@ async function rcrAddAct(id){
   // 신규 상태에서 첫 접촉 기록이면 접촉 단계로 자동 이동
   const c=(allCandidates||[]).find(x=>x.id===id);
   if(c && (c.stage||'신규')==='신규' && ['전화','면담','문자'].includes(t)){
-    await dbU('candidates',id,{stage:'접촉'});
+    await rcrUpd(id,{stage:'접촉'});
     const i=allCandidates.findIndex(x=>x.id===id);
     if(i>=0) allCandidates[i].stage='접촉';
   }
@@ -18435,7 +18476,7 @@ async function rcrAddAct(id){
 async function rcrSoftDelete(id){
   if(!rcrIsAdmin()){ showToast('관리자만 가능합니다','error'); return; }
   if(!confirm('이 후보를 삭제하시겠습니까?\n(기록은 보존되며 목록에서만 숨겨집니다)')) return;
-  const ok=await dbU('candidates',id,{status:'deleted'});
+  const ok=await rcrUpd(id,{status:'deleted'});
   if(!ok){ showToast('삭제 실패','error'); return; }
   const i=allCandidates.findIndex(x=>x.id===id);
   if(i>=0) allCandidates[i].status='deleted';
@@ -18503,7 +18544,7 @@ async function rcrConfirmHire(){
     }
     // ② 후보 상태 갱신
     const patch={stage:'영입', hired_at:hdate, account_id:uid, branch_name:branch};
-    const ok2=await dbU('candidates',cid,patch);
+    const ok2=await rcrUpd(cid,patch);
     if(!ok2) showToast('계정은 생성됐으나 후보 상태 저장에 실패했습니다','warn');
     const i=allCandidates.findIndex(x=>x.id===cid);
     if(i>=0) allCandidates[i]={...allCandidates[i],...patch};
@@ -18608,7 +18649,7 @@ async function rcrUpload(input){
           target_income: rcrClean(rcrPick(r,RCR_H.income)),
           phone_key:np
         };
-        const _r2 = await dbU('candidates',_prev.id,_p);
+        const _r2 = await rcrUpd(_prev.id,_p);
         if(_r2){
           const _i=allCandidates.findIndex(c=>c.id===_prev.id);
           if(_i>=0) allCandidates[_i]={...allCandidates[_i],..._p};
@@ -18619,7 +18660,7 @@ async function rcrUpload(input){
         continue;
       }
 
-      const row=await dbI('candidates',{
+      const row=await rcrIns({
         name, phone,
         platform:      rcrClean(rcrPick(r,RCR_H.platform)).toLowerCase(),
         current_job:   rcrClean(rcrPick(r,RCR_H.job)),
@@ -24350,7 +24391,7 @@ async function rpTransferOne(id){
   try{
     const patch=_rpBuildTransferPatch(lead.auto_recall_reason, lead);
     const ok = await dbU('leads',id,patch);
-    if(!ok){ showToast('저장 실패 — 반영되지 않았습니다','error'); return; }
+    if(!ok){ showToast('저장 실패 — DB에 반영되지 않았습니다. F12 콘솔의 sbPost/sbPatch err 메시지를 확인하십시오','error'); return; }
     await logActivity(id,'assign','회수목록 → 대전TM 최종 이관','assigned','');
     _rpPatchLocal(id, patch);
     _rpSelected.delete(id);
@@ -24369,7 +24410,7 @@ async function rpRevertOne(id){
     const now=new Date().toISOString();
     const patch={recall_pending:false, auto_recalled:false, auto_recall_reason:null, auto_recall_at:null, updated_at:now};
     const ok = await dbU('leads',id,patch);
-    if(!ok){ showToast('저장 실패 — 반영되지 않았습니다','error'); return; }
+    if(!ok){ showToast('저장 실패 — DB에 반영되지 않았습니다. F12 콘솔의 sbPost/sbPatch err 메시지를 확인하십시오','error'); return; }
     await logActivity(id,'assign',`↩ 회수목록 원복 → ${lead.team_name||'원래 팀장'} 복귀`,'assigned','');
     _rpPatchLocal(id, patch);
     _rpSelected.delete(id);
