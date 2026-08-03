@@ -5404,7 +5404,11 @@ async function sbPatch(table,id,data,_retry=0){
   try{
     const r=await fetch(SB_URL+'/rest/v1/'+table+'?id=eq.'+id,{method:'PATCH',headers:sbH(),body:JSON.stringify(data)});
     if(r.status===401 || r.status===403){ handleAuthFailure(); return false; }  // ★ 인증실패
-    if(!r.ok){ console.error('sbPatch err:',r.status); return false; }
+    if(!r.ok){
+      let _b=''; try{ _b=await r.text(); }catch(_){}
+      console.error('sbPatch err:',r.status, table, _b.slice(0,300), data);
+      return false;
+    }
     return true;
   }catch(e){
     if(_retry<2){
@@ -24884,7 +24888,11 @@ async function confirmDistribute(){
       if(!confirm(_msg)) return;
     }
     closeOv('ov-distribute'); clearSel();
-    await Promise.all(ids.flatMap(id=>{
+    // 저장 성공을 확인한 뒤에만 로컬 캐시를 갱신한다.
+    // (기존엔 결과를 버리고 낙관적으로 갱신 → 서버 저장이 실패해도 성공처럼 보이고,
+    //  새로고침하면 원래 상태로 되돌아왔다)
+    let _okN=0; const _failIds=[];
+    for(const id of ids){
       const _r=_buildRedistUpdate(id);
       const _now=new Date().toISOString();
       const _lead = (allLeads||[]).find(r=>r.id===id);
@@ -24900,18 +24908,41 @@ async function confirmDistribute(){
                   tm_transferred_at:_now,assigned_at:_now,distributed_at:_r.distributed_at};
         _logMsg = '대전TM센터 추가관리'+(note?' ('+note+')':'');
       }
+      let _saved = await dbU('leads',id,djData);
+      if(!_saved && _isFull){
+        // 폴백: 확장 컬럼(recall_pending·pre_transfer_* 등)이 DB에 없으면 PATCH 전체가 400으로 실패한다.
+        // 이관의 본질인 소속 컬럼만으로 재시도해 최소한 이관은 성사시킨다.
+        const _core = {
+          branch_name:'대전', team_name:'대전센터',
+          team_names:JSON.stringify(['대전센터']),
+          tm_transferred:true, assigned_at:djData.assigned_at||new Date().toISOString(),
+          status:'assigned', collab_branches:null,
+          distributed_at:djData.distributed_at
+        };
+        _saved = await dbU('leads',id,_core);
+        if(_saved){
+          djData = _core;
+          console.warn('[대전이관] 확장 컬럼 없이 재시도 성공 —', id,
+                       '→ fix_transfer.sql 을 실행하면 원복 기능까지 정상 동작합니다');
+        }
+      }
+      if(!_saved){ _failIds.push(id); continue; }   // 실패분은 캐시도 건드리지 않는다
       if(allLeads){const i=allLeads.findIndex(r=>r.id===id);if(i>=0)allLeads[i]={...allLeads[i],...djData};}
       if(typeof _allLeadsRaw!=='undefined' && _allLeadsRaw){
         const ri=_allLeadsRaw.findIndex(r=>r.id===id);
         if(ri>=0)_allLeadsRaw[ri]={..._allLeadsRaw[ri],...djData};
       }
-      return [
-        dbU('leads',id,djData),
-        logActivity(id,'assign',_logMsg,'',''),
-        _logRedist(id, _r.prevDist, _r.distributed_at)
-      ];
-    }));
-    showToast(`${ids.length}건 대전TM ${_isFull?'완전이관':'추가관리'} 완료`,'success');
+      await logActivity(id,'assign',_logMsg,'','');
+      await _logRedist(id, _r.prevDist, _r.distributed_at);
+      _okN++;
+    }
+    if(_failIds.length){
+      const _names=_failIds.slice(0,3).map(id=>(allLeads||[]).find(l=>l.id===id)?.company_name||id);
+      showToast(`${_okN}건 완료 / ${_failIds.length}건 저장 실패 — 반영되지 않았습니다 (${_names.join(', ')}${_failIds.length>3?' 외':''})`,'error');
+      console.error('[대전이관 저장 실패] 대상:', _failIds, '— 콘솔의 sbPatch err 메시지를 확인하십시오');
+    } else {
+      showToast(`${_okN}건 대전TM ${_isFull?'완전이관':'추가관리'} 완료`,'success');
+    }
     filterLeads(); updateLeadsSubTabCounts();
     if(typeof _updatePendingCount==='function') _updatePendingCount();
     return;
