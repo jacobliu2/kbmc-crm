@@ -1144,16 +1144,16 @@ body.dark-mode *::-webkit-scrollbar-thumb:hover{background:rgba(180,208,232,.30)
         <span id="msg-badge" style="display:none;position:absolute;top:2px;right:2px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--err);color:#fff;font-size:9px;font-weight:700;align-items:center;justify-content:center;line-height:16px;text-align:center"></span>
       </div>
       <!-- KBMC브리핑 -->
-      <button id="kbrief-btn" onclick="openKbmcBrief()" title="KBMC브리핑" style="position:relative;display:inline-flex;align-items:center;gap:5px;padding:5px 11px;background:var(--gray-100);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;font-weight:700;color:var(--navy);cursor:pointer;transition:all .15s;white-space:nowrap;flex-shrink:0;margin-right:4px" onmouseover="this.style.background='var(--navy)';this.style.color='#fff';this.style.borderColor='var(--navy)'" onmouseout="this.style.background='var(--gray-100)';this.style.color='var(--navy)';this.style.borderColor='var(--gray-200)'"><svg class="li" viewBox="0 0 24 24"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.2-3"/></svg>KBMC브리핑<span id="kbrief-dot" style="display:none;position:absolute;top:0;right:0;width:9px;height:9px;border-radius:50%;background:var(--err);border:2px solid #fff"></span></button>
+      <button id="kbrief-btn" onclick="openKbmcBrief()" title="KBMC브리핑" style="position:relative;display:inline-flex;align-items:center;gap:5px;padding:5px 11px;background:var(--gray-100);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;font-weight:700;color:var(--navy);cursor:pointer;transition:all .15s;white-space:nowrap;flex-shrink:0;margin-right:4px" onmouseover="this.style.background='var(--navy)';this.style.color='#fff';this.style.borderColor='var(--navy)'" onmouseout="this.style.background='var(--gray-100)';this.style.color='var(--navy)';this.style.borderColor='var(--gray-200)'"><svg class="li" viewBox="0 0 24 24"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.2-3"/></svg><span id="kbrief-dot" style="display:none;position:absolute;top:0;right:0;width:9px;height:9px;border-radius:50%;background:var(--err);border:2px solid #fff"></span></button>
       <!-- 사용자 메뉴 -->
       <a href="https://dbckd6359.wixsite.com/my-site-2" target="_blank" rel="noopener"
         title="생각창고 — 자가진단 · 재무분석"
         style="display:inline-flex;align-items:center;gap:5px;padding:5px 11px;background:var(--gray-100);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;font-weight:700;color:var(--navy);text-decoration:none;cursor:pointer;transition:all .15s;white-space:nowrap;flex-shrink:0;margin-right:4px"
         onmouseover="this.style.background='var(--navy)';this.style.color='#fff';this.style.borderColor='var(--navy)'"
         onmouseout="this.style.background='var(--gray-100)';this.style.color='var(--navy)';this.style.borderColor='var(--gray-200)'">
-        <svg class="li" viewBox="0 0 24 24"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1h6c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/></svg>생각창고
+        <svg class="li" viewBox="0 0 24 24"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1h6c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/></svg>
       </a>
-      <button id="help-btn" onclick="openManual()" title="사용자 매뉴얼" style="display:inline-flex;align-items:center;gap:5px;padding:5px 11px;background:var(--gray-100);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;font-weight:700;color:var(--navy);cursor:pointer;transition:all .15s;white-space:nowrap;flex-shrink:0;margin-right:2px" onmouseover="this.style.background='var(--navy)';this.style.color='#fff';this.style.borderColor='var(--navy)'" onmouseout="this.style.background='var(--gray-100)';this.style.color='var(--navy)';this.style.borderColor='var(--gray-200)'"><svg class="li" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>사용자 매뉴얼</button>
+      <button id="help-btn" onclick="openManual()" title="사용자 매뉴얼" style="display:inline-flex;align-items:center;gap:5px;padding:5px 11px;background:var(--gray-100);border:1.5px solid var(--gray-200);border-radius:20px;font-size:12px;font-weight:700;color:var(--navy);cursor:pointer;transition:all .15s;white-space:nowrap;flex-shrink:0;margin-right:2px" onmouseover="this.style.background='var(--navy)';this.style.color='#fff';this.style.borderColor='var(--navy)'" onmouseout="this.style.background='var(--gray-100)';this.style.color='var(--navy)';this.style.borderColor='var(--gray-200)'"><svg class="li" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></button>
         <div id="user-btn" onclick="toggleUserDrop()">
         <div id="user-avatar"></div>
         <span id="user-name"></span>
@@ -5934,7 +5934,7 @@ function startIdleTimer(){
 
 // ── 앱 시작 ──────────────────────────────────────────────
 const NAV_CFG = {
-  admin:[{id:'admin',l:'<svg class="li" viewBox="0 0 24 24"><path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="6"/><rect x="12" y="7" width="3" height="10"/><rect x="17" y="13" width="3" height="4"/></svg>대시보드'},{id:'leads',l:'<svg class="li" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>DB관리'},{id:'stage-dashboard',l:'<svg class="li" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>영업관리'},{id:'recruit',l:'<svg class="li" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>리쿠르팅'},{id:'users',l:'<svg class="li" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13A4 4 0 0 1 16 11"/></svg>사용자 관리'},{id:'activity',l:'<svg class="li" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>캘린더'},{id:'settings',l:'<svg class="li" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.8 1.2V21a2 2 0 0 1-4 0v-.1A1.6 1.6 0 0 0 8 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.2-2.8H2a2 2 0 0 1 0-4h.1A1.6 1.6 0 0 0 4.6 8a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 8 4.6a1.6 1.6 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.6 1.6 0 0 0 2.8 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.8H22a2 2 0 0 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>설정'}],
+  admin:[{id:'leads',l:'<svg class="li" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>DB관리'},{id:'stage-dashboard',l:'<svg class="li" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>영업관리'},{id:'recruit',l:'<svg class="li" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>리쿠르팅'},{id:'activity',l:'<svg class="li" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>캘린더'},{id:'settings',l:'<svg class="li" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.8 1.2V21a2 2 0 0 1-4 0v-.1A1.6 1.6 0 0 0 8 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.2-2.8H2a2 2 0 0 1 0-4h.1A1.6 1.6 0 0 0 4.6 8a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 8 4.6a1.6 1.6 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.6 1.6 0 0 0 2.8 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.8H22a2 2 0 0 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>설정'}],
   dbmanager:[{id:'leads',l:'<svg class="li" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>DB관리'},{id:'activity',l:'<svg class="li" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>캘린더'},{id:'notices',l:'<svg class="li" viewBox="0 0 24 24"><path d="M3 11v3a1 1 0 0 0 1 1h2l4 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15 8a4 4 0 0 1 0 8M18 5a8 8 0 0 1 0 14"/></svg>공지함'}],
   branch:[{id:'branch',l:'<svg class="li" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M16 6h.01M8 10h.01M16 10h.01M8 14h.01M16 14h.01"/></svg>지점관리'},{id:'leads',l:'<svg class="li" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>DB관리'},{id:'stage-dashboard',l:'<svg class="li" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>영업관리'},{id:'my-clients',l:'<svg class="li" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 0 12 0V3H6z"/><path d="M6 5H3v2a3 3 0 0 0 3 3M18 5h3v2a3 3 0 0 1-3 3M9 21h6M12 17v4"/></svg>고객관리'},{id:'recruit',l:'<svg class="li" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>리쿠르팅'},{id:'activity',l:'<svg class="li" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>캘린더'},{id:'notices',l:'<svg class="li" viewBox="0 0 24 24"><path d="M3 11v3a1 1 0 0 0 1 1h2l4 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15 8a4 4 0 0 1 0 8M18 5a8 8 0 0 1 0 14"/></svg>공지함'}],
   team:[{id:'leads',l:'<svg class="li" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>DB관리'},{id:'stage-dashboard',l:'<svg class="li" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>영업관리'},{id:'my-clients',l:'<svg class="li" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 0 12 0V3H6z"/><path d="M6 5H3v2a3 3 0 0 0 3 3M18 5h3v2a3 3 0 0 1-3 3M9 21h6M12 17v4"/></svg>고객관리'},{id:'activity',l:'<svg class="li" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>캘린더'},{id:'notices',l:'<svg class="li" viewBox="0 0 24 24"><path d="M3 11v3a1 1 0 0 0 1 1h2l4 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15 8a4 4 0 0 1 0 8M18 5a8 8 0 0 1 0 14"/></svg>공지함'}],
@@ -5948,7 +5948,8 @@ function goHome(){
     if(!curUser||!curUser.role){ return; }
     const nav = NAV_CFG[curUser.role] || [];
     if(!nav.length) return;
-    const firstId = nav[0].id;
+    // 관리자 홈은 대시보드 고정 (네비 버튼 제거 후에도 로고 클릭 = 대시보드)
+    const firstId = (curUser.role==='admin') ? 'admin' : nav[0].id;
     if(typeof showScreen==='function'){
       const btn = document.querySelector('#main-nav .nb[data-s="'+firstId+'"]');
       showScreen(firstId, btn||null);
@@ -6025,17 +6026,25 @@ function startApp(){
 // ── 초기 데이터 삽입 ──────────────────────────────────────
 
 // ── 화면 전환 ─────────────────────────────────────────────
-// ── 영업관리 통합 탭 (인사이트 · 단계별 현황 · 대전 업무현황) ──
-// 화면·로더는 기존 그대로, 상단에 탭 바만 얹어 오간다.
-const SALES_TABS = [
-  {id:'insights',        l:'인사이트',       roles:['admin']},
-  {id:'stage-dashboard', l:'단계별 현황',    roles:['admin','branch','team']},
-  {id:'dj-status',       l:'대전 업무현황',  roles:['admin']},
+// ── 화면 통합 탭 시스템 ──
+// 여러 화면을 하나의 네비 버튼 아래 탭으로 묶는다. 화면·로더는 기존 그대로.
+const SCREEN_TAB_GROUPS = [
+  { nav:'stage-dashboard', tabs:[            // 영업관리
+      {id:'insights',        l:'인사이트',       roles:['admin']},
+      {id:'stage-dashboard', l:'단계별 현황',    roles:['admin','branch','team']},
+      {id:'dj-status',       l:'대전 업무현황',  roles:['admin']},
+  ]},
+  { nav:'settings', tabs:[                    // 설정
+      {id:'settings', l:'설정',        roles:['admin']},
+      {id:'users',    l:'사용자 관리', roles:['admin']},
+  ]},
 ];
-function renderSalesTabs(active){
+function renderScreenTabs(active){
+  const grp = SCREEN_TAB_GROUPS.find(g=>g.tabs.some(t=>t.id===active));
+  if(!grp) return;
   const scr=document.getElementById('screen-'+active); if(!scr) return;
   const role=curUser?.role;
-  const tabs=SALES_TABS.filter(t=>t.roles.includes(role));
+  const tabs=grp.tabs.filter(t=>t.roles.includes(role));
   let bar=scr.querySelector(':scope > .sales-tabbar');
   if(tabs.length<2){ if(bar) bar.remove(); return; }   // 탭이 하나뿐인 역할은 바를 띄우지 않음
   const html=tabs.map(t=>`<button class="sales-tab" onclick="showScreen('${t.id}')"
@@ -6048,6 +6057,8 @@ function renderSalesTabs(active){
     scr.prepend(bar);
   }
   bar.innerHTML=html;
+  // 탭 이동 시에도 좌측 네비의 소속 버튼 하이라이트 유지
+  const _nb=document.querySelector(`.nb[data-s="${grp.nav}"]`); if(_nb) _nb.classList.add('active');
 }
 
 function showScreen(id, btn){
@@ -6088,11 +6099,7 @@ function showScreen(id, btn){
     'stage-dashboard':loadStageDashboard,'dj-status':loadDjStatus,'messages':loadMessages,
     'users':loadUsersScreen
   }[id]||function(){})();
-  if(['insights','stage-dashboard','dj-status'].includes(id)){
-    try{ renderSalesTabs(id); }catch(_e){}
-    // 탭 이동 시에도 좌측 네비의 '영업관리' 하이라이트 유지
-    const _nb=document.querySelector('.nb[data-s="stage-dashboard"]'); if(_nb) _nb.classList.add('active');
-  }
+  try{ renderScreenTabs(id); }catch(_e){}
 }
 
 // ── 유틸 ─────────────────────────────────────────────────
@@ -7184,7 +7191,8 @@ function requestNotifyPermission(){
 function _schedNotifyCheck(){
   try{
     if(!curUser) return;
-    if(!('Notification' in window) || Notification.permission!=='granted') return;
+    // 토스트 리마인더는 브라우저 알림 권한과 무관하게 항상 발화한다.
+    // (브라우저/OS 알림은 _fireSchedNotify 내부에서 권한 확인 후 추가 발송)
     if(typeof allSchedules==='undefined' || !allSchedules) return;
     // ★ 사용자 설정 반영: 일정 알림 on/off + 시점(schedLead)
     const _prefs = (typeof _getMyNotifPrefs==='function') ? _getMyNotifPrefs() : {schedule:true, schedLead:[10,0]};
@@ -7257,8 +7265,7 @@ async function _fireSchedNotify(prefix, s){
 
 function startSchedNotifyTimer(){
   stopSchedNotifyTimer();
-  if(!('Notification' in window)) return;
-  _schedNotifyCheck();  // 즉시 1회
+  _schedNotifyCheck();  // 즉시 1회 (토스트는 알림 미지원 브라우저에서도 작동)
   _schedNotifyTimer = setInterval(_schedNotifyCheck, 30000);  // 30초마다
   if(typeof _appTimers!=='undefined') _appTimers.push(_schedNotifyTimer);  // 로그아웃 시 정리
   // 백그라운드에서는 브라우저가 타이머를 늦춘다. 화면 복귀 시 즉시 재확인해 놓친 건을 잡는다.
