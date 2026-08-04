@@ -1191,7 +1191,7 @@ body.dark-mode *::-webkit-scrollbar-thumb:hover{background:rgba(180,208,232,.30)
         </div>
       </div>
       <div class="stat-grid" id="admin-stat-grid" style="grid-template-columns:repeat(5,1fr)">
-        <div class="stat-card click" onclick="filterByStatus('')"><div class="stat-label">전체 DB <span style="font-size:9px;color:var(--gray-400)">(드랍 포함)</span></div><div class="stat-val" id="s-total">0</div></div>
+        <div class="stat-card click" title="드랍·보류·회수 대기까지 모두 포함한 수. 삭제(휴지통)만 제외." onclick="filterByStatus('')"><div class="stat-label">전체 DB <span style="font-size:9px;color:var(--gray-400)">(드랍·회수대기 포함)</span></div><div class="stat-val" id="s-total">0</div><div style="font-size:9.5px;color:var(--gray-400);margin-top:2px">삭제분만 제외</div></div>
         <div class="stat-card green click" onclick="fByStage('계약')"><div class="stat-label">계약</div><div class="stat-val" id="s-contract">0</div></div>
         <div class="stat-card blue click" onclick="filterByStatus('contacted')"><div class="stat-label">접촉</div><div class="stat-val" id="s-consulting">0</div></div>
         <div class="stat-card orange click" onclick="quickTab('unassigned',null)"><div class="stat-label">미배정</div><div class="stat-val" id="s-pending">0</div></div>
@@ -1323,7 +1323,7 @@ body.dark-mode *::-webkit-scrollbar-thumb:hover{background:rgba(180,208,232,.30)
       <div style="display:flex;gap:0;border-bottom:2px solid var(--gray-200);margin-bottom:16px">
         <button id="leads-subtab-active" onclick="switchLeadsSubTab('active',this)"
           style="padding:9px 18px;border:none;background:transparent;cursor:pointer;font-size:14px;font-weight:700;color:var(--navy);border-bottom:2px solid var(--navy);margin-bottom:-2px;font-family:inherit">
-          <svg class="li" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>활성 DB <span id="leads-subtab-active-cnt" style="font-size:11px;font-weight:400;color:var(--gray-400)"></span>
+          <svg class="li" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>고객사 DB <span id="leads-subtab-active-cnt" style="font-size:11px;font-weight:400;color:var(--gray-400)"></span>
         </button>
         <button id="leads-subtab-drop" onclick="switchLeadsSubTab('drop',this)"
           style="padding:9px 18px;border:none;background:transparent;cursor:pointer;font-size:14px;font-weight:600;color:var(--gray-500);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit">
@@ -1344,7 +1344,10 @@ body.dark-mode *::-webkit-scrollbar-thumb:hover{background:rgba(180,208,232,.30)
       <!-- 전체 DB 패널 -->
       <div id="leads-panel-active">
             <div class="page-header">
-        <div class="page-title" style="font-size:16px">활성 DB <sub id="leads-sub"></sub></div>
+        <div>
+          <div class="page-title" style="font-size:16px">고객사 DB <sub id="leads-sub"></sub></div>
+          <div id="leads-breakdown" style="font-size:11.5px;color:var(--gray-500);margin-top:3px;line-height:1.5"></div>
+        </div>
         <div style="display:flex;gap:8px" id="leads-btn-area">
           <button class="btn btn-blue btn-sm" onclick="openAddLead()">+ 직접 등록</button>
           <label class="btn btn-outline btn-sm" id="btn-excel-upload-wrap" style="cursor:pointer"><svg class="li" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>엑셀 업로드<input type="file" accept=".xlsx,.xls" style="display:none" onchange="importExcel(event)" id="btn-excel-upload"></label>
@@ -3409,9 +3412,10 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS auto_recall_reason text;</div>
       <div id="sdash-title" style="font-size:18px;font-weight:800;letter-spacing:-.3px">전체 현황</div>
       <div id="sdash-sub" style="font-size:12px;color:var(--gray-500);margin-top:2px"></div>
     </div>
-    <div title="현재 선택된 범위·기간 조건에 해당하는 리드 총 수 (drop·hold 단계 포함)" style="text-align:right;padding:8px 16px;border-radius:8px;background:linear-gradient(135deg,#1e293b,#0f172a);color:#fff;cursor:help">
-      <div style="font-size:10px;opacity:.75;letter-spacing:.5px">총 배정 기업</div>
+    <div title="선택한 범위·기간에 해당하는 고객사 수. 드랍·보류 포함." style="text-align:right;padding:8px 16px;border-radius:8px;background:linear-gradient(135deg,#1e293b,#0f172a);color:#fff;cursor:help">
+      <div style="font-size:10px;opacity:.75;letter-spacing:.5px">이 화면에 집계된 고객사</div>
       <div style="font-size:26px;font-weight:800;line-height:1"><span id="sdash-total">0</span><span style="font-size:12px;font-weight:600;opacity:.7;margin-left:3px">개</span></div>
+      <div id="sdash-excluded" style="font-size:10px;opacity:.7;margin-top:4px;line-height:1.4"></div>
     </div>
   </div>
 
@@ -9242,7 +9246,8 @@ async function loadLeads(){
   const _pgSel=document.getElementById('pg-size-sel');
   if(_pgSel){ const _s=localStorage.getItem('kbmc_pg_size')||'50'; _pgSel.value=_s; }
 
-  (document.getElementById('leads-sub')||{}).textContent=allLeads.length+'건';
+  (document.getElementById('leads-sub')||{}).textContent=allLeads.length.toLocaleString()+'건';
+  try{ renderLeadsBreakdown(); }catch(_){}
 
   // activities/next_actions는 위에서 이미 동시 로드 완료
   // active 패널만 직접 표시 (switchLeadsSubTab 호출 시 무한루프 방지)
@@ -9583,7 +9588,9 @@ function filterLeads(){
     });
   }
   curPage=1; renderLeadsTable();
-  (document.getElementById('leads-sub')||{}).textContent=filtered.length+'건';
+  // 제목 숫자는 '전체'를 뜻한다. 필터 결과는 아래 내역 줄에 따로 적는다.
+  (document.getElementById('leads-sub')||{}).textContent=(allLeads||[]).length.toLocaleString()+'건';
+  try{ renderLeadsBreakdown(); }catch(_){}
   try{ _refreshQuickBadges(); }catch(_){}
   updateLeadsStatsMini();
   if(curUser?.role==='branch') _refreshDjManageTab();
@@ -14541,7 +14548,22 @@ function renderStageDashboard(){
   document.getElementById('sdash-crumb').textContent = crumb;
   document.getElementById('sdash-title').textContent = title;
   document.getElementById('sdash-sub').textContent = sub;
-  document.getElementById('sdash-total').textContent = total;
+  document.getElementById('sdash-total').textContent = Number(total).toLocaleString();
+  // 왜 DB관리 숫자와 다른지 화면이 직접 밝힌다.
+  try{
+    const _pool=(window._sdashAllLeads||[]).filter(l=>l.status!=='deleted');
+    const _noDate=_pool.filter(l=>_leadTimeMs(l)===null).length;
+    const _el=document.getElementById('sdash-excluded');
+    if(_el){
+      const _parts=[];
+      if(_noDate) _parts.push('날짜 정보 없는 '+_noDate.toLocaleString()+'건 제외');
+      if((_sdashState.period||'all')!=='all') _parts.push('기간 조건 적용');
+      if(_sdashState.branch||_sdashState.team) _parts.push('범위 조건 적용');
+      _el.textContent = _parts.length
+        ? _parts.join(' · ')
+        : '전체 '+_pool.length.toLocaleString()+'건 모두 집계';
+    }
+  }catch(_){}
   const meta = `최종 갱신 ${new Date().toLocaleTimeString('ko-KR')}`;
   const metaEl = document.getElementById('sdash-meta'); if(metaEl) metaEl.textContent = meta;
 
@@ -25163,6 +25185,26 @@ async function rcExportExcel(){
 // updateLeadsSubTabCounts에 reassigndb 카운트 추가
 
 // ── 서브탭 카운트 업데이트 (stub — 각 탭 렌더 함수에서 직접 처리)
+// 목록 위에 "이 숫자가 무엇으로 이루어졌는지"를 적는다.
+// 화면마다 숫자가 다른 이유를 사용자가 직접 확인할 수 있게 한다.
+function renderLeadsBreakdown(){
+  const el=document.getElementById('leads-breakdown'); if(!el) return;
+  const base=Array.isArray(allLeads)?allLeads:[];
+  const isDrop=l=>l.status==='drop'||l.current_stage==='드랍';
+  const isHold=l=>l.current_stage==='보류';
+  const drop=base.filter(isDrop).length;
+  const hold=base.filter(l=>!isDrop(l)&&isHold(l)).length;
+  const active=base.length-drop-hold;
+  const raw=Array.isArray(_allLeadsRaw)?_allLeadsRaw:[];
+  const pending=raw.filter(l=>l.recall_pending===true||l.recall_pending==='true').length;
+  const shown=Array.isArray(filtered)?filtered.length:base.length;
+  const nf=n=>Number(n).toLocaleString();
+  let t='구성 — 활성 '+nf(active)+' · 드랍 '+nf(drop)+' · 보류 '+nf(hold);
+  if(pending) t+=' <span style="color:var(--gray-400)">(회수 대기 '+nf(pending)+'건은 회수목록 탭에서 별도 관리)</span>';
+  if(shown!==base.length) t+='<br><span style="color:var(--gray-400)">지금 목록에 보이는 것은 필터를 거친 '+nf(shown)+'건입니다.</span>';
+  el.innerHTML=t;
+}
+
 function updateLeadsSubTabCounts(){
   // 드랍 카운트
   const dropSub=document.getElementById('drop-sub');
