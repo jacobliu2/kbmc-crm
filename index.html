@@ -5448,6 +5448,67 @@ async function _loadAllActivities(){
   return all;
 }
 
+// ── 팀장 전용 범위 조회 ──────────────────────────────────
+// 팀장은 본인 리드만 보이는데(business-rules 2.3) 전체 2,000건 + 활동 30,000건을
+// 받아 클라이언트에서 4건으로 줄이고 있었다. 서버에서 걸러 받는다.
+// team_names는 JSON 문자열 배열이므로 like로 매칭한다.
+let _scopeSeq=0;
+async function _fetchLeadsScoped(name, extra){
+  const enc=encodeURIComponent(name);
+  const base='leads?select=*&order=created_at.desc&status=neq.deleted'+(extra||'');
+  // 태그는 호출마다 고유해야 한다. 두 화면이 동시에 조회하면
+  // 같은 태그를 공유해 부분로드 플래그가 서로 덮어써진다.
+  const sq=(++_scopeSeq), tagA='내 고객사#'+sq, tagB='협업 고객사#'+sq;
+  const r=await Promise.all([
+    _fetchPagesParallel(base+'&team_name=eq.'+enc,tagA),
+    _fetchPagesParallel(base+'&team_names=like.'+encodeURIComponent('*"'+name+'"*'),tagB)
+  ]);
+  const solo=r[0], collab=r[1];
+  // 한쪽만 실패해도 결과는 '덜 받은 목록'이 된다. 부분 데이터로 진행하면
+  // 팀장 화면에서 리드가 조용히 사라지므로, 하나라도 실패하면 전체 조회로 폴백한다.
+  if(solo===null||collab===null) return null;
+  // 페이지 결손(_fetchPagesParallel 방어②)이 발생한 경우도 신뢰할 수 없다.
+  const _p=window._loadPartial||{};
+  if(_p[tagA]||_p[tagB]) return null;
+  const map=new Map();
+  (solo||[]).concat(collab||[]).forEach(function(l){ if(l&&l.id) map.set(l.id,l); });
+  return Array.from(map.values()).sort(function(x,y){
+    return String(y.created_at||'').localeCompare(String(x.created_at||''));
+  });
+}
+
+// 리드 1건만 필요할 때. 전량(2,000건)을 받아 find()하던 자리를 대체한다.
+// 권한 범위 밖이면 null — 호출부가 안내 문구를 띄운다.
+async function _fetchLeadById(id){
+  if(!id) return null;
+  if(typeof testMode!=='undefined' && testMode){
+    return (lg('leads')||[]).find(function(l){return l.id===id;})||null;
+  }
+  const rows=await sbGet('leads?select=*&id=eq.'+encodeURIComponent(id)+'&limit=1');
+  if(!rows||!rows.length) return null;
+  const l=rows[0];
+  if(curUser && curUser.role==='team'){          // 서버 권한 전환 전 앱측 확인
+    if(l.recall_pending===true||l.recall_pending==='true') return null;
+    if(l.team_name===curUser.name) return l;
+    try{ if(JSON.parse(l.team_names||'[]').includes(curUser.name)) return l; }catch(e){}
+    return null;
+  }
+  return l;
+}
+
+// lead_id 목록으로만 조회 (URL 길이 제한 회피 위해 80건씩 분할)
+async function _fetchByLeadIds(table, leadIds, cols, tag){
+  if(!leadIds||!leadIds.length) return [];
+  const out=[];
+  for(let i=0;i<leadIds.length;i+=80){
+    const chunk=leadIds.slice(i,i+80);
+    const qs=table+'?select='+cols+'&order=created_at.desc&lead_id=in.('+chunk.join(',')+')';
+    const rows=await _fetchPagesParallel(qs,tag);
+    if(rows) out.push.apply(out,rows);
+  }
+  return out;
+}
+
 async function sbGet(path, _retry=0){
   if(testMode) return [];
   try{
@@ -5580,8 +5641,21 @@ async function dbQ(table, filters={}){
   }
   // ★ leads: PostgREST 기본 1000건 한계 우회 — Range 헤더 페이지네이션
   if(table==='leads'){
-    let qs='leads?select=*&order=created_at.desc&status=neq.deleted';
-    Object.entries(filters).forEach(([k,v])=>{if(v!==undefined&&v!=='')qs+=`&${k}=eq.${encodeURIComponent(v)}`;});
+    let extra='';
+    Object.entries(filters).forEach(([k,v])=>{if(v!==undefined&&v!=='')extra+=`&${k}=eq.${encodeURIComponent(v)}`;});
+    // ★★ 계약 변경 주의 ★★
+    //   dbQ('leads')는 더 이상 '무조건 전체 원본'이 아니다.
+    //   팀장 세션에서는 본인 담당 리드만 반환한다(business-rules 2.3).
+    //   전체 원본이 반드시 필요한 신규 코드는 이 함수를 쓰지 말고
+    //   _fetchPagesParallel을 직접 호출할 것.
+    //   호출부 20곳을 각각 고치는 대신 여기 한 곳에서 범위를 좁힌다.
+    //   실패하면 아래 전체 조회로 자연히 폴백된다.
+    if(curUser && curUser.role==='team' && curUser.name){
+      const scoped=await _fetchLeadsScoped(curUser.name, extra);
+      if(scoped!==null) return scoped;
+      console.warn('[팀장] 범위 조회 실패 → 전체 조회로 폴백');
+    }
+    let qs='leads?select=*&order=created_at.desc&status=neq.deleted'+extra;
     const all=await _fetchPagesParallel(qs,'leads');
     if(all===null){
       showToast('⚠️ Supabase 연결 실패 — 데이터를 불러오지 못했습니다. 새로고침 해주세요.','error');
@@ -6594,7 +6668,9 @@ async function globalSearch(q){
 async function gsOpen(id){
   document.getElementById('gs-input').value='';
   document.getElementById('gs-result').style.display='none';
-  const l=(allLeads||[]).find(x=>x.id===id)||(await dbQ('leads')).find(x=>x.id===id); if(l)openLeadDetailModal(l);
+  const l=(allLeads||[]).find(x=>x.id===id)||(await _fetchLeadById(id));
+  if(l) openLeadDetailModal(l);
+  else showToast('해당 고객을 찾을 수 없습니다 (담당에서 제외되었을 수 있습니다)','error');
 }
 
 // ── 알림 ─────────────────────────────────────────────────
@@ -6603,6 +6679,78 @@ function getNs(){try{return JSON.parse(localStorage.getItem(NK)||'[]');}catch(e)
 function addN(type,title,body,ref){
   const arr=getNs(); arr.unshift({id:uuid(),type,title,body,ref,read:false,at:new Date().toISOString()});
   localStorage.setItem(NK,JSON.stringify(arr.slice(0,50))); updateNBadge();
+  try{ _queueAppNotify(type,title,body,ref); }catch(e){ console.warn('알림 발송 실패:',e); }
+}
+
+// ── 알림 실제 발송 ───────────────────────────────────────
+// 기존 addN은 localStorage 저장 + 뱃지 갱신만 했다. 토스트/브라우저 알림이
+// 전혀 발송되지 않아 "알림센터에만 쌓이는" 증상이 있었다.
+// 일정 알림(_fireSchedNotify)과 동일한 경로를 모든 알림에 연결한다.
+let _nBurst = { count:0, timer:null, first:null };
+
+// 발송 중복 방지: 같은 내용은 하루 1회만 발송한다.
+// checkAlerts()가 60초마다 돌며 액션 알림 addN을 재호출하므로(L6964 부근)
+// 이 관문이 없으면 팀장 화면에 토스트가 1분마다 반복된다.
+// 저장(알림센터)은 기존과 동일하게 매번 수행되고, 발송만 걸러진다.
+const _NSENT_KEY='kbmc_notif_sent';
+function _notifAlreadySent(type,title,body,ref){
+  const today=(typeof todayKst==='function')?todayKst():new Date().toISOString().slice(0,10);
+  let box={};
+  try{ box=JSON.parse(localStorage.getItem(_NSENT_KEY)||'{}'); }catch(e){}
+  if(box.d!==today) box={d:today,k:{}};          // 날짜 바뀌면 초기화
+  // 사용자 구분 필수 — 공용 PC에서 계정을 바꿔 로그인하면
+  // 앞사람의 발송 이력에 걸려 뒷사람 알림이 차단된다.
+  const who=(curUser&&(curUser.id||curUser.name))||'-';
+  const key=who+'|'+type+'|'+(ref||'')+'|'+_stripTags(title)+'|'+_stripTags(body);
+  if(box.k[key]) return true;
+  box.k[key]=1;
+  const ks=Object.keys(box.k);
+  if(ks.length>300){ const t={}; ks.slice(-300).forEach(function(x){t[x]=1;}); box.k=t; }
+  try{ localStorage.setItem(_NSENT_KEY,JSON.stringify(box)); }catch(e){}
+  return false;
+}
+
+// 1.2초 내 연속 호출은 1건으로 병합 (동행요청 forEach 등에서 토스트 폭탄 방지)
+function _queueAppNotify(type,title,body,ref){
+  if(_notifAlreadySent(type,title,body,ref)) return;
+  if(!_nBurst.first) _nBurst.first={type:type,title:title,body:body,ref:ref};
+  _nBurst.count++;
+  if(_nBurst.timer) clearTimeout(_nBurst.timer);
+  _nBurst.timer=setTimeout(function(){
+    const f=_nBurst.first, n=_nBurst.count;
+    _nBurst={count:0,timer:null,first:null};
+    if(!f) return;
+    const t=_stripTags(f.title);
+    const b=_stripTags(f.body)+(n>1?' 외 '+(n-1)+'건':'');
+    _fireAppNotify(f.type,t,b,f.ref);
+  },1200);
+}
+
+// 액션 알림(addN('na', '<svg...>액션 알림', ...))은 title에 SVG가 들어온다.
+// 태그를 벗겨야 토스트/알림 본문이 깨지지 않는다.
+function _stripTags(s){ return String(s||'').replace(/<[^>]*>/g,'').trim(); }
+
+// 발송 경로는 _fireSchedNotify와 동일 순서
+//  1순위 ServiceWorkerRegistration.showNotification() — 웹앱/모바일 포함 전 환경
+//  2순위 new Notification() — PC 브라우저 탭 전용 폴백
+async function _fireAppNotify(type,title,body,ref){
+  // 토스트는 사용하지 않는다. 브라우저/웹앱 알림 단일 경로.
+  if(!('Notification' in window) || Notification.permission!=='granted') return;
+  const opts={ body:body, tag:'kbmc-'+type, requireInteraction:false,
+               icon:'/icon-192.png', badge:'/icon-192.png', data:{ url:'/' } };
+  try{
+    if('serviceWorker' in navigator && typeof window._swReadyOrNull==='function'){
+      const reg=await window._swReadyOrNull(3000);
+      if(reg && typeof reg.showNotification==='function'){
+        await reg.showNotification(title, opts);
+        return;
+      }
+    }
+  }catch(e){ console.warn('SW 알림 실패, 폴백 시도:',e); }
+  try{
+    const n=new Notification(title, opts);
+    n.onclick=function(){ window.focus(); n.close(); };
+  }catch(e){ console.warn('알림 발송 실패:',e); }
 }
 // 단일 리드가 '나에게 새로 배정'됐으면 종 알림 (Realtime 실시간 이벤트용)
 function notifyIfAssignedToMe(lead){
@@ -6812,7 +6960,7 @@ async function notifGo(ref){
     case 'na':
       // 활동/다음액션 → 해당 리드 상세
       if(nData){
-        const l=(allLeads||[]).find(x=>x.id===nData)||(await dbQ('leads')).find(x=>x.id===nData);
+        const l=(allLeads||[]).find(x=>x.id===nData)||(await _fetchLeadById(nData));
         if(l) openLeadDetailModal(l);
       } else {
         showScreen('activity', document.querySelector('.nb[data-s="activity"]'));
@@ -6821,7 +6969,7 @@ async function notifGo(ref){
     case 'contract':
       // 계약 달성 → 해당 리드 상세
       if(nData){
-        const l=(allLeads||[]).find(x=>x.id===nData)||(await dbQ('leads')).find(x=>x.id===nData);
+        const l=(allLeads||[]).find(x=>x.id===nData)||(await _fetchLeadById(nData));
         if(l) openLeadDetailModal(l);
       }
       break;
@@ -6871,8 +7019,9 @@ async function notifGo(ref){
     default:
       // 기존 방식: lead ID
       if(ref && ref.length>10){
-        const l=(allLeads||[]).find(x=>x.id===ref)||(await dbQ('leads')).find(x=>x.id===ref);
+        const l=(allLeads||[]).find(x=>x.id===ref)||(await _fetchLeadById(ref));
         if(l){ openLeadDetailModal(l); break; }
+        showToast('해당 고객을 찾을 수 없습니다 (담당에서 제외되었을 수 있습니다)','error'); break;
       }
       break;
   }
@@ -8995,11 +9144,29 @@ async function loadLeads(){
   if(_qtabAll){_qtabAll.style.background='var(--navy)';_qtabAll.style.color='#fff';_qtabAll.style.borderColor='var(--navy)';}
   const _ltb=document.getElementById('leads-tbody'); if(_ltb) _ltb.innerHTML='<tr><td colspan="12" class="loading">불러오는 중...</td></tr>';
   // leads + activities + next_actions 동시 로드 (타이밍 문제 근본 해결)
-  const [_leadsRaw, _actsRaw, _nasRaw] = await Promise.all([
-    dbQ('leads').catch(()=>[]),
-    testMode ? Promise.resolve(lg('activities')) : _loadAllActivities(),
-    testMode ? Promise.resolve(allNextActions||[]) : dbQ('next_actions').catch(()=>[]),
-  ]);
+  let _leadsRaw, _actsRaw, _nasRaw;
+  const _ACT_COLS='id,lead_id,type,content,stage,author,date,created_at';
+  // leads 범위 축소는 dbQ가 담당한다(팀장이면 자동으로 본인 것만 온다).
+  _leadsRaw = await dbQ('leads').catch(()=>[]);
+  // 건수 상한 없음 — _fetchByLeadIds가 80건씩 나눠 처리하므로
+  // 담당 리드가 많아도 전량 조회(30,000건)보다 항상 유리하다.
+  const _teamScoped = (curUser && curUser.role==='team' && !testMode);
+  if(_teamScoped){
+    // 활동·예정액션도 받은 리드 범위로만 조회 (30,000건 → 수십 건)
+    const _ids=_leadsRaw.map(function(l){return l.id;});
+    const _r=await Promise.all([
+      _fetchByLeadIds('activities',_ids,_ACT_COLS,'활동기록'),
+      _fetchByLeadIds('next_actions',_ids,'*','예정액션'),
+    ]);
+    _actsRaw=_r[0]; _nasRaw=_r[1];
+    console.log('[팀장] 범위 조회:',_leadsRaw.length,'건 /',_actsRaw.length,'활동');
+  } else {
+    const _f=await Promise.all([
+      testMode ? Promise.resolve(lg('activities')) : _loadAllActivities(),
+      testMode ? Promise.resolve(allNextActions||[]) : dbQ('next_actions').catch(()=>[]),
+    ]);
+    _actsRaw=_f[0]; _nasRaw=_f[1];
+  }
   allActivities = _actsRaw;
   allNextActions = _nasRaw;
   allLeads = _leadsRaw;
@@ -11853,7 +12020,8 @@ function myLeadsRowClick(e, lid, lname, isUnrecorded){
   } else {
     const lead=myLeads?.find(x=>x.id===lid);
     if(lead) openPanel(lead);
-    else dbQ('leads').then(all=>{ const l=all.find(x=>x.id===lid); if(l) openLeadDetailModal(l); });
+    else _fetchLeadById(lid).then(l=>{ if(l) openLeadDetailModal(l);
+      else showToast('해당 고객을 찾을 수 없습니다 (담당에서 제외되었을 수 있습니다)','error'); });
   }
 }
 function renderMyGoal(){
@@ -14569,8 +14737,7 @@ async function sdashOpenLead(id){
   // 3순위: 메모리에 없으면 DB에서 직접 조회 (캐시 누락 대비)
   if(!lead){
     try{
-      const fresh = await dbQ('leads').catch(()=>[]);
-      lead = (fresh||[]).find(l=>l.id===id);
+      lead = await _fetchLeadById(id).catch(()=>null);
     }catch(e){ console.warn('sdashOpenLead 조회 실패:',e); }
   }
   if(!lead){
