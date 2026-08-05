@@ -10155,7 +10155,9 @@ async function openPanel(lead){
       // Supabase 조회 성공 (빈배열 포함)
       // 캐시 갱신
       if(Array.isArray(allActivities)){
-        rows.forEach(r=>{ if(!allActivities.find(a=>a.id===r.id)) allActivities.unshift(r); });
+        // Set으로 O(n) 병합 (find 중첩은 캐시가 커질수록 화면을 멈춘다)
+        const _seen=new Set(allActivities.map(a=>a.id));
+        rows.forEach(r=>{ if(!_seen.has(r.id)){ allActivities.unshift(r); _seen.add(r.id); } });
       }
       // sbGet 결과 + allActivities 캐시 합산
       const cached = (allActivities||[]).filter(a=>a.lead_id===lead.id && a.type!=='status_change');
@@ -10716,7 +10718,8 @@ function openActM(lid,cname){
       if(rows && rows.length > 0){
         // allActivities 캐시 갱신
         if(Array.isArray(allActivities)){
-          rows.forEach(r=>{ if(!allActivities.find(a=>a.id===r.id)) allActivities.unshift(r); });
+          const _seen=new Set(allActivities.map(a=>a.id));
+          rows.forEach(r=>{ if(!_seen.has(r.id)){ allActivities.unshift(r); _seen.add(r.id); } });
         }
         // 히스토리 탭 현재 열려있으면 재렌더
         const histEl = document.getElementById('act-modal-history-body');
@@ -10791,7 +10794,8 @@ function switchActModalTab(tab, btn){
         sbGet(`activities?select=*&lead_id=eq.${lid}&order=created_at.desc&limit=200`).then(rows=>{
           if(rows&&rows.length>0){
             if(Array.isArray(allActivities)){
-              rows.forEach(r=>{ if(!allActivities.find(a=>a.id===r.id)) allActivities.unshift(r); });
+              const _seen=new Set(allActivities.map(a=>a.id));
+              rows.forEach(r=>{ if(!_seen.has(r.id)){ allActivities.unshift(r); _seen.add(r.id); } });
             }
             _renderActModalHistory(lid);
           }
@@ -11946,15 +11950,20 @@ async function saveActivity(){
   const scr=document.querySelector('.screen.active')?.id?.replace('screen-','');
   if(scr==='leads'){
     filterLeads();           // 화면 즉시 갱신
-    // 백그라운드로 activities만 새로고침 (leads는 이미 캐시에 있음)
+    // 백그라운드 새로고침 — 방금 저장한 그 리드의 활동만 다시 받는다.
+    //   [이전] dbQ('activities')로 19,640건 전량(20페이지)을 받은 뒤
+    //          acts.forEach × allActivities.find 로 대조 → 약 3.9억 회 비교
+    //          = 화면이 수 초간 멎는 원인이었다.
+    //   [지금] 그 리드분(수십 건)만 받고, Set으로 O(n) 병합한다.
     if(!testMode){
-      dbQ('activities').then(acts=>{
-        if(acts&&acts.length){
-          // 덮어쓰지 않고 캐시에 없는 것만 추가 (방금 저장한 act 보존)
-          acts.forEach(a=>{ if(!allActivities.find(x=>x.id===a.id)) allActivities.push(a); });
+      sbGet('activities?select=id,lead_id,type,content,stage,author,date,created_at'
+            +'&lead_id=eq.'+encodeURIComponent(lid)+'&order=created_at.desc&limit=200')
+        .then(rows=>{
+          if(!rows||!rows.length) return;
+          const seen=new Set((allActivities||[]).map(x=>x.id));
+          rows.forEach(a=>{ if(!seen.has(a.id)){ allActivities.push(a); seen.add(a.id); } });
           renderLeadsTable();
-        }
-      }).catch(()=>{});
+        }).catch(()=>{});
     }
   } else if(scr==='my-leads'){
     filterMyLeads();
