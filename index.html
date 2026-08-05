@@ -8742,12 +8742,40 @@ function renderKpiDashboard(all){
     const weekStart=new Date(dd.getFullYear(),dd.getMonth(),dd.getDate()-dow).getTime();
     const prevWeekStart=weekStart-7*86400000;
     let wk=0,pwk=0;
-    acts.forEach(a=>{ if(!REAL.has(String(a.type||'').trim()))return; const ts=new Date(a.created_at).getTime(); if(isNaN(ts))return; if(ts>=weekStart)wk++; else if(ts>=prevWeekStart)pwk++; });
-    set('kpi-acts', wk);
+    // 요약 조회 모드에서는 acts에 리드당 1줄뿐이라 주간 건수를 셀 수 없다.
+    // 최근 2주치만 따로 받아 센다(수백 건 수준이라 부담 없음).
+    const _isSummary = !!(acts&&acts[0]&&Object.prototype.hasOwnProperty.call(acts[0],'act_count'));
+    if(_isSummary && !testMode){
+      const _types='(call,meeting,online,proposal,contract,email)';
+      const _from=new Date(prevWeekStart).toISOString();
+      sbGet('activities?select=created_at&type=in.'+_types+'&created_at=gte.'+encodeURIComponent(_from)+'&limit=5000')
+        .then(rows=>{
+          let w=0,p=0;
+          (rows||[]).forEach(r=>{ const ts=new Date(r.created_at).getTime();
+            if(isNaN(ts))return; if(ts>=weekStart)w++; else p++; });
+          set('kpi-acts', w);
+          const d=w-p; set('kpi-acts-sub',(d>=0?'\u25b2 +':'\u25bc ')+Math.abs(d)+' \uc9c0\ub09c\uc8fc \ub300\ube44');
+        }).catch(()=>{ set('kpi-acts','\u2013'); });
+    } else {
+      acts.forEach(a=>{ if(!REAL.has(String(a.type||'').trim()))return; const ts=new Date(a.created_at).getTime(); if(isNaN(ts))return; if(ts>=weekStart)wk++; else if(ts>=prevWeekStart)pwk++; });
+      set('kpi-acts', wk);
+    }
     const wd=wk-pwk; set('kpi-acts-sub',(wd>=0?'\u25b2 +':'\u25bc ')+Math.abs(wd)+' \uc9c0\ub09c\uc8fc \ub300\ube44');
     // 평균 첫 연락 (배정→첫 실활동, 일)
     const firstMap={};
-    acts.forEach(a=>{ if(!REAL.has(String(a.type||'').trim()))return; const ts=new Date(a.created_at).getTime(); if(isNaN(ts))return; const k=String(a.lead_id); if(firstMap[k]===undefined||ts<firstMap[k]) firstMap[k]=ts; });
+    acts.forEach(a=>{
+      const k=String(a.lead_id);
+      // 요약 모드: 첫 실접촉 시각이 first_real_at 에 따로 담겨 있다
+      if(Object.prototype.hasOwnProperty.call(a,'first_real_at')){
+        if(!a.first_real_at) return;
+        const fts=new Date(a.first_real_at).getTime();
+        if(!isNaN(fts)) firstMap[k]=fts;
+        return;
+      }
+      if(!REAL.has(String(a.type||'').trim()))return;
+      const ts=new Date(a.created_at).getTime(); if(isNaN(ts))return;
+      if(firstMap[k]===undefined||ts<firstMap[k]) firstMap[k]=ts;
+    });
     let fsum=0,fn=0;
     leads.forEach(l=>{ if(!l.assigned_at)return; const a=new Date(l.assigned_at).getTime(); if(isNaN(a))return; const f=firstMap[String(l.id)]; if(f===undefined||f<a)return; fsum+=(f-a); fn++; });
     set('kpi-first-contact', fn? (fsum/fn/86400000).toFixed(1)+'\uc77c' : '\u2013');
@@ -14675,16 +14703,21 @@ function renderStageDashboard(){
   // 왜 DB관리 숫자와 다른지 화면이 직접 밝힌다.
   try{
     const _pool=(window._sdashAllLeads||[]).filter(l=>l.status!=='deleted');
-    const _noDate=_pool.filter(l=>_leadTimeMs(l)===null).length;
+    const _gap=_pool.length-Number(total);
     const _el=document.getElementById('sdash-excluded');
     if(_el){
-      const _parts=[];
-      if(_noDate) _parts.push('날짜 정보 없는 '+_noDate.toLocaleString()+'건 제외');
-      if((_sdashState.period||'all')!=='all') _parts.push('기간 조건 적용');
-      if(_sdashState.branch||_sdashState.team) _parts.push('범위 조건 적용');
-      _el.textContent = _parts.length
-        ? _parts.join(' · ')
-        : '전체 '+_pool.length.toLocaleString()+'건 모두 집계';
+      // 실제 차이를 계산해 밝힌다. 추측한 사유를 적으면 또 어긋난다.
+      if(_gap>0){
+        const _why=[];
+        if((_sdashState.period||'all')!=='all') _why.push('기간');
+        if(_sdashState.branch||_sdashState.team) _why.push('범위');
+        const _noDate=_pool.filter(l=>_leadTimeMs(l)===null).length;
+        if(_noDate) _why.push('날짜 없음 '+_noDate.toLocaleString()+'건');
+        _el.textContent='전체 '+_pool.length.toLocaleString()+'건 중 '
+          +_gap.toLocaleString()+'건 제외'+(_why.length?' ('+_why.join(' · ')+')':'');
+      } else {
+        _el.textContent='전체 '+_pool.length.toLocaleString()+'건 모두 집계';
+      }
     }
   }catch(_){}
   const meta = `최종 갱신 ${new Date().toLocaleTimeString('ko-KR')}`;
@@ -24319,10 +24352,22 @@ function _rcBuildLastActMapFromCache(){
     ? allActivities : lg('activities');
   for(const a of (acts||[])){
     if(!a||!a.lead_id) continue;
+    const key = String(a.lead_id);
+    // ── 요약 조회 모드 ────────────────────────────────────
+    //   요약본은 리드당 마지막 1건뿐이라, 그 1건이 메모(note)면
+    //   실접촉이 있어도 "기록 없음"으로 오판된다(회수대상 뱃지 부풀림).
+    //   요약본은 실접촉 시각을 last_real_at 에 따로 담고 있으므로 그것을 쓴다.
+    if(Object.prototype.hasOwnProperty.call(a,'last_real_at')){
+      if(!a.last_real_at) continue;                 // 실접촉 이력 없음
+      const rms = new Date(a.last_real_at).getTime();
+      if(isNaN(rms)) continue;
+      map.set(key,{lastMs:rms,count:Number(a.real_count)||1});
+      continue;
+    }
+    // ── 전체 조회 모드 (기존 방식) ────────────────────────
     if(!REAL.has(String(a.type||'').trim())) continue;
     const ms = new Date(a.created_at).getTime();
     if(isNaN(ms)) continue;
-    const key = String(a.lead_id);
     const prev = map.get(key);
     if(!prev||ms>prev.lastMs) map.set(key,{lastMs:ms,count:(prev?.count||0)+1});
   }
@@ -25314,18 +25359,20 @@ async function rcExportExcel(){
 function renderLeadsBreakdown(){
   const el=document.getElementById('leads-breakdown'); if(!el) return;
   const base=Array.isArray(allLeads)?allLeads:[];
-  const isDrop=l=>l.status==='drop'||l.current_stage==='드랍';
-  const isHold=l=>l.current_stage==='보류';
-  const drop=base.filter(isDrop).length;
-  const hold=base.filter(l=>!isDrop(l)&&isHold(l)).length;
-  const active=base.length-drop-hold;
+  // ★ 탭 기준과 반드시 같아야 한다 (updateLeadsSubTabCounts 참조)
+  //   드랍·보류 DB 탭 = status==='drop' || current_stage==='보류'
+  //   고객사 DB   탭 = 그 나머지
+  //   잣대가 다르면 "활성 875 / 표시 932" 같은 모순이 생긴다.
+  const isOut=l=>l.status==='drop'||l.current_stage==='보류';
+  const out=base.filter(isOut).length;
+  const active=base.length-out;
   const raw=Array.isArray(_allLeadsRaw)?_allLeadsRaw:[];
   const pending=raw.filter(l=>l.recall_pending===true||l.recall_pending==='true').length;
   const shown=Array.isArray(filtered)?filtered.length:base.length;
   const nf=n=>Number(n).toLocaleString();
-  let t='구성 — 활성 '+nf(active)+' · 드랍 '+nf(drop)+' · 보류 '+nf(hold);
+  let t='이 탭 '+nf(active)+'건 · 드랍·보류 탭 '+nf(out)+'건 = 합계 '+nf(base.length)+'건';
   if(pending) t+=' <span style="color:var(--gray-400)">(회수 대기 '+nf(pending)+'건은 회수목록 탭에서 별도 관리)</span>';
-  if(shown!==base.length) t+='<br><span style="color:var(--gray-400)">지금 목록에 보이는 것은 필터를 거친 '+nf(shown)+'건입니다.</span>';
+  if(shown!==active) t+='<br><span style="color:var(--gray-400)">아래 목록에 보이는 것은 필터·정렬을 거친 '+nf(shown)+'건입니다.</span>';
   el.innerHTML=t;
 }
 
