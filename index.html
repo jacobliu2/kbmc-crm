@@ -6180,6 +6180,49 @@ const SCREEN_TAB_GROUPS = [
       {id:'users',    l:'사용자 관리', roles:['admin']},
   ]},
 ];
+// ── 화면 전환 진행 표시 ──────────────────────────────────
+// 로더를 다음 프레임으로 미룬 뒤로 화면이 먼저 뜨고 데이터가 나중에 찬다.
+// 그 사이가 비어 보이지 않도록 알린다.
+//   · 상단 가는 막대 — 화면을 덮지 않는다
+//   · 400ms 넘게 걸릴 때만 "불러오는 중" 문구 (깜빡임 방지)
+let _navBusyTimer=null, _navBusySafety=null;
+
+function _navBusyOn(id){
+  let bar=document.getElementById('nav-progress');
+  if(!bar){
+    bar=document.createElement('div'); bar.id='nav-progress';
+    bar.style.cssText='position:fixed;top:0;left:0;height:2.5px;width:0;z-index:9999;'
+      +'background:linear-gradient(90deg,var(--navy,#1e293b),#3b82f6);'
+      +'transition:width .35s ease-out,opacity .25s;pointer-events:none';
+    document.body.appendChild(bar);
+  }
+  bar.style.opacity='1'; bar.style.width='0';
+  requestAnimationFrame(function(){ bar.style.width='72%'; });
+
+  clearTimeout(_navBusyTimer);
+  _navBusyTimer=setTimeout(function(){
+    const scr=document.getElementById('screen-'+id); if(!scr) return;
+    if(scr.querySelector(':scope > .nav-busy-note')) return;
+    const n=document.createElement('div'); n.className='nav-busy-note';
+    n.style.cssText='padding:28px 0;text-align:center;color:var(--gray-400);font-size:13px';
+    n.textContent='불러오는 중…';
+    scr.appendChild(n);
+  },400);
+
+  clearTimeout(_navBusySafety);
+  _navBusySafety=setTimeout(function(){ _navBusyOff(); },20000);  // 안전 해제
+}
+
+function _navBusyOff(){
+  clearTimeout(_navBusyTimer); clearTimeout(_navBusySafety);
+  document.querySelectorAll('.nav-busy-note').forEach(function(n){ n.remove(); });
+  const bar=document.getElementById('nav-progress');
+  if(bar){
+    bar.style.width='100%';
+    setTimeout(function(){ bar.style.opacity='0'; setTimeout(function(){ bar.style.width='0'; },260); },120);
+  }
+}
+
 // ── 화면 이동 이력 (뒤로/앞으로) ─────────────────────────
 let _navHist=[], _navPos=-1, _navMoving=false;
 
@@ -6281,13 +6324,22 @@ function showScreen(id, btn){
     'users':loadUsersScreen
   }[id];
   if(_loader){
+    _navBusyOn(id);
     requestAnimationFrame(function(){
       setTimeout(function(){
-        try{ _loader(); }
+        let _r;
+        try{ _r=_loader(); }
         catch(e){
           console.error('[화면전환] '+id+' 로더 오류:',e);
           try{ showToast('화면을 여는 중 문제가 있었습니다. 새로고침해 주십시오.','error'); }catch(_){}
+          _navBusyOff(); return;
         }
+        // 로더가 async면 끝날 때, 아니면 즉시 해제
+        if(_r && typeof _r.then==='function'){
+          _r.then(function(){ _navBusyOff(); }, function(e){
+            console.error('[화면전환] '+id+' 로더 실패:',e); _navBusyOff();
+          });
+        } else { _navBusyOff(); }
       },0);
     });
   }
