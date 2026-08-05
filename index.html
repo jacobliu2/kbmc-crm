@@ -5467,14 +5467,25 @@ async function _loadAllActivities(){
   if(typeof perfOn==='function' && perfOn('actSummary')){
     try{
       const t0=Date.now();
-      const rows=await sbPost('rpc/lead_act_summary', {});
-      if(Array.isArray(rows) && rows.length){
-        console.log('[활동기록] 요약 조회:',rows.length,'줄 /',(Date.now()-t0),'ms');
-        return rows;
+      // ★ sbPost 를 쓰면 안 된다. sbPost 는 한 건 삽입용이라
+      //   배열 응답에서 d[0] 만 꺼내 돌려준다 → 요약 2,503줄이 1줄로 잘린다.
+      //   RPC 는 fetch 로 직접 호출해 배열 전체를 받는다.
+      const r=await fetch(SB_URL+'/rest/v1/rpc/lead_act_summary',{
+        method:'POST', headers:{...sbH(),'Content-Type':'application/json'}, body:'{}'
+      });
+      if(r.ok){
+        const rows=await r.json().catch(()=>null);
+        if(Array.isArray(rows) && rows.length){
+          const kb=Math.round(JSON.stringify(rows).length/1024);
+          console.log('[활동기록] 요약 조회:',rows.length,'줄 /',kb,'KB /',(Date.now()-t0),'ms');
+          return rows;
+        }
+        console.warn('[활동기록] 요약 결과가 배열이 아니거나 비었음 → 전체 조회로 폴백', rows);
+      }else{
+        console.warn('[활동기록] 요약 RPC 실패 HTTP',r.status,'→ 전체 조회로 폴백');
       }
-      console.warn('[활동기록] 요약 결과가 비어 전체 조회로 폴백');
     }catch(e){
-      console.warn('[활동기록] 요약 조회 실패 → 전체 조회로 폴백:',e);
+      console.warn('[활동기록] 요약 조회 예외 → 전체 조회로 폴백:',e);
     }
   }
   // 성능 최적화: 전체 컬럼 대신 목록·히스토리 렌더에 필요한 필드만 조회
