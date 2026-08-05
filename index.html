@@ -6206,13 +6206,20 @@ function showScreen(id, btn){
       if(sel && saved && ['all','month','year'].includes(saved)) sel.value = saved;
     }catch(e){}
   }
-  ({
-    'admin':loadAdmin,'insights':loadInsights,'leads':loadLeads,'my-leads':loadMyLeads,'my-clients':loadMyClients,
-    'settings':loadSettings,'tm-panel':loadTmPanel,'branch':loadBranchScreen,'activity':loadActivityScreen,'notices':loadNoticesScreen,
-    'stage-dashboard':loadStageDashboard,'dj-status':loadDjStatus,'messages':loadMessages,
-    'users':loadUsersScreen
-  }[id]||function(){})();
-  try{ renderScreenTabs(id); }catch(_e){}
+  // 로더에서 예외가 나면 그 뒤(탭바 렌더)가 통째로 건너뛰어져
+  // "화면이 안 바뀐 것처럼" 보인다. 예외를 여기서 가두고 원인을 콘솔에 남긴다.
+  try{
+    ({
+      'admin':loadAdmin,'insights':loadInsights,'leads':loadLeads,'my-leads':loadMyLeads,'my-clients':loadMyClients,
+      'settings':loadSettings,'tm-panel':loadTmPanel,'branch':loadBranchScreen,'activity':loadActivityScreen,'notices':loadNoticesScreen,
+      'stage-dashboard':loadStageDashboard,'dj-status':loadDjStatus,'messages':loadMessages,
+      'users':loadUsersScreen
+    }[id]||function(){})();
+  }catch(e){
+    console.error('[화면전환] '+id+' 로더 오류:',e);
+    showToast('화면을 여는 중 문제가 있었습니다. 새로고침해 주십시오.','error');
+  }
+  try{ renderScreenTabs(id); }catch(_e){ console.warn('[화면전환] 탭바 렌더 실패:',_e); }
 }
 
 // ── 유틸 ─────────────────────────────────────────────────
@@ -9482,6 +9489,11 @@ function _navRecallCount(){
     //   예전엔 이 시점에 localStorage의 묵은 데이터로 세고 그대로 굳어,
     //   탭 괄호·목록과 1건씩 어긋난 채 남았다.
     if(!Array.isArray(allActivities) || allActivities.length===0) return null;
+    // 서버 계산값이 5분 이내면 그것을 쓴다 (목록과 반드시 일치)
+    if(typeof window._rcServerCount==='number' &&
+       window._rcServerAt && (Date.now()-window._rcServerAt)<5*60*1000){
+      if(curUser?.role==='admin') return window._rcServerCount;
+    }
     const lam=_rcBuildLastActMapFromCache();
     let arr=_rcCandidates();
     if(curUser.role==='branch'){ const br=curUser.name; arr=arr.filter(l=>l.branch_name===br); }
@@ -14742,6 +14754,8 @@ function renderStageDashboard(){
         const _why=[];
         if((_sdashState.period||'all')!=='all') _why.push('기간');
         if(_sdashState.branch||_sdashState.team) _why.push('범위');
+        const _noBranch=_pool.filter(l=>!l.branch_name).length;
+        if(_noBranch) _why.push('지점 미배정 '+_noBranch.toLocaleString()+'건');
         const _noDate=_pool.filter(l=>_leadTimeMs(l)===null).length;
         if(_noDate) _why.push('날짜 없음 '+_noDate.toLocaleString()+'건');
         _el.textContent='전체 '+_pool.length.toLocaleString()+'건 중 '
@@ -24474,8 +24488,19 @@ async function rcRender(){
   } else {
     const ids = cands.map(l=>String(l.id));
     lastActMap = await _rcFetchLastActs(ids);
-    // 서버 기준으로 다시 셌으니 네비 뱃지도 같은 자리에서 맞춘다.
-    setTimeout(function(){ try{ updateNavRecallBadge(); }catch(_){}} , 0);
+    // ★ 서버 계산 결과를 정본으로 보관한다.
+    //   뱃지·탭 괄호는 캐시로 세고 목록은 서버로 세어 1건씩 어긋났다.
+    //   이제 서버 값이 한 번 나오면 그것을 모두가 쓴다.
+    try{
+      let _n=0;
+      for(const _l of cands){
+        const _v=lastActMap.get(String(_l.id));
+        if(_rcJudge(_l, _v?.lastMs)) _n++;
+      }
+      window._rcServerCount=_n;
+      window._rcServerAt=Date.now();
+    }catch(_){}
+    setTimeout(function(){ try{ updateNavRecallBadge(); if(typeof updateLeadsSubTabCounts==='function') updateLeadsSubTabCounts(); }catch(_){}} , 0);
   }
 
   _rcTargets = [];
