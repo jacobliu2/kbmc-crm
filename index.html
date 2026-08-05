@@ -6630,11 +6630,12 @@ async function globalSearch(q){
       </div>`;
     }
 
-    // 검색 결과 - 카테고리 분류
-    (allActivities||[]).filter(a=>
-      (a.content||'').toLowerCase().includes(q.toLowerCase()) ||
-      (a.author||'').toLowerCase().includes(q.toLowerCase())
-    ).slice(0,5);
+    // [제거됨] 활동기록 검색 — 결과를 어디에도 담지 않는 사문화 코드였다.
+    //   원본: (allActivities||[]).filter(...).slice(0,5);  ← 반환값 미사용
+    //   화면에 활동 검색 결과가 표시된 적이 없으며, 타자 한 글자마다
+    //   활동 19,640건을 훑어 CPU만 소모했다.
+    //   활동 본문 검색이 필요해지면 서버 질의로 새로 구현할 것:
+    //     activities?select=...&content=ilike.*질의*&limit=5
 
     // 리드 섹션
     if(matched.length>0){
@@ -11743,8 +11744,31 @@ async function saveActivity(){
   const lid=document.getElementById('act-lead-id').value;
   let content=document.getElementById('act-content').value.trim();
   const type=document.getElementById('act-type').value;
-  // 중복 활동 방지: 같은 고객·같은 유형·같은 내용을 5분 내 재등록하면 확인 (다른 날 재시도는 영향 없음)
-  const _recentDup=(allActivities||[]).find(a=> a.lead_id===lid && a.type===type && content && (a.content||'').trim()===content && (Date.now()-new Date(a.created_at).getTime())<5*60*1000);
+  // 중복 활동 방지: 같은 고객·같은 유형·같은 내용을 5분 내 재등록하면 확인
+  //   전역 캐시(allActivities) 대신 해당 리드의 최근 활동만 서버에서 조회한다.
+  //   이유: 캐시가 요약본(본문 잘림)으로 바뀌면 완전일치 비교가 오탐한다.
+  //   조회량이 극소이므로 부담 없음. 실패 시 기존 캐시로 폴백.
+  let _recentDup=null;
+  if(content){
+    const _since=new Date(Date.now()-5*60*1000).toISOString();
+    try{
+      const _rows = testMode ? null : await sbGet(
+        'activities?select=id,type,content,created_at&lead_id=eq.'+encodeURIComponent(lid)+
+        '&created_at=gte.'+encodeURIComponent(_since)+'&limit=20');
+      if(_rows!==null && Array.isArray(_rows)){
+        _recentDup=_rows.find(a=> a.type===type && (a.content||'').trim()===content );
+      } else {
+        _recentDup=(allActivities||[]).find(a=> a.lead_id===lid && a.type===type
+          && (a.content||'').trim()===content
+          && (Date.now()-new Date(a.created_at).getTime())<5*60*1000);
+      }
+    }catch(e){
+      console.warn('중복검사 서버조회 실패, 캐시로 폴백:',e);
+      _recentDup=(allActivities||[]).find(a=> a.lead_id===lid && a.type===type
+        && (a.content||'').trim()===content
+        && (Date.now()-new Date(a.created_at).getTime())<5*60*1000);
+    }
+  }
   if(_recentDup){
     if(!confirm('방금 같은 고객에게 동일한 내용의 활동을 등록하셨습니다.\n\n그래도 한 번 더 등록할까요?')){ return; }
   }
