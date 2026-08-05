@@ -8311,7 +8311,14 @@ function renderRecallWarning(lastMap){
       } else {
         const bd=bizElapsedDays(lastMs,NOW); ratio=bd/5; scat='접촉·상담'; remain=Math.max(0,(5-bd))+'영업일';
       }
-      if(ratio>=1.0){ over++; }
+      // ★ '이미 회수 대상' 판정은 _rcJudge 하나만 쓴다.
+      //   예전엔 여기서 ratio>=1.0 으로 따로 셌고, 그 잣대가 _rcJudge 와 달랐다.
+      //     · 관리 단계 : _rcJudge 는 30영업일 '초과', 여기는 '이상'
+      //     · 배정 미기록 : _rcJudge 는 단계가 '배정'일 때만, 여기는 단계 무관
+      //   그래서 회수대상 탭(30건)과 인사이트(32건)가 어긋났다.
+      let _isOver=false;
+      try{ _isOver = !!_rcJudge(l, lastMs); }catch(_e){ _isOver = (ratio>=1.0); }
+      if(_isOver){ over++; }
       else if(ratio>=0.7){
         imminent++; byStage[scat]=(byStage[scat]||0)+1;
         const b=l.branch_name||'미지정'; byBranch[b]=(byBranch[b]||0)+1;
@@ -9236,6 +9243,9 @@ async function loadLeads(){
     _actsRaw=_f[0]; _nasRaw=_f[1];
   }
   allActivities = _actsRaw;
+  // 데이터가 새로 들어왔으니 네비 뱃지도 같은 근거로 다시 센다.
+  // (이 호출이 없으면 뱃지만 옛 값에 머물러 탭·목록과 어긋난다)
+  setTimeout(function(){ try{ updateNavRecallBadge(); }catch(_){}} , 0);
   allNextActions = _nasRaw;
   allLeads = _leadsRaw;
   allLeads=allLeads.filter(l=>l.status!=='deleted');
@@ -9468,6 +9478,10 @@ function _recallViewCount(){
 function _navRecallCount(){
   try{
     if(curUser?.role!=='admin' && curUser?.role!=='branch') return 0;
+    // ★ 활동기록이 아직 안 왔으면 세지 않는다.
+    //   예전엔 이 시점에 localStorage의 묵은 데이터로 세고 그대로 굳어,
+    //   탭 괄호·목록과 1건씩 어긋난 채 남았다.
+    if(!Array.isArray(allActivities) || allActivities.length===0) return null;
     const lam=_rcBuildLastActMapFromCache();
     let arr=_rcCandidates();
     if(curUser.role==='branch'){ const br=curUser.name; arr=arr.filter(l=>l.branch_name===br); }
@@ -9477,6 +9491,7 @@ function _navRecallCount(){
 function updateNavRecallBadge(){
   try{
     const c=_navRecallCount();
+    if(c===null) return;                 // 아직 셀 수 없음 — 기존 표시 유지
     document.querySelectorAll('#main-nav .nav-recall-badge').forEach(b=>{
       if(c>0){ b.textContent=c; b.style.display=''; } else b.style.display='none';
     });
@@ -24452,6 +24467,8 @@ async function rcRender(){
   } else {
     const ids = cands.map(l=>String(l.id));
     lastActMap = await _rcFetchLastActs(ids);
+    // 서버 기준으로 다시 셌으니 네비 뱃지도 같은 자리에서 맞춘다.
+    setTimeout(function(){ try{ updateNavRecallBadge(); }catch(_){}} , 0);
   }
 
   _rcTargets = [];
