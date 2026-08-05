@@ -2518,6 +2518,23 @@ body.dark-mode *::-webkit-scrollbar-thumb:hover{background:rgba(180,208,232,.30)
           <span id="tm-tab-save-status" style="font-size:12px;color:var(--gray-400);margin-left:10px"></span>
         </div>
 
+        <!-- 성능 실험 설정 -->
+        <div class="card" style="grid-column:1/-1">
+          <div class="section-title"><svg class="li" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg>성능 <span style="font-size:11px;font-weight:400;color:var(--gray-400)">(실험 중인 기능)</span></div>
+          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:12px;border-radius:var(--r-sm);border:1.5px solid var(--gray-200)">
+            <input type="checkbox" id="opt-act-summary" onchange="setPerfOpt('actSummary', this.checked)" style="margin-top:2px;width:16px;height:16px;cursor:pointer">
+            <span>
+              <span style="font-size:13px;font-weight:600">활동기록 요약 조회 사용</span>
+              <span style="font-size:10px;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:8px;margin-left:6px;font-weight:700">실험</span>
+              <div style="font-size:12px;color:var(--gray-500);margin-top:4px;line-height:1.6">
+                화면을 열 때 활동기록을 요약본으로 받습니다. 받는 양이 약 1/6로 줄어 로딩이 빨라집니다.<br>
+                활동 건수나 미리보기가 이상해 보이면 이 항목을 끄십시오. <b>즉시 원래대로 돌아갑니다.</b>
+              </div>
+              <div id="opt-act-summary-state" style="font-size:11px;color:var(--gray-400);margin-top:6px"></div>
+            </span>
+          </label>
+        </div>
+
         <!-- DB 커넥션 모니터링 -->
         <div class="card" style="grid-column:1/-1">
           <div class="section-title"><svg class="li" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>DB 커넥션 모니터링 <span style="font-size:11px;font-weight:400;color:var(--gray-400)">(연결 누수 감시)</span></div>
@@ -13468,11 +13485,52 @@ function loadSettings(){
   initTmDefaultTabUI();renderStagesList();renderNoticeList();loadSbUi();renderTabVisSettings();renderLeaderReqs();
   loadDeleteLogs();
   loadConnStats();
+  try{ renderPerfOpts(); }catch(e){}
   // Supabase에서 최신 accounts 로드 후 렌더
   loadAccsFromSB().then(()=>{ syncBranchTeamMap(); renderUserList(); });
 }
 
 // ── DB 커넥션 모니터링 (연결 누수 감시) ──
+// ── 성능 실험 설정 ────────────────────────────────────────
+// 저장 자리를 3단으로 둔다. 나중에 '전원 적용'(DB 전역)으로 넓힐 때
+// 읽는 코드를 고치지 않도록 미리 순서를 잡아둔다.
+//   ① 내 브라우저 설정  (지금 단계)
+//   ② DB 전역 설정      (다음 단계 — window._perfGlobal 에 실릴 예정)
+//   ③ 코드 기본값       (꺼짐)
+const _PERF_KEY='kbmc_perf_opts';
+
+function getPerfOpts(){
+  try{ return JSON.parse(localStorage.getItem(_PERF_KEY)||'{}'); }catch(e){ return {}; }
+}
+
+function perfOn(name){
+  const mine=getPerfOpts();
+  if(Object.prototype.hasOwnProperty.call(mine,name)) return !!mine[name];   // ①
+  const g=window._perfGlobal||{};
+  if(Object.prototype.hasOwnProperty.call(g,name)) return !!g[name];         // ②
+  return false;                                                              // ③
+}
+
+function setPerfOpt(name,val){
+  const o=getPerfOpts(); o[name]=!!val;
+  try{ localStorage.setItem(_PERF_KEY,JSON.stringify(o)); }catch(e){}
+  renderPerfOpts();
+  showToast(val ? '켰습니다. 화면을 새로고침하면 적용됩니다.'
+                : '껐습니다. 화면을 새로고침하면 원래대로 돌아갑니다.', 'success');
+}
+
+function renderPerfOpts(){
+  const box=document.getElementById('opt-act-summary'); if(!box) return;
+  box.checked=perfOn('actSummary');
+  const st=document.getElementById('opt-act-summary-state');
+  if(st){
+    const mine=getPerfOpts();
+    st.textContent = Object.prototype.hasOwnProperty.call(mine,'actSummary')
+      ? '이 브라우저에만 적용됩니다. 다른 사용자에게는 영향이 없습니다.'
+      : '설정하지 않음 — 기본값(꺼짐)을 따릅니다.';
+  }
+}
+
 async function loadConnStats(){
   const el=document.getElementById('conn-mon-body');
   if(!el) return;
