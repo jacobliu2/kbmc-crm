@@ -4483,7 +4483,7 @@ function _renderMcGrid(gridId, items, emptyMsg, isPotential){
     const leadActs=acts.filter(a=>a.lead_id===l.id&&a.type!=='assign')
       .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
     const lastAct=leadActs[0];
-    const actCnt=leadActs.length;
+    const actCnt=_actCountOf(leadActs);
     // _isPot 항목은 customer_type 기반으로 색상 결정
     const _effStage = l.current_stage || (l.customer_type==='contract'?'계약':l.customer_type==='managed'?'관리':'');
     const stageClr=_effStage==='계약'?'var(--ok)':'var(--blue)';
@@ -4788,7 +4788,7 @@ function renderLeadCards(){
     const leadActs = acts.filter(a=>a.lead_id===l.id && a.type!=='assign')
       .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
     const lastAct = leadActs[0];
-    const actCnt = leadActs.length;
+    const actCnt = _actCountOf(leadActs);
     const grade = calcLeadGrade(l, acts);
     const sc = SC2[l.status]||'var(--gray-400)';
     const sl = SL2[l.status]||l.status;
@@ -5459,6 +5459,24 @@ async function _fetchPagesParallel(qs, tag, opt){
 }
 
 async function _loadAllActivities(){
+  // ── 요약 조회 (설정 > 성능 에서 켤 수 있음) ──────────────
+  //   리드별 마지막 활동 1건 + 건수만 받는다. 19,640건 → 3,055건.
+  //   본문은 120자로 잘리므로, 전체 본문이 필요한 상세 화면은
+  //   기존대로 lead_id별 개별 조회를 쓴다(이미 그렇게 되어 있음).
+  //   이상이 있으면 설정에서 끄면 즉시 기존 방식으로 되돌아간다.
+  if(typeof perfOn==='function' && perfOn('actSummary')){
+    try{
+      const t0=Date.now();
+      const rows=await sbPost('rpc/lead_act_summary', {});
+      if(Array.isArray(rows) && rows.length){
+        console.log('[활동기록] 요약 조회:',rows.length,'줄 /',(Date.now()-t0),'ms');
+        return rows;
+      }
+      console.warn('[활동기록] 요약 결과가 비어 전체 조회로 폴백');
+    }catch(e){
+      console.warn('[활동기록] 요약 조회 실패 → 전체 조회로 폴백:',e);
+    }
+  }
   // 성능 최적화: 전체 컬럼 대신 목록·히스토리 렌더에 필요한 필드만 조회
   // 제외: updated_at, deleted_at 등 대용량·비사용 컬럼
   const SELECT_COLS = 'id,lead_id,type,content,stage,author,date,created_at';
@@ -14511,6 +14529,20 @@ function _periodRange(key){
 }
 
 // 리드의 대표 시점 (updated_at > assigned_at > created_at)
+// 리드 하나의 활동 건수를 구한다.
+//   전체 조회 모드 : 배열 길이가 곧 건수
+//   요약 조회 모드 : 배열에 1줄뿐이나 그 줄이 act_count 를 들고 있다
+// 두 모드를 플래그 없이 자동 구분한다 — act_count 유무로 판단.
+function _actCountOf(leadActs, humanOnly){
+  if(!leadActs || !leadActs.length) return 0;
+  const f=leadActs[0];
+  if(f && typeof f.act_count==='number'){
+    if(humanOnly && typeof f.act_count_human==='number') return f.act_count_human;
+    return f.act_count;
+  }
+  return leadActs.length;
+}
+
 function _leadTimeMs(l){
   const t = l.updated_at || l.assigned_at || l.created_at;
   if(!t) return null;
@@ -19925,7 +19957,7 @@ function calcLeadGrade(lead, acts){
   const stageScore={'배정':5,'접촉':10,'상담':30,'제안':50,'계약':100,'관리':80,'드랍':0,'보류':5};
   const now=Date.now();
   const leadActs=(acts||[]).filter(a=>a.lead_id===lead.id&&a.type!=='assign');
-  const actCount=leadActs.length;
+  const actCount=_actCountOf(leadActs);
   const lastAct=leadActs.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];
   const daysSince=lastAct?Math.floor((now-new Date(lastAct.created_at).getTime())/86400000):999;
 
@@ -21871,7 +21903,7 @@ function _buildTmCard(l,acts){
   const leadActs=acts.filter(a=>a.lead_id===l.id&&a.type!=='assign')
     .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
   const lastAct=leadActs[0];
-  const actCount=leadActs.length;
+  const actCount=_actCountOf(leadActs);
   const isNew=l.status==='assigned'||l.status==='pending';
   const isHC=!!l.tm_happycall;
   const _msFrom=l.assigned_at?new Date(l.assigned_at).getTime():0;
@@ -21974,7 +22006,7 @@ function _buildTmHqCard(l,acts){
   const leadActs=acts.filter(a=>a.lead_id===l.id&&a.type!=='assign')
     .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
   const lastAct=leadActs[0];
-  const actCount=leadActs.length;
+  const actCount=_actCountOf(leadActs);
   // 이관 후 상태 색상
   const hasBranch=!!(l.branch_name&&l.branch_name!=='대전'&&l.branch_name!=='대전센터');
   const hasTeam=!!(l.team_name&&l.team_name!=='대전센터');
@@ -23124,7 +23156,8 @@ function openDbCleanup(opts){
               <span style="font-size:11px;font-weight:700;color:var(--err)">🔴 [${dg.type}] ${dg.group.length}건 중복</span>
             </div>
             ${dg.group.map((l,li)=>{
-              const actCnt=acts.filter(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type)).length;
+              const _la=acts.filter(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type));
+              const actCnt=_actCountOf(_la, true);
               const lastAct=acts.filter(a=>a.lead_id===l.id&&!['assign','status_change'].includes(a.type))
                 .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];
               const stageClr={'계약':'var(--ok)','관리':'var(--ok)','드랍':'var(--err)','보류':'var(--warn)'}[l.current_stage]||'var(--blue)';
