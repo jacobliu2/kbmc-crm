@@ -1116,6 +1116,16 @@ body.dark-mode *::-webkit-scrollbar-thumb:hover{background:rgba(180,208,232,.30)
 
   <header>
     <div class="logo" onclick="goHome()" title="메인화면으로 이동">KBMC <span>CRM</span></div>
+    <div id="nav-histbar" style="display:flex;gap:2px;margin:0 4px 0 8px;flex-shrink:0">
+      <button id="nav-back" onclick="navBack()" title="이전 화면 (Alt+←)"
+        data-base="width:28px;height:28px;border:none;background:none;padding:0;display:flex;align-items:center;justify-content:center;border-radius:6px;color:var(--gray-500)"
+        style="width:28px;height:28px;border:none;background:none;padding:0;display:flex;align-items:center;justify-content:center;border-radius:6px;color:var(--gray-500);opacity:.28;cursor:default">
+        <svg class="li" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <button id="nav-fwd" onclick="navForward()" title="다음 화면 (Alt+→)"
+        data-base="width:28px;height:28px;border:none;background:none;padding:0;display:flex;align-items:center;justify-content:center;border-radius:6px;color:var(--gray-500)"
+        style="width:28px;height:28px;border:none;background:none;padding:0;display:flex;align-items:center;justify-content:center;border-radius:6px;color:var(--gray-500);opacity:.28;cursor:default">
+        <svg class="li" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></button>
+    </div>
     <nav id="main-nav"></nav>
     <div class="huser">
       <!-- 햄버거 버튼 (모바일만) -->
@@ -6067,6 +6077,13 @@ const NAV_CFG = {
 const RL={admin:'관리자',dbmanager:'DB관리자',branch:'지점장',team:'팀장',tm:'대전TM'};
 
 // ── KBMC CRM 로고 클릭 → 역할별 메인화면으로 이동 ───────────────
+// Alt+← / Alt+→ 단축키
+document.addEventListener('keydown', function(e){
+  if(!e.altKey) return;
+  if(e.key==='ArrowLeft'){ e.preventDefault(); navBack(); }
+  else if(e.key==='ArrowRight'){ e.preventDefault(); navForward(); }
+});
+
 function goHome(){
   try{
     if(!curUser||!curUser.role){ return; }
@@ -6163,6 +6180,38 @@ const SCREEN_TAB_GROUPS = [
       {id:'users',    l:'사용자 관리', roles:['admin']},
   ]},
 ];
+// ── 화면 이동 이력 (뒤로/앞으로) ─────────────────────────
+let _navHist=[], _navPos=-1, _navMoving=false;
+
+function _navPush(id){
+  if(_navMoving) return;                       // 뒤로/앞으로로 온 이동은 기록하지 않는다
+  if(_navHist[_navPos]===id) return;           // 같은 화면 재클릭은 무시
+  _navHist=_navHist.slice(0,_navPos+1);
+  _navHist.push(id);
+  if(_navHist.length>30) _navHist.shift();     // 30개까지만 보관
+  _navPos=_navHist.length-1;
+  _navBtnSync();
+}
+
+function navBack(){
+  if(_navPos<=0) return;
+  _navMoving=true; _navPos--;
+  try{ showScreen(_navHist[_navPos]); } finally { _navMoving=false; _navBtnSync(); }
+}
+
+function navForward(){
+  if(_navPos>=_navHist.length-1) return;
+  _navMoving=true; _navPos++;
+  try{ showScreen(_navHist[_navPos]); } finally { _navMoving=false; _navBtnSync(); }
+}
+
+function _navBtnSync(){
+  const b=document.getElementById('nav-back'), f=document.getElementById('nav-fwd');
+  const off='opacity:.28;cursor:default', on='opacity:1;cursor:pointer';
+  if(b) b.setAttribute('style', b.getAttribute('data-base')+';'+(_navPos>0?on:off));
+  if(f) f.setAttribute('style', f.getAttribute('data-base')+';'+(_navPos<_navHist.length-1?on:off));
+}
+
 function renderScreenTabs(active){
   const grp = SCREEN_TAB_GROUPS.find(g=>g.tabs.some(t=>t.id===active));
   if(!grp) return;
@@ -6217,20 +6266,31 @@ function showScreen(id, btn){
       if(sel && saved && ['all','month','year'].includes(saved)) sel.value = saved;
     }catch(e){}
   }
-  // 로더에서 예외가 나면 그 뒤(탭바 렌더)가 통째로 건너뛰어져
-  // "화면이 안 바뀐 것처럼" 보인다. 예외를 여기서 가두고 원인을 콘솔에 남긴다.
-  try{
-    ({
-      'admin':loadAdmin,'insights':loadInsights,'leads':loadLeads,'my-leads':loadMyLeads,'my-clients':loadMyClients,
-      'settings':loadSettings,'tm-panel':loadTmPanel,'branch':loadBranchScreen,'activity':loadActivityScreen,'notices':loadNoticesScreen,
-      'stage-dashboard':loadStageDashboard,'dj-status':loadDjStatus,'messages':loadMessages,
-      'users':loadUsersScreen
-    }[id]||function(){})();
-  }catch(e){
-    console.error('[화면전환] '+id+' 로더 오류:',e);
-    showToast('화면을 여는 중 문제가 있었습니다. 새로고침해 주십시오.','error');
-  }
   try{ renderScreenTabs(id); }catch(_e){ console.warn('[화면전환] 탭바 렌더 실패:',_e); }
+  _navPush(id);
+
+  // ★ 로더는 다음 프레임으로 미룬다.
+  //   [이전] 여기서 곧바로 실행 → 로더가 오래 붙잡으면 브라우저가 화면을
+  //          다시 그리지 못해 "네비를 눌러도 안 바뀐다"로 보였다.
+  //          (회수대상 탭 → 영업관리 이동이 대표 증상)
+  //   [지금] 화면 전환을 먼저 그리고, 그 다음에 데이터를 불러온다.
+  const _loader = {
+    'admin':loadAdmin,'insights':loadInsights,'leads':loadLeads,'my-leads':loadMyLeads,'my-clients':loadMyClients,
+    'settings':loadSettings,'tm-panel':loadTmPanel,'branch':loadBranchScreen,'activity':loadActivityScreen,'notices':loadNoticesScreen,
+    'stage-dashboard':loadStageDashboard,'dj-status':loadDjStatus,'messages':loadMessages,
+    'users':loadUsersScreen
+  }[id];
+  if(_loader){
+    requestAnimationFrame(function(){
+      setTimeout(function(){
+        try{ _loader(); }
+        catch(e){
+          console.error('[화면전환] '+id+' 로더 오류:',e);
+          try{ showToast('화면을 여는 중 문제가 있었습니다. 새로고침해 주십시오.','error'); }catch(_){}
+        }
+      },0);
+    });
+  }
 }
 
 // ── 유틸 ─────────────────────────────────────────────────
