@@ -6291,8 +6291,43 @@ function showScreen(id, btn){
   if(allowed.length && !allowed.includes(id)){
     showToast('해당 화면에 접근할 수 없습니다.','error'); return;
   }
-  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
-  const el=document.getElementById('screen-'+id); if(el)el.classList.add('active');
+  // ── 화면 표시를 강제 지정한다 ────────────────────────────
+  //   [이전] .active 클래스만 토글 → CSS(.screen{display:none})에 의존.
+  //          회수대상 탭에서 다른 네비로 갈 때 목록이 계속 보이는 증상이 있었다.
+  //   [지금] 인라인 style 로 직접 지정. 인라인이 클래스보다 우선하므로
+  //          어떤 이유로든 한 화면만 보이는 것이 보장된다.
+  document.querySelectorAll('.screen').forEach(function(sc){
+    sc.classList.remove('active');
+    sc.style.display='none';
+  });
+  const el=document.getElementById('screen-'+id);
+  if(el){ el.classList.add('active'); el.style.display='block'; }
+  else { console.warn('[화면전환] screen-'+id+' 요소를 찾지 못했습니다.'); }
+
+  // ── 이중 안전장치 ────────────────────────────────────────
+  //   증상: 회수대상 탭에 있다가 다른 네비를 누르면 네비 하이라이트만 바뀌고
+  //         회수 목록이 계속 보였다.
+  //   DB관리를 떠날 때 하위 패널을 직접 숨겨, 어떤 경로로든 남지 않게 한다.
+  if(id!=='leads'){
+    ['active','drop','recall','trash'].forEach(function(t){
+      const pnl=document.getElementById('leads-panel-'+t);
+      if(pnl) pnl.style.display='none';
+    });
+  }else if(typeof _leadsSubTab!=='undefined'){
+    ['active','drop','recall','trash'].forEach(function(t){
+      const pnl=document.getElementById('leads-panel-'+t);
+      if(pnl) pnl.style.display = (t===_leadsSubTab) ? '' : 'none';
+    });
+  }
+  // 전환이 실제로 이뤄졌는지 확인 — 어긋나면 콘솔에 남긴다
+  try{
+    const _vis=[...document.querySelectorAll('.screen')]
+      .filter(function(sc){ return getComputedStyle(sc).display!=='none'; })
+      .map(function(sc){ return sc.id.replace('screen-',''); });
+    if(_vis.length!==1 || _vis[0]!==id)
+      console.warn('[화면전환] 요청',id,'/ 실제 보이는 화면',_vis);
+  }catch(_){}
+
   buildNav(); // 탭 active 동기화
   if(btn)btn?.classList.add('active');
   else{const b=document.querySelector(`.nb[data-s="${id}"]`);if(b)b.classList.add('active');}
@@ -23986,6 +24021,20 @@ function openBrAssignPopup(){
   const leaders=TEAM_MAP[curUser.name]||[];
   _brAssignSelTeams.clear();
 
+  // ★ 이미 대전TM과 협업 중이면 미리 켜 둔다.
+  //   안 그러면 지점장이 협업 팀장만 추가하고 확정할 때
+  //   대전이 조용히 빠진다(고르지 않은 것으로 처리되므로).
+  //   선택된 건 중 하나라도 대전 관여가 있으면 켠다.
+  try{
+    const _pool=(_allLeadsRaw&&_allLeadsRaw.length?_allLeadsRaw:(allLeads||[]));
+    const _hasTm=[...brSelIds].some(function(id){
+      const l=_pool.find(function(x){return x.id===id;}); if(!l) return false;
+      if(l.tm_transferred===true||l.tm_transferred==='true') return true;
+      try{ return JSON.parse(l.collab_branches||'[]').includes('대전TM'); }catch(e){ return false; }
+    });
+    if(_hasTm) _brAssignSelTeams.add('대전TM');
+  }catch(e){ console.warn('대전 협업 상태 확인 실패:',e); }
+
   let ov=document.getElementById('ov-br-assign');
   if(!ov){ov=document.createElement('div');ov.id='ov-br-assign';ov.className='ov-bg';document.body.appendChild(ov);}
 
@@ -24033,6 +24082,9 @@ function openBrAssignPopup(){
           <div class="mgr-sub" style="color:var(--blue)">협업추적</div>
         </div>
       </div>
+      <div style="font-size:11px;color:var(--gray-400);line-height:1.6;margin:-4px 0 10px">
+        선택하면 대전TM 화면에도 함께 보입니다. <b>해제하면 대전에서 빠집니다.</b>
+      </div>
     </div>
     <div id="br-assign-sel-label" style="font-size:12px;color:var(--blue);font-weight:600;margin:8px 0 14px;min-height:18px"></div>
     <div class="fg" style="margin-bottom:16px">
@@ -24045,12 +24097,23 @@ function openBrAssignPopup(){
     </div>
   </div>`;
   ov.classList.add('open');
+  try{ _brAssignSyncCards(); }catch(e){}
 }
 
 function toggleBrAssignTeam(el, team){
   if(_brAssignSelTeams.has(team)){_brAssignSelTeams.delete(team);el.classList.remove('selected');}
   else{_brAssignSelTeams.add(team);el.classList.add('selected');}
   // 선택 레이블 업데이트
+  const sel=[..._brAssignSelTeams];
+  const lbl=document.getElementById('br-assign-sel-label');
+  if(lbl) lbl.innerHTML=sel.length?'<svg class="li" viewBox="0 0 24 24"><path d="M5 12l5 5L20 6"/></svg> 선택: '+sel.join(', '):'';
+}
+
+// 팝업이 그려진 뒤, 미리 켜 둔 항목에 선택 표시를 입힌다
+function _brAssignSyncCards(){
+  document.querySelectorAll('#ov-br-assign .mgr-card[data-team]').forEach(function(c){
+    if(_brAssignSelTeams.has(c.getAttribute('data-team'))) c.classList.add('selected');
+  });
   const sel=[..._brAssignSelTeams];
   const lbl=document.getElementById('br-assign-sel-label');
   if(lbl) lbl.innerHTML=sel.length?'<svg class="li" viewBox="0 0 24 24"><path d="M5 12l5 5L20 6"/></svg> 선택: '+sel.join(', '):'';
@@ -24089,8 +24152,12 @@ async function confirmBrAssignPopup(){
       status:'assigned',
       yj_transferred:false,yj_from_role:'',yj_from_branch:'',
       collab_branches:isCollab?JSON.stringify(collabBranches):null,
-      // 대전TM 이관 플래그 초기화 (재배정 시 대전 관여 제거)
-      tm_transferred:false,
+      // ★ 대전TM을 고르면 실제로 대전에 넘어가야 한다.
+      //   [이전] 무조건 false → 지점장이 협업을 추가하는 순간 대전이 빠졌다.
+      //          (재콜건: 1지점장 + 대전 동시 분배 후, 2지점 협업 추가 시 대전 소실)
+      //   [지금] 팝업에서 「대전TM센터」를 고르면 유지, 안 고르면 해제.
+      //          지점장이 켜고 끄며 직접 정한다.
+      tm_transferred: collabBranches.includes('대전TM'),
       tm_hq_transferred:false
     };
     // 재배정DB에서 배정됐으면 auto_recalled 초기화
