@@ -5917,6 +5917,22 @@ let TEAM_MAP = {
   '최종길':['박상욱','박승규','이성원','유영준','전용준'],
 };
 
+// ── 관리자 전용 지점 ──────────────────────────────────────
+// 외부파트너·협업파트너는 내부 지점이 아니라 외부 협력 창구다.
+// 일반 사용자 화면에는 노출하지 않고 관리자만 배정·조회할 수 있게 한다.
+const ADMIN_ONLY_BRANCHES = ['외부파트너','협업파트너'];
+
+function isAdminOnlyBranch(name){
+  return ADMIN_ONLY_BRANCHES.includes(String(name||'').trim());
+}
+
+// 화면에 보여줄 지점 목록 — 관리자면 전부, 아니면 관리자 전용 지점 제외
+function visibleBranches(){
+  const all=(typeof BRANCHES!=='undefined'&&Array.isArray(BRANCHES))?BRANCHES:[];
+  if(curUser?.role==='admin') return all.slice();
+  return all.filter(function(b){ return !isAdminOnlyBranch(b); });
+}
+
 // 사용자 목록 기반으로 BRANCHES/TEAM_MAP 동적 갱신
 function syncBranchTeamMap(){
   const accs = getAccs();
@@ -8353,7 +8369,7 @@ function renderBranchTrend(leadById){
   try{
     const el=document.getElementById('insight-branch-trend');
     if(!el) return;
-    const branches=(typeof BRANCHES!=='undefined'&&BRANCHES.length)?BRANCHES.slice():[];
+    const branches=visibleBranches();
     if(!branches.length){ el.innerHTML='<div style="color:var(--gray-300);font-size:12px;text-align:center;padding:24px">지점 정보 없음</div>'; return; }
     if(!leadById||!Object.keys(leadById).length){ leadById={}; (allLeads||[]).forEach(l=>{ leadById[l.id]=l; }); }
     const NW=6;
@@ -8420,7 +8436,7 @@ function renderTeamActivity(leadById){
     });
     const teams=[...new Set([...Object.keys(cur),...Object.keys(prev)])];
     if(!teams.length){ el.innerHTML='<div style="color:var(--gray-300);font-size:12px;text-align:center;padding:24px">최근 활동 데이터 없음</div>'; return; }
-    const branches=(typeof BRANCHES!=='undefined'?BRANCHES:[]);
+    const branches=visibleBranches();
     const bColor=b=>{ const i=branches.indexOf(b); return i>=0?_BRANCH_COLORS[i%_BRANCH_COLORS.length]:'#94a3b8'; };
     const rows=teams.map(t=>({t,c:cur[t]||0,p:prev[t]||0,b:branchOf[t]||''})).sort((a,b)=>b.c-a.c);
     const max=Math.max(...rows.map(r=>r.c),1);
@@ -8490,7 +8506,7 @@ function renderRecallWarning(lastMap){
         list.push({name:l.company_name||l.name||'(무명)', team:l.team_name||'', ratio, scat, remain});
       }
     });
-    const branches=(typeof BRANCHES!=='undefined'?BRANCHES:[]);
+    const branches=visibleBranches();
     const bColor=b=>{ const i=branches.indexOf(b); return i>=0?_BRANCH_COLORS[i%_BRANCH_COLORS.length]:'#94a3b8'; };
     // 상단 요약 2수치
     let html=`<div style="display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap">
@@ -8621,7 +8637,7 @@ function openDropDetail(){
       byTeam[tm]=(byTeam[tm]||0)+1;
       (reasonByBranch[c]=reasonByBranch[c]||{}); reasonByBranch[c][b]=(reasonByBranch[c][b]||0)+1;
     });
-    const branches=(typeof BRANCHES!=='undefined'?BRANCHES:[]);
+    const branches=visibleBranches();
     const bColor=b=>{ const i=branches.indexOf(b); return i>=0?_BRANCH_COLORS[i%_BRANCH_COLORS.length]:'#94a3b8'; };
     const sortE=o=>Object.entries(o).sort((a,b)=>b[1]-a[1]);
     const barRow=(label,v,vmax,color,sub)=>`<div style="margin-bottom:9px">
@@ -8675,7 +8691,7 @@ function _rhythmScopeOptions(){
     const sel=document.getElementById('rhythm-scope');
     if(!sel) return;
     let _accs=[]; try{ _accs=getAccs()||[]; }catch(_e){}
-    const branches=(typeof BRANCHES!=='undefined'&&BRANCHES.length)?BRANCHES.slice():[];
+    const branches=visibleBranches();
     const teams=[...new Set(_accs.filter(a=>a.role==='team').map(a=>a.name).filter(Boolean))].sort();
     const sig='all|'+branches.join(',')+'|'+teams.join(',');
     if(sel.dataset.sig===sig) return;
@@ -9454,7 +9470,7 @@ async function loadLeads(){
 
   if(curUser.role === 'admin' || curUser.role === 'dbmanager'){
     // 관리자/DB관리자: 전체 지점 선택 가능
-    if(branchEl) branchEl.innerHTML='<option value="">전체 지점</option>'+BRANCHES.map(b=>`<option>${b}</option>`).join('')+'<option value="대전">대전TM</option>';
+    if(branchEl) branchEl.innerHTML='<option value="">전체 지점</option>'+visibleBranches().map(b=>`<option>${b}</option>`).join('')+'<option value="대전">대전TM</option>';
     if(branchEl) branchEl.style.display='';
     // 팀장 필터: TEAM_MAP 기준 (삭제 계정 제외), 지점 선택에 따라 연동
     const _branchSel=document.getElementById('leads-branch')?.value||'';
@@ -23688,11 +23704,11 @@ function openDistribute(){
               <div class="mgr-sub">팀장</div></div>`).join('')}
           </div>`;
         // 타 지점 협업 섹션
-        const otherBranches=BRANCHES.filter(b=>b!==curUser.name);
+        const otherBranches=visibleBranches().filter(b=>b!==curUser.name);
         let _oci=0;
         const collabSection=otherBranches.map(b=>{
           const bLeaders=TEAM_MAP[b]||[];
-          if(!bLeaders.length) return '';
+          // 팀장이 없어도 지점장 카드는 나오게 한다 (외부파트너·협업파트너 대응)
           const uid='od-collab-'+(_oci++);
           return `<div style="margin-bottom:6px">
             <div onclick="toggleCollabSection('${uid}')" style="font-size:11px;font-weight:700;color:var(--blue);cursor:pointer;display:flex;align-items:center;gap:6px;padding:5px 8px;background:rgba(49,130,246,.05);border-radius:6px;border:1px solid rgba(49,130,246,.15);user-select:none">
@@ -23714,7 +23730,8 @@ function openDistribute(){
       if(tw) tw.style.display='';
     } else {
       // 관리자: 전체 지점장 표시
-      grid.innerHTML=BRANCHES.map(b=>`
+      // 관리자 전용 지점(외부파트너·협업파트너)은 관리자 화면에만 나온다
+      grid.innerHTML=visibleBranches().map(b=>`
         <div class="mgr-card" onclick="selectBranchCard(this,'${b}')" data-branch="${b}">
           <div class="mgr-name">${b}</div><div class="mgr-sub">지점장</div></div>`).join('');
     }
@@ -24090,7 +24107,7 @@ function openBrAssignPopup(){
       </div>
       ${(function(){let ci=0;return BRANCHES.filter(b=>b!==curUser.name).map(b=>{
         const bLeaders=TEAM_MAP[b]||[];
-        if(!bLeaders.length) return '';
+        // 팀장이 없어도 지점장 카드는 나오게 한다 (외부파트너·협업파트너 대응)
         const uid='bra-collab-'+(ci++);
         return `<div style="margin-bottom:6px">
           <div onclick="toggleCollabSection('${uid}')" style="font-size:11px;font-weight:700;color:var(--blue);cursor:pointer;display:flex;align-items:center;gap:6px;padding:5px 8px;background:rgba(49,130,246,.05);border-radius:6px;border:1px solid rgba(49,130,246,.15);user-select:none">
@@ -26127,11 +26144,14 @@ function selectBranchCard(el, branch){
 
       </div>`;
     // 타 지점 섹션 (협업) — 기본 접기, 클릭 시 펼침
-    const otherBranches=BRANCHES.filter(b=>b!==branch);
+    const otherBranches=visibleBranches().filter(b=>b!==branch);
     let collabIdx=0;
     const collabSection=otherBranches.map(b=>{
       const bLeaders=TEAM_MAP[b]||[];
-      if(!bLeaders.length) return '';
+      // ★ 산하 팀장이 없어도 섹션을 그린다.
+      //   [이전] 팀장이 없으면 통째로 건너뛰어, 외부파트너·협업파트너처럼
+      //          팀장이 없는 지점은 협업 대상으로 고를 수가 없었다.
+      //   [지금] 지점장 카드만이라도 나오게 한다.
       const uid='collab-'+collabIdx++;
       return `<div style="margin-bottom:6px">
         <div onclick="toggleCollabSection('${uid}')" style="font-size:11px;font-weight:700;color:var(--blue);cursor:pointer;display:flex;align-items:center;gap:6px;padding:5px 8px;background:rgba(49,130,246,.05);border-radius:6px;border:1px solid rgba(49,130,246,.15);user-select:none">
