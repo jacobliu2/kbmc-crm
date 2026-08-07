@@ -10938,10 +10938,22 @@ function openActM(lid,cname){
       let existCollab=[];
       try{ existCollab=JSON.parse(lead3?.team_names||'[]').filter(t=>t!==curUser.name); }catch(e){}
       window._actCollabSel=new Set(existCollab);
-      // 타 지점 팀장 전체 (내 팀 제외)
-      const allOtherTeams=Object.entries(TEAM_MAP).flatMap(([br,teams])=>
-        teams.filter(t=>t!==curUser.name).map(t=>({name:t,branch:br}))
-      );
+      // ★ 이미 대전과 협업/이관 중이면 미리 켠다.
+      //   team_names 에는 안 들어 있고 collab_branches / tm_transferred 로만
+      //   표시되므로 따로 확인해야 한다.
+      try{
+        const _tmOn = (lead3?.tm_transferred===true||lead3?.tm_transferred==='true')
+          || JSON.parse(lead3?.collab_branches||'[]').includes('대전TM');
+        if(_tmOn) window._actCollabSel.add('대전TM');
+      }catch(e){}
+      // 타 지점 팀장 전체 (내 팀 제외) + 대전TM
+      //   [이전] TEAM_MAP 만 사용 → 대전TM이 목록에 없어 고를 수 없었다.
+      //          그래서 협업 팀장을 추가하면 collab_branches 가 덮여 대전이 빠졌다.
+      //          (재콜건 2지점 + 대전 동시 관리가 불가능했던 원인)
+      const allOtherTeams=[{name:'대전TM',branch:'대전'}].concat(
+        Object.entries(TEAM_MAP).flatMap(([br,teams])=>
+          teams.filter(t=>t!==curUser.name).map(t=>({name:t,branch:br}))
+        ));
       collabCards.innerHTML=allOtherTeams.map(({name,branch})=>{
         const isSel=window._actCollabSel.has(name);
         const isYJ=name==='유영준';
@@ -12134,10 +12146,15 @@ async function saveActivity(){
       if(t==='대전TM'||t==='대전센터') return '대전TM';
       return Object.entries(TEAM_MAP).find(([,v])=>v.includes(t))?.[0]||null;
     }).filter(Boolean))];
+    // 대전TM은 팀장이 아니므로 team_names 에는 넣지 않고
+    // collab_branches / tm_transferred 로만 표시한다.
+    const _tmPicked = collabBranches.includes('대전TM');
+    const _mergedNoTm = merged.filter(t=>t!=='대전TM'&&t!=='대전센터');
     const upd={
-      team_names:JSON.stringify(merged),
-      team_name:merged.join(', '),
-      collab_branches:collabBranches.length?JSON.stringify(collabBranches):null
+      team_names:JSON.stringify(_mergedNoTm),
+      team_name:_mergedNoTm.join(', '),
+      collab_branches:collabBranches.length?JSON.stringify(collabBranches):null,
+      tm_transferred:_tmPicked
     };
     await dbU('leads',lid,upd);
     // 캐시 갱신
@@ -23622,9 +23639,24 @@ function openDistribute(){
   _selBranch=''; _selTeam=''; _recallType='team_only'; _distMode='branch';
   _daejeonType='add';
   if(typeof _selTeams!=='undefined') _selTeams.clear();
+  // ★ 이미 대전과 협업/이관 중인 건이면 「대전TM 동반」을 미리 켜 둔다.
+  //   [이전] 무조건 false → 관리자가 협업 팀장만 추가하고 확정하면
+  //          tm_transferred 가 false 로 덮여 대전이 조용히 빠졌다.
+  //          (재콜건: 1지점장+대전 동시 분배 후 2지점 협업 추가 시 대전 소실)
   _tmCollabSelected=false;
+  try{
+    const _pool=(typeof _allLeadsRaw!=='undefined'&&_allLeadsRaw&&_allLeadsRaw.length)?_allLeadsRaw:(allLeads||[]);
+    _tmCollabSelected=[...selIds].some(function(id){
+      const l=_pool.find(function(x){return x.id===id;}); if(!l) return false;
+      if(l.tm_transferred===true||l.tm_transferred==='true') return true;
+      try{ return JSON.parse(l.collab_branches||'[]').includes('대전TM'); }catch(e){ return false; }
+    });
+  }catch(e){ console.warn('대전 협업 상태 확인 실패:',e); }
   const _tmCard=document.getElementById('dist-tm-collab-card');
-  if(_tmCard){_tmCard.classList.remove('selected');_tmCard.style.background='';}
+  if(_tmCard){
+    if(_tmCollabSelected){ _tmCard.classList.add('selected'); }
+    else { _tmCard.classList.remove('selected'); _tmCard.style.background=''; }
+  }
   const tw=document.getElementById('dist-team-wrap'); if(tw)tw.style.display='none';
   const tn=document.getElementById('dist-team-note'); if(tn)tn.textContent='';
   if(document.getElementById('dist-note'))(document.getElementById('dist-note')||{}).value='';
@@ -24135,6 +24167,10 @@ async function confirmBrAssignPopup(){
   const isCollab=collabTeams.length>0;
   const collabBranches=[...new Set(collabTeams.map(t=>{
     if(t==='대전TM'||t==='대전센터') return '대전TM';
+    // ★ 고른 이름이 지점장 본인이면 그 이름이 곧 지점이다.
+    //   [이전] TEAM_MAP 의 '값'(팀장 목록)에서만 찾아 지점장은 걸러졌다.
+    //          → 타 지점 지점장을 협업으로 넣어도 collab_branches 에 안 들어갔다.
+    if(Object.prototype.hasOwnProperty.call(TEAM_MAP,t)) return t;
     return Object.entries(TEAM_MAP).find(([,v])=>v.includes(t))?.[0]||null;
   }).filter(Boolean))];
 
@@ -26104,6 +26140,10 @@ function selectBranchCard(el, branch){
         </div>
         <div id="${uid}" style="display:none;margin-top:6px">
           <div class="mgr-grid" style="margin-bottom:8px">
+            <div class="mgr-card" onclick="toggleTeamCard(this,'${b}')" data-team="${b}" style="min-width:76px;border-color:var(--blue);opacity:.85">
+              <div class="mgr-name" style="font-size:12px;font-weight:800;color:var(--blue)">${esc(b)}</div>
+              <div class="mgr-sub" style="color:var(--blue);font-weight:700">협업지점장</div>
+            </div>
             ${bLeaders.map(t=>`<div class="mgr-card" onclick="toggleTeamCard(this,'${t}')" data-team="${t}" style="min-width:76px;border-color:var(--blue);opacity:.85">
               <div class="mgr-name" style="font-size:12px">${esc(t)}</div>
               <div class="mgr-sub" style="color:var(--blue)">협업팀장</div>
@@ -26443,6 +26483,10 @@ async function confirmDistribute(){
   // 협업 지점장 목록 계산 (대전TM 포함)
   const collabBranches=[...new Set(collabTeams.map(t=>{
     if(t==='대전TM'||t==='대전센터') return '대전TM';
+    // ★ 고른 이름이 지점장 본인이면 그 이름이 곧 지점이다.
+    //   [이전] TEAM_MAP 의 '값'(팀장 목록)에서만 찾아 지점장은 걸러졌다.
+    //          → 타 지점 지점장을 협업으로 넣어도 collab_branches 에 안 들어갔다.
+    if(Object.prototype.hasOwnProperty.call(TEAM_MAP,t)) return t;
     return Object.entries(TEAM_MAP).find(([,v])=>v.includes(t))?.[0]||null;
   }).filter(Boolean))];
 
